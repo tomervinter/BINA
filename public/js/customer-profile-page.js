@@ -6,8 +6,8 @@ async function initCustomerProfilePage() {
   const content = document.getElementById('cpContent');
   const emptyState = document.getElementById('cpEmptyState');
 
-  const customersRes = await fetch('/api/customers', { credentials: 'include' });
-  const customers = customersRes.ok ? await customersRes.json() : [];
+  const customersRes = await fetch('/api/customers?pageSize=all', { credentials: 'include' });
+  const customers = customersRes.ok ? (await customersRes.json()).rows : [];
   const sorted = customers.slice().sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'he'));
   select.innerHTML = '<option value="">— בחר לקוח —</option>' + sorted.map((c) =>
     '<option value="' + Layout.escapeHtml(c.customerNumber) + '">' + Layout.escapeHtml(c.name || c.customerNumber) + ' (' + Layout.escapeHtml(c.customerNumber) + ')</option>'

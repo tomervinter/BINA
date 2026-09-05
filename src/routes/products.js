@@ -3,18 +3,27 @@ const multer = require('multer');
 const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer } = require('../lib/csv');
+const { parseListQuery } = require('../lib/listQuery');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(requireAuth);
 
+const LIST_FIELDS = ['itemCode', 'name', 'type', 'superType', 'department', 'unit', 'status'];
+
 router.get('/', async (req, res) => {
-  const rows = await prisma.product.findMany({
-    where: { organizationId: req.user.organizationId },
-    orderBy: { name: 'asc' }
+  const { page, pageSize, sortBy, sortDir, where, skip, take } = parseListQuery(req, {
+    sortableFields: LIST_FIELDS,
+    filterableFields: LIST_FIELDS,
+    defaultSort: { field: 'name', dir: 'asc' }
   });
-  res.json(rows);
+  const fullWhere = { organizationId: req.user.organizationId, ...where };
+  const [rows, total] = await Promise.all([
+    prisma.product.findMany({ where: fullWhere, orderBy: { [sortBy]: sortDir }, skip, take }),
+    prisma.product.count({ where: fullWhere })
+  ]);
+  res.json({ rows, total, page, pageSize });
 });
 
 router.post('/upload', upload.single('file'), async (req, res) => {

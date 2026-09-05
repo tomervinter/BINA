@@ -4,10 +4,10 @@ async function initInsightsPage() {
 
   const [insightsRes, productsRes] = await Promise.all([
     fetch('/api/insights', { credentials: 'include' }),
-    fetch('/api/products', { credentials: 'include' })
+    fetch('/api/products?pageSize=all', { credentials: 'include' })
   ]);
   const insights = insightsRes.ok ? await insightsRes.json() : [];
-  const products = productsRes.ok ? await productsRes.json() : [];
+  const products = productsRes.ok ? (await productsRes.json()).rows : [];
   const prodName = {};
   products.forEach((p) => { prodName[p.itemCode] = p.name; });
 

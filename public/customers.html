@@ -13,7 +13,7 @@
       <div class="topbar" id="topbarMount"></div>
 
       <div class="card">
-        <div class="card-title">טעינת קובץ לקוחות (CSV)</div>
+        <div class="card-title">טעינת קובץ לקוחות (CSV / Excel)</div>
         <div class="upload-row">
           <input type="file" id="csvFile" accept=".csv,.xlsx,.xls">
           <button class="btn" id="uploadBtn">העלאה (מחליף את כל הרשימה)</button>
@@ -29,13 +29,14 @@
   </div>
 
   <script src="js/layout.js"></script>
-  <script src="js/table.js"></script>
+  <script src="js/server-table.js"></script>
   <script src="js/list-page.js"></script>
   <script>
     initListPage({
       pageKey: 'customers',
       apiBase: '/api/customers',
       exportFilename: 'customers',
+      defaultSort: { field: 'name', dir: 'asc' },
       columns: [
         { key: 'customerNumber', label: 'מספר לקוח' },
         { key: 'name', label: 'שם לקוח' },

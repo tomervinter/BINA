@@ -3,6 +3,7 @@ const multer = require('multer');
 const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer, parseDMY, parseNumber } = require('../lib/csv');
+const { parseListQuery } = require('../lib/listQuery');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -10,12 +11,17 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
-  const rows = await prisma.inventoryRecord.findMany({
-    where: { organizationId: req.user.organizationId },
-    orderBy: { date: 'desc' },
-    take: 2000
+  const { page, pageSize, sortBy, sortDir, where, skip, take } = parseListQuery(req, {
+    sortableFields: ['sku', 'productName', 'date', 'stock'],
+    filterableFields: ['sku', 'productName'],
+    defaultSort: { field: 'date', dir: 'desc' }
   });
-  res.json(rows);
+  const fullWhere = { organizationId: req.user.organizationId, ...where };
+  const [rows, total] = await Promise.all([
+    prisma.inventoryRecord.findMany({ where: fullWhere, orderBy: { [sortBy]: sortDir }, skip, take }),
+    prisma.inventoryRecord.count({ where: fullWhere })
+  ]);
+  res.json({ rows, total, page, pageSize });
 });
 
 router.post('/upload', upload.single('file'), async (req, res) => {

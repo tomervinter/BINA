@@ -3,19 +3,28 @@ const multer = require('multer');
 const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer, parseDMY, parseNumber } = require('../lib/csv');
+const { parseListQuery } = require('../lib/listQuery');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(requireAuth);
 
+// Sales can run into the hundreds of thousands of rows, so filtering is limited to the
+// text columns (customerNumber/productCode) — DB-level substring search on numbers/dates
+// isn't practical at that scale, but sorting is still supported on every column.
 router.get('/', async (req, res) => {
-  const rows = await prisma.sale.findMany({
-    where: { organizationId: req.user.organizationId },
-    orderBy: { date: 'desc' },
-    take: 2000
+  const { page, pageSize, sortBy, sortDir, where, skip, take } = parseListQuery(req, {
+    sortableFields: ['customerNumber', 'productCode', 'date', 'quantity', 'revenue', 'weight'],
+    filterableFields: ['customerNumber', 'productCode'],
+    defaultSort: { field: 'date', dir: 'desc' }
   });
-  res.json(rows);
+  const fullWhere = { organizationId: req.user.organizationId, ...where };
+  const [rows, total] = await Promise.all([
+    prisma.sale.findMany({ where: fullWhere, orderBy: { [sortBy]: sortDir }, skip, take }),
+    prisma.sale.count({ where: fullWhere })
+  ]);
+  res.json({ rows, total, page, pageSize });
 });
 
 router.post('/upload', upload.single('file'), async (req, res) => {

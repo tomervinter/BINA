@@ -23,10 +23,14 @@ async function initListPage(config) {
     }
   });
 
+  let table = null;
   async function loadTable() {
-    const res = await fetch(config.apiBase, { credentials: 'include' });
-    const rows = res.ok ? await res.json() : [];
-    createDataTable(document.getElementById('tableContainer'), config.columns, rows, { exportFilename: config.exportFilename });
+    if (table) { table.reload(); return; }
+    table = createServerTable(document.getElementById('tableContainer'), config.columns, {
+      apiBase: config.apiBase,
+      exportFilename: config.exportFilename,
+      defaultSort: config.defaultSort
+    });
   }
 
   await loadTable();
