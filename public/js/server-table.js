@@ -1,6 +1,7 @@
 // Server-paginated table for large data sets (sales/inventory can run into hundreds of
 // thousands of rows) — sorting and filtering happen in the database via query params;
-// the browser only ever holds one page of rows at a time.
+// the browser only ever holds one page of rows at a time. Toolbar/markup matches the
+// original Artifact (count-pill, delete-all, clear-filter, real .xlsx export).
 function createServerTable(container, columns, opts) {
   opts = opts || {};
   const state = {
@@ -19,7 +20,7 @@ function createServerTable(container, columns, opts) {
     return col.render ? col.render(row) : row[col.key];
   }
 
-  async function load() {
+  function buildParams() {
     const params = new URLSearchParams();
     params.set('page', state.page);
     params.set('pageSize', state.pageSize);
@@ -27,10 +28,13 @@ function createServerTable(container, columns, opts) {
     const activeFilters = {};
     Object.keys(state.filters).forEach((k) => { if (state.filters[k]) activeFilters[k] = state.filters[k]; });
     if (Object.keys(activeFilters).length) params.set('filters', JSON.stringify(activeFilters));
+    return params;
+  }
 
+  async function load() {
     let data, loadError = null;
     try {
-      const res = await fetch(opts.apiBase + '?' + params.toString(), { credentials: 'include' });
+      const res = await fetch(opts.apiBase + '?' + buildParams().toString(), { credentials: 'include' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       data = await res.json();
     } catch (err) {
@@ -42,27 +46,40 @@ function createServerTable(container, columns, opts) {
     render(loadError);
   }
 
-  function exportCurrentPageCsv() {
-    const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-    const header = columns.map((c) => esc(c.label)).join(',');
-    const lines = state.rows.map((row) => columns.map((c) => esc(c.exportValue ? c.exportValue(row) : cellValue(c, row))).join(','));
-    const csv = '﻿' + [header].concat(lines).join('\r\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = (opts.exportFilename || 'export') + '.csv';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  function exportXlsx() {
+    window.location.href = opts.apiBase + '/export?' + buildParams().toString();
+  }
+
+  async function deleteAll() {
+    if (!confirm('למחוק את כל הנתונים? פעולה זו אינה הפיכה.')) return;
+    await fetch(opts.apiBase, { method: 'DELETE', credentials: 'include' });
+    state.page = 1;
+    await load();
+  }
+
+  function clearFilters() {
+    state.filters = {};
+    state.page = 1;
+    load();
   }
 
   function render(loadError) {
     const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
     let html = '';
     if (loadError) html += '<div class="error-box" style="display:block;">' + Layout.escapeHtml(loadError) + '</div>';
-    html += '<div class="table-toolbar">' +
-      '<button class="btn btn-ghost btn-sm js-exportBtn" type="button">ייצוא העמוד הנוכחי לאקסל</button>' +
-      '<span class="table-count">' + state.total.toLocaleString('he-IL') + ' רשומות בסה"כ</span>' +
-      '</div>';
+    html += '<div class="table-head-row"><div class="table-head-right"></div><div class="table-head-left"><span class="count-pill">' + state.total.toLocaleString('he-IL') + ' רשומות</span></div></div>';
+    html += '<div class="toolbar">';
+    if (opts.deletable !== false) {
+      html += '<button class="btn btn-danger btn-sm js-deleteAllBtn" type="button">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"></path><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"></path><path d="M7 7l1 12.5A1.5 1.5 0 0 0 9.5 21h5a1.5 1.5 0 0 0 1.5-1.5L17 7"></path></svg>' +
+        'מחיקת כל הנתונים</button>';
+    }
+    html += '<button class="btn btn-ghost btn-sm js-clearFilterBtn" type="button">נקה סינון</button>' +
+      '<span class="spacer"></span>' +
+      '<button class="btn btn-success btn-sm js-exportBtn" type="button">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2"></rect><path d="M3.5 9.5h17M3.5 14.5h17M9.5 3.5v17"></path></svg>' +
+      'ייצוא לאקסל</button></div>';
+
     html += '<div class="table-scroll"><table><thead><tr>';
     columns.forEach((col) => {
       const sortable = col.sortable !== false;
@@ -102,7 +119,10 @@ function createServerTable(container, columns, opts) {
 
     container.innerHTML = html;
 
-    container.querySelector('.js-exportBtn').addEventListener('click', exportCurrentPageCsv);
+    container.querySelector('.js-exportBtn').addEventListener('click', exportXlsx);
+    container.querySelector('.js-clearFilterBtn').addEventListener('click', clearFilters);
+    const deleteBtn = container.querySelector('.js-deleteAllBtn');
+    if (deleteBtn) deleteBtn.addEventListener('click', deleteAll);
     container.querySelector('.js-prevPage').addEventListener('click', () => { if (state.page > 1) { state.page--; load(); } });
     container.querySelector('.js-nextPage').addEventListener('click', () => { if (state.page < totalPages) { state.page++; load(); } });
     container.querySelectorAll('.js-sortBtn').forEach((el) => {

@@ -12,9 +12,12 @@
     <main class="main-content">
       <div class="topbar" id="topbarMount"></div>
 
+      <div class="page-title">ניהול עונתיות</div>
+      <div class="page-subtitle">הגדרת תקופות עונתיות המשפיעות על ניתוח המגמות — נערכת ידנית ישירות במסך זה, טבלת <b>Seasonality</b></div>
+
       <div class="card">
-        <div class="card-title">ניהול עונתיות</div>
-        <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px;">הגדירו כאן טווחי תאריכים לעונות (קיץ, חורף וכד') — משמש להשוואות עונתיות באותו אופן שבו חגים משמשים להשוואה שנתית.</p>
+        <div class="card-title">הגדרת העונות</div>
+        <p class="card-text">הגדירו כאן טווחי תאריכים לעונות (קיץ, חורף וכד') — משמש להשוואות עונתיות באותו אופן שבו חגים משמשים להשוואה שנתית.</p>
         <div id="tableContainer"></div>
       </div>
     </main>
@@ -26,6 +29,8 @@
     initInlineEditTable({
       pageKey: 'seasons',
       apiBase: '/api/seasons',
+      addLabel: 'הוספת עונה',
+      countLabel: 'עונות',
       fields: [
         { key: 'name', label: 'עונה' },
         { key: 'year', label: 'שנה', type: 'number', default: new Date().getFullYear() },

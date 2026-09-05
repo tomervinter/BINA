@@ -4,6 +4,8 @@ const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer } = require('../lib/csv');
 const { parseListQuery } = require('../lib/listQuery');
+const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
+const { replaceAll } = require('../lib/bulkInsert');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -11,6 +13,18 @@ const upload = multer({ storage: multer.memoryStorage() });
 router.use(requireAuth);
 
 const LIST_FIELDS = ['itemCode', 'name', 'type', 'superType', 'department', 'unit', 'status'];
+const EXPORT_COLUMNS = [
+  { key: 'itemCode', label: 'קוד פריט' },
+  { key: 'name', label: 'שם פריט' },
+  { key: 'type', label: 'טיפוס' },
+  { key: 'superType', label: 'טיפוס על' },
+  { key: 'department', label: 'מחלקה' },
+  { key: 'unit', label: 'יחידת מידה למוצר' },
+  { key: 'status', label: 'סטטוס מוצר' },
+  { key: 'forProcurement', label: 'לעיתוד' },
+  { key: 'forMarketing', label: 'לשיווק' }
+];
+const MAX_EXPORT_ROWS = 100000;
 
 router.get('/', async (req, res) => {
   const { page, pageSize, sortBy, sortDir, where, skip, take } = parseListQuery(req, {
@@ -24,6 +38,23 @@ router.get('/', async (req, res) => {
     prisma.product.count({ where: fullWhere })
   ]);
   res.json({ rows, total, page, pageSize });
+});
+
+router.get('/export', async (req, res) => {
+  const { sortBy, sortDir, where } = parseListQuery(req, {
+    sortableFields: LIST_FIELDS,
+    filterableFields: LIST_FIELDS,
+    defaultSort: { field: 'name', dir: 'asc' }
+  });
+  const rows = await prisma.product.findMany({
+    where: { organizationId: req.user.organizationId, ...where },
+    orderBy: { [sortBy]: sortDir },
+    take: MAX_EXPORT_ROWS
+  });
+  const buffer = rowsToXlsxBuffer(EXPORT_COLUMNS, rows);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="products.xlsx"');
+  res.send(buffer);
 });
 
 router.post('/upload', upload.single('file'), async (req, res) => {
@@ -50,10 +81,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     forMarketing: r['לשיווק'] || null
   })).filter((r) => r.itemCode);
 
-  await prisma.$transaction([
-    prisma.product.deleteMany({ where: { organizationId: orgId } }),
-    prisma.product.createMany({ data: rows })
-  ]);
+  await replaceAll(prisma, 'product', { organizationId: orgId }, rows);
 
   res.json({ ok: true, count: rows.length });
 });

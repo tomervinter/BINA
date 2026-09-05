@@ -17,6 +17,8 @@ const inventoryRoutes = require('./routes/inventory');
 const holidaysRoutes = require('./routes/holidays');
 const seasonsRoutes = require('./routes/seasons');
 const relevanceRoutes = require('./routes/relevance');
+const navCountsRoutes = require('./routes/navCounts');
+const templatesRoutes = require('./routes/templates');
 
 const app = express();
 
@@ -39,6 +41,8 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/holidays', holidaysRoutes);
 app.use('/api/seasons', seasonsRoutes);
 app.use('/api/relevance', relevanceRoutes);
+app.use('/api/nav-counts', navCountsRoutes);
+app.use('/api/templates', templatesRoutes);
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
 

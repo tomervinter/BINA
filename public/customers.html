@@ -12,17 +12,17 @@
     <main class="main-content">
       <div class="topbar" id="topbarMount"></div>
 
+      <div class="page-title" style="display:flex;align-items:center;gap:10px;">טעינת לקוחות <span class="master-badge-lg">Master</span></div>
+      <div class="page-subtitle">בסיס הלקוחות של החברה — טבלת מאסטר <b>Customers</b>, המפתח לשיוך נתונים בטבלאות אחרות לפי מספר לקוח.</div>
+
       <div class="card">
-        <div class="card-title">טעינת קובץ לקוחות (CSV / Excel)</div>
-        <div class="upload-row">
-          <input type="file" id="csvFile" accept=".csv,.xlsx,.xls">
-          <button class="btn" id="uploadBtn">העלאה (מחליף את כל הרשימה)</button>
-        </div>
-        <div class="status-line" id="uploadStatus"></div>
+        <div class="card-title">טעינת לקוחות</div>
+        <p class="card-text">העלו קובץ אקסל (.xlsx) או CSV עם רשימת הלקוחות המעודכנת. טעינת קובץ חדש מחליפה את כל הרשימה הקיימת. יש לוודא שהשורה הראשונה בקובץ מכילה את כותרות העמודות בדיוק כפי שמופיע בתבנית.</p>
+        <div id="uploadWidget"></div>
       </div>
 
       <div class="card">
-        <div class="card-title">רשימת לקוחות</div>
+        <div class="card-title">בסיס הלקוחות</div>
         <div id="tableContainer"></div>
       </div>
     </main>
@@ -30,12 +30,12 @@
 
   <script src="js/layout.js"></script>
   <script src="js/server-table.js"></script>
+  <script src="js/upload-widget.js"></script>
   <script src="js/list-page.js"></script>
   <script>
     initListPage({
       pageKey: 'customers',
       apiBase: '/api/customers',
-      exportFilename: 'customers',
       defaultSort: { field: 'name', dir: 'asc' },
       columns: [
         { key: 'customerNumber', label: 'מספר לקוח' },

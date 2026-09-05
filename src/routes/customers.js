@@ -4,6 +4,19 @@ const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer } = require('../lib/csv');
 const { parseListQuery } = require('../lib/listQuery');
+const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
+const { replaceAll } = require('../lib/bulkInsert');
+
+const EXPORT_COLUMNS = [
+  { key: 'customerNumber', label: 'מספר לקוח' },
+  { key: 'name', label: 'שם לקוח' },
+  { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
+  { key: 'customerType', label: 'סוג לקוח' },
+  { key: 'city', label: 'עיר' },
+  { key: 'centralCustomer', label: 'שם לקוח מרכז' },
+  { key: 'status', label: 'סטטוס לקוח' }
+];
+const MAX_EXPORT_ROWS = 100000;
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -24,6 +37,25 @@ router.get('/', async (req, res) => {
     prisma.customer.count({ where: fullWhere })
   ]);
   res.json({ rows, total, page, pageSize });
+});
+
+// Real .xlsx export honoring the same filters/sort as the list view (capped so a
+// runaway export can't exhaust server memory at hundreds-of-thousands-of-rows scale).
+router.get('/export', async (req, res) => {
+  const { sortBy, sortDir, where } = parseListQuery(req, {
+    sortableFields: LIST_FIELDS,
+    filterableFields: LIST_FIELDS,
+    defaultSort: { field: 'name', dir: 'asc' }
+  });
+  const rows = await prisma.customer.findMany({
+    where: { organizationId: req.user.organizationId, ...where },
+    orderBy: { [sortBy]: sortDir },
+    take: MAX_EXPORT_ROWS
+  });
+  const buffer = rowsToXlsxBuffer(EXPORT_COLUMNS, rows);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="customers.xlsx"');
+  res.send(buffer);
 });
 
 // Full-replace upload, matching the confirmed real-world workflow: each day's file
@@ -50,10 +82,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     status: r['סטטוס לקוח'] || 'פעיל'
   })).filter((r) => r.customerNumber);
 
-  await prisma.$transaction([
-    prisma.customer.deleteMany({ where: { organizationId: orgId } }),
-    prisma.customer.createMany({ data: rows })
-  ]);
+  await replaceAll(prisma, 'customer', { organizationId: orgId }, rows);
 
   res.json({ ok: true, count: rows.length });
 });

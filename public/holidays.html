@@ -12,9 +12,12 @@
     <main class="main-content">
       <div class="topbar" id="topbarMount"></div>
 
+      <div class="page-title">ניהול חגים</div>
+      <div class="page-subtitle">לוח חגים ואירועים המשפיעים על ניתוח המגמות — נערך ידנית ישירות במסך זה, טבלת <b>Holidays</b></div>
+
       <div class="card">
-        <div class="card-title">ניהול חגים</div>
-        <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px;">הוסיפו כאן את תאריכי החגים לכל השנים הרלוונטיות — ככל שיהיו יותר שנים, כך תובנות ההשוואה השנתית (עלייה/ירידה בחג לעומת אשתקד) יהיו מדויקות יותר.</p>
+        <div class="card-title">לוח החגים</div>
+        <p class="card-text">הוסיפו כאן את תאריכי החגים לכל השנים הרלוונטיות — ככל שיהיו יותר שנים, כך תובנות ההשוואה השנתית (עלייה/ירידה בחג לעומת אשתקד) יהיו מדויקות יותר.</p>
         <div id="tableContainer"></div>
       </div>
     </main>
@@ -26,6 +29,8 @@
     initInlineEditTable({
       pageKey: 'holidays',
       apiBase: '/api/holidays',
+      addLabel: 'הוספת חג',
+      countLabel: 'חגים',
       fields: [
         { key: 'name', label: 'חג' },
         { key: 'year', label: 'שנה', type: 'number', default: new Date().getFullYear() },

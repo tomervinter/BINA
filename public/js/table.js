@@ -32,6 +32,7 @@ function createDataTable(container, columns, rows, opts) {
   }
 
   function exportCsv() {
+    if (opts.exportUrl) { window.location.href = opts.exportUrl; return; }
     const data = filteredSorted();
     const esc = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
     const header = columns.map((c) => esc(c.label)).join(',');
@@ -47,7 +48,9 @@ function createDataTable(container, columns, rows, opts) {
 
   function render() {
     const data = filteredSorted();
-    let html = '<div class="table-toolbar"><button class="btn btn-ghost btn-sm js-exportBtn" type="button">ייצוא לאקסל</button><span class="table-count">' + data.length + ' רשומות</span></div>';
+    let html = '<div class="table-head-row"><div class="table-head-right"></div><div class="table-head-left"><span class="count-pill">' + data.length.toLocaleString('he-IL') + ' רשומות</span></div></div>';
+    html += '<div class="toolbar"><span class="spacer"></span><button class="btn btn-success btn-sm js-exportBtn" type="button">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2"></rect><path d="M3.5 9.5h17M3.5 14.5h17M9.5 3.5v17"></path></svg>ייצוא לאקסל</button></div>';
     html += '<div class="table-scroll"><table><thead><tr>';
     columns.forEach((col) => {
       const sortCls = state.sortCol === col.key ? (' sorted-' + state.sortDir) : '';

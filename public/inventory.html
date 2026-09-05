@@ -12,17 +12,17 @@
     <main class="main-content">
       <div class="topbar" id="topbarMount"></div>
 
+      <div class="page-title">טעינת מלאי</div>
+      <div class="page-subtitle">מצב המלאי לפי תאריך — טבלת <b>Inventory</b></div>
+
       <div class="card">
-        <div class="card-title">טעינת קובץ מלאי (CSV / Excel)</div>
-        <div class="upload-row">
-          <input type="file" id="csvFile" accept=".csv,.xlsx,.xls">
-          <button class="btn" id="uploadBtn">העלאה (מחליף את כל הרשימה)</button>
-        </div>
-        <div class="status-line" id="uploadStatus"></div>
+        <div class="card-title">טעינת מלאי</div>
+        <p class="card-text">העלו קובץ אקסל (.xlsx) או CSV עם מצב המלאי העדכני לכל מק"ט. נתון זה משמש את מנוע התובנות לבדוק האם ירידה במכר נובעת מהיעדר מלאי ולא מירידה אמיתית בביקוש.</p>
+        <div id="uploadWidget"></div>
       </div>
 
       <div class="card">
-        <div class="card-title">מצב מלאי</div>
+        <div class="card-title">מצב המלאי</div>
         <div id="tableContainer"></div>
       </div>
     </main>
@@ -30,6 +30,7 @@
 
   <script src="js/layout.js"></script>
   <script src="js/server-table.js"></script>
+  <script src="js/upload-widget.js"></script>
   <script src="js/list-page.js"></script>
   <script>
     function fmtDate(iso) {
@@ -40,7 +41,6 @@
     initListPage({
       pageKey: 'inventory',
       apiBase: '/api/inventory',
-      exportFilename: 'inventory',
       defaultSort: { field: 'date', dir: 'desc' },
       columns: [
         { key: 'sku', label: 'מק"ט' },

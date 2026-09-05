@@ -4,16 +4,33 @@ const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer, parseDMY, parseNumber } = require('../lib/csv');
 const { parseListQuery } = require('../lib/listQuery');
+const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
+const { replaceAll } = require('../lib/bulkInsert');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(requireAuth);
 
+const SORTABLE = ['sku', 'productName', 'date', 'stock'];
+const FILTERABLE = ['sku', 'productName'];
+const MAX_EXPORT_ROWS = 100000;
+function fmtDate(d) {
+  const dt = new Date(d);
+  const p = (n) => String(n).padStart(2, '0');
+  return p(dt.getDate()) + '/' + p(dt.getMonth() + 1) + '/' + dt.getFullYear();
+}
+const EXPORT_COLUMNS = [
+  { key: 'sku', label: 'מק"ט' },
+  { key: 'productName', label: 'שם מוצר' },
+  { key: 'date', label: 'תאריך', value: (r) => fmtDate(r.date) },
+  { key: 'stock', label: 'מלאי' }
+];
+
 router.get('/', async (req, res) => {
   const { page, pageSize, sortBy, sortDir, where, skip, take } = parseListQuery(req, {
-    sortableFields: ['sku', 'productName', 'date', 'stock'],
-    filterableFields: ['sku', 'productName'],
+    sortableFields: SORTABLE,
+    filterableFields: FILTERABLE,
     defaultSort: { field: 'date', dir: 'desc' }
   });
   const fullWhere = { organizationId: req.user.organizationId, ...where };
@@ -22,6 +39,23 @@ router.get('/', async (req, res) => {
     prisma.inventoryRecord.count({ where: fullWhere })
   ]);
   res.json({ rows, total, page, pageSize });
+});
+
+router.get('/export', async (req, res) => {
+  const { sortBy, sortDir, where } = parseListQuery(req, {
+    sortableFields: SORTABLE,
+    filterableFields: FILTERABLE,
+    defaultSort: { field: 'date', dir: 'desc' }
+  });
+  const rows = await prisma.inventoryRecord.findMany({
+    where: { organizationId: req.user.organizationId, ...where },
+    orderBy: { [sortBy]: sortDir },
+    take: MAX_EXPORT_ROWS
+  });
+  const buffer = rowsToXlsxBuffer(EXPORT_COLUMNS, rows);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="inventory.xlsx"');
+  res.send(buffer);
 });
 
 router.post('/upload', upload.single('file'), async (req, res) => {
@@ -46,10 +80,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     };
   }).filter((r) => r.sku);
 
-  await prisma.$transaction([
-    prisma.inventoryRecord.deleteMany({ where: { organizationId: orgId } }),
-    prisma.inventoryRecord.createMany({ data: rows })
-  ]);
+  await replaceAll(prisma, 'inventoryRecord', { organizationId: orgId }, rows);
 
   res.json({ ok: true, count: rows.length });
 });

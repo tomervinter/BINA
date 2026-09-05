@@ -12,18 +12,18 @@
     <main class="main-content">
       <div class="topbar" id="topbarMount"></div>
 
+      <div class="page-title">טעינת קובץ מכירות</div>
+      <div class="page-subtitle">בסיס נתוני המכירות של החברה — טבלת <b>Sales</b></div>
+
       <div class="card">
-        <div class="card-title">טעינת קובץ מכירות (CSV / Excel)</div>
-        <div class="upload-row">
-          <input type="file" id="csvFile" accept=".csv,.xlsx,.xls">
-          <button class="btn" id="uploadBtn">העלאה (מחליף את כל הרשימה)</button>
-        </div>
-        <div class="status-line" id="uploadStatus"></div>
+        <div class="card-title">טעינת קובץ מכירות</div>
+        <p class="card-text">העלו קובץ אקסל (.xlsx) או CSV עם נתוני המכירות המפורטים לפי לקוח ופריט. טעינת קובץ חדש מחליפה את הנתונים הקיימים. יש לוודא שהשורה הראשונה בקובץ מכילה את כותרות העמודות בדיוק כפי שמופיע בתבנית.</p>
+        <div id="uploadWidget"></div>
       </div>
 
       <div class="card">
-        <div class="card-title">מכירות</div>
-        <p style="color:var(--text-muted);font-size:12.5px;margin:0 0 10px;">ניתן לסנן לפי מספר לקוח וקוד פריט; מיון עובד על כל העמודות. הטבלה עמודה-אחר-עמודה כדי לתמוך בכמויות גדולות של נתונים.</p>
+        <div class="card-title">בסיס נתוני המכירות</div>
+        <p style="color:var(--text-muted);font-size:12.5px;margin:0 0 10px;">ניתן לסנן לפי מספר לקוח וקוד פריט; מיון עובד על כל העמודות.</p>
         <div id="tableContainer"></div>
       </div>
     </main>
@@ -31,6 +31,7 @@
 
   <script src="js/layout.js"></script>
   <script src="js/server-table.js"></script>
+  <script src="js/upload-widget.js"></script>
   <script src="js/list-page.js"></script>
   <script>
     function fmtDate(iso) {
@@ -41,7 +42,6 @@
     initListPage({
       pageKey: 'sales',
       apiBase: '/api/sales',
-      exportFilename: 'sales',
       defaultSort: { field: 'date', dir: 'desc' },
       columns: [
         { key: 'customerNumber', label: 'מספר לקוח' },

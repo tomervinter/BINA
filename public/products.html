@@ -12,17 +12,17 @@
     <main class="main-content">
       <div class="topbar" id="topbarMount"></div>
 
+      <div class="page-title" style="display:flex;align-items:center;gap:10px;">טעינת מוצרים <span class="master-badge-lg">Master</span></div>
+      <div class="page-subtitle">קטלוג המוצרים של החברה — טבלת מאסטר <b>Products</b>, המפתח לשיוך נתונים בטבלאות אחרות לפי קוד פריט.</div>
+
       <div class="card">
-        <div class="card-title">טעינת קובץ מוצרים (CSV / Excel)</div>
-        <div class="upload-row">
-          <input type="file" id="csvFile" accept=".csv,.xlsx,.xls">
-          <button class="btn" id="uploadBtn">העלאה (מחליף את כל הרשימה)</button>
-        </div>
-        <div class="status-line" id="uploadStatus"></div>
+        <div class="card-title">טעינת מוצרים</div>
+        <p class="card-text">העלו קובץ אקסל (.xlsx) או CSV עם קטלוג המוצרים המעודכן. טעינת קובץ חדש מחליפה את כל הרשימה הקיימת. יש לוודא שהשורה הראשונה בקובץ מכילה את כותרות העמודות בדיוק כפי שמופיע בתבנית.</p>
+        <div id="uploadWidget"></div>
       </div>
 
       <div class="card">
-        <div class="card-title">רשימת מוצרים</div>
+        <div class="card-title">קטלוג המוצרים</div>
         <div id="tableContainer"></div>
       </div>
     </main>
@@ -30,12 +30,12 @@
 
   <script src="js/layout.js"></script>
   <script src="js/server-table.js"></script>
+  <script src="js/upload-widget.js"></script>
   <script src="js/list-page.js"></script>
   <script>
     initListPage({
       pageKey: 'products',
       apiBase: '/api/products',
-      exportFilename: 'products',
       defaultSort: { field: 'name', dir: 'asc' },
       columns: [
         { key: 'itemCode', label: 'קוד פריט' },

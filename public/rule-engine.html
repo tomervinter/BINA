@@ -12,12 +12,21 @@
     <main class="main-content">
       <div class="topbar" id="topbarMount"></div>
 
+      <div class="page-title">כללי מנוע התובנות</div>
+      <div class="page-subtitle">תיעוד מדויק של כל כלל וסף שלפיו המערכת מייצרת תובנות כרגע.</div>
+
+      <div class="card">
+        <ul class="rules-general-list">
+          <li>רק לקוחות בסטטוס <b>"פעיל"</b> מניבים תובנות.</li>
+          <li>ניתן לשנות רק את הערכים המספריים המודגשים בתוך הטקסט — מבנה הכלל עצמו קבוע.</li>
+        </ul>
+      </div>
+
       <div class="card">
         <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
-          <span>כללי מנוע התובנות</span>
+          <span>פירוט הכללים</span>
           <button class="btn btn-ghost btn-sm" id="resetAllBtn" type="button">איפוס כל הכללים לברירת המחדל</button>
         </div>
-        <p style="color:var(--text-muted);font-size:13px;margin:0 0 6px;">כל כלל קבוע במבנה שלו — ניתן לשנות רק את הערכים המספריים המודגשים, ישירות בתוך הטקסט.</p>
         <div id="rulesContainer"></div>
       </div>
     </main>

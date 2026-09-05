@@ -4,19 +4,38 @@ const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer, parseDMY, parseNumber } = require('../lib/csv');
 const { parseListQuery } = require('../lib/listQuery');
+const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
+const { replaceAll } = require('../lib/bulkInsert');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(requireAuth);
 
+const SORTABLE = ['customerNumber', 'productCode', 'date', 'quantity', 'revenue', 'weight'];
+const FILTERABLE = ['customerNumber', 'productCode'];
+const MAX_EXPORT_ROWS = 100000;
+function fmtDate(d) {
+  const dt = new Date(d);
+  const p = (n) => String(n).padStart(2, '0');
+  return p(dt.getDate()) + '/' + p(dt.getMonth() + 1) + '/' + dt.getFullYear();
+}
+const EXPORT_COLUMNS = [
+  { key: 'customerNumber', label: 'מספר לקוח' },
+  { key: 'productCode', label: 'קוד פריט' },
+  { key: 'date', label: 'תאריך', value: (r) => fmtDate(r.date) },
+  { key: 'quantity', label: 'מכר כמותי' },
+  { key: 'revenue', label: 'מכר כספי' },
+  { key: 'weight', label: 'משקל' }
+];
+
 // Sales can run into the hundreds of thousands of rows, so filtering is limited to the
 // text columns (customerNumber/productCode) — DB-level substring search on numbers/dates
 // isn't practical at that scale, but sorting is still supported on every column.
 router.get('/', async (req, res) => {
   const { page, pageSize, sortBy, sortDir, where, skip, take } = parseListQuery(req, {
-    sortableFields: ['customerNumber', 'productCode', 'date', 'quantity', 'revenue', 'weight'],
-    filterableFields: ['customerNumber', 'productCode'],
+    sortableFields: SORTABLE,
+    filterableFields: FILTERABLE,
     defaultSort: { field: 'date', dir: 'desc' }
   });
   const fullWhere = { organizationId: req.user.organizationId, ...where };
@@ -25,6 +44,23 @@ router.get('/', async (req, res) => {
     prisma.sale.count({ where: fullWhere })
   ]);
   res.json({ rows, total, page, pageSize });
+});
+
+router.get('/export', async (req, res) => {
+  const { sortBy, sortDir, where } = parseListQuery(req, {
+    sortableFields: SORTABLE,
+    filterableFields: FILTERABLE,
+    defaultSort: { field: 'date', dir: 'desc' }
+  });
+  const rows = await prisma.sale.findMany({
+    where: { organizationId: req.user.organizationId, ...where },
+    orderBy: { [sortBy]: sortDir },
+    take: MAX_EXPORT_ROWS
+  });
+  const buffer = rowsToXlsxBuffer(EXPORT_COLUMNS, rows);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="sales.xlsx"');
+  res.send(buffer);
 });
 
 router.post('/upload', upload.single('file'), async (req, res) => {
@@ -51,10 +87,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     };
   }).filter((r) => r.customerNumber && r.productCode && r.date.getTime() !== new Date(0).getTime());
 
-  await prisma.$transaction([
-    prisma.sale.deleteMany({ where: { organizationId: orgId } }),
-    prisma.sale.createMany({ data: rows })
-  ]);
+  await replaceAll(prisma, 'sale', { organizationId: orgId }, rows);
 
   res.json({ ok: true, count: rows.length });
 });

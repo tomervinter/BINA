@@ -2,6 +2,21 @@ const express = require('express');
 const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const { parseDMY } = require('../lib/csv');
+const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
+
+function fmtDate(d) {
+  const dt = new Date(d);
+  const p = (n) => String(n).padStart(2, '0');
+  return p(dt.getDate()) + '/' + p(dt.getMonth() + 1) + '/' + dt.getFullYear();
+}
+const EXPORT_COLUMNS = [
+  { key: 'name', label: 'חג' },
+  { key: 'year', label: 'שנה' },
+  { key: 'fromDate', label: 'מתאריך', value: (r) => fmtDate(r.fromDate) },
+  { key: 'toDate', label: 'עד תאריך', value: (r) => fmtDate(r.toDate) },
+  { key: 'daysBefore', label: 'מספר ימי השפעה לפני החג' },
+  { key: 'daysAfter', label: 'מספר ימי השפעה לאחר החג' }
+];
 
 const router = express.Router();
 router.use(requireAuth);
@@ -23,6 +38,22 @@ router.get('/', async (req, res) => {
     orderBy: [{ year: 'desc' }, { fromDate: 'asc' }]
   });
   res.json(rows);
+});
+
+router.get('/export', async (req, res) => {
+  const rows = await prisma.holiday.findMany({
+    where: { organizationId: req.user.organizationId },
+    orderBy: [{ year: 'desc' }, { fromDate: 'asc' }]
+  });
+  const buffer = rowsToXlsxBuffer(EXPORT_COLUMNS, rows);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="holidays.xlsx"');
+  res.send(buffer);
+});
+
+router.delete('/', async (req, res) => {
+  await prisma.holiday.deleteMany({ where: { organizationId: req.user.organizationId } });
+  res.json({ ok: true });
 });
 
 // Rows are added blank and filled in via inline edits (PUT), so name isn't required here.
