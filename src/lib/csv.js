@@ -1,4 +1,5 @@
 const { parse } = require('csv-parse/sync');
+const XLSX = require('xlsx');
 
 // Parses an uploaded CSV buffer into an array of plain objects keyed by the header row.
 function parseCsvBuffer(buffer) {
@@ -9,6 +10,36 @@ function parseCsvBuffer(buffer) {
     trim: true
   });
   return records;
+}
+
+// SheetJS resolves Excel date cells to Date objects anchored at UTC midnight for the
+// intended calendar day — read them back with UTC getters, not local ones, or the
+// day can shift depending on the server's timezone.
+function formatExcelDate(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return p(d.getUTCDate()) + '/' + p(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear();
+}
+
+function parseXlsxBuffer(buffer) {
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  return rows.map((row) => {
+    const out = {};
+    Object.keys(row).forEach((key) => {
+      const v = row[key];
+      out[key] = v instanceof Date ? formatExcelDate(v) : v;
+    });
+    return out;
+  });
+}
+
+// Dispatches to the CSV or Excel parser by file extension, so every upload route
+// accepts both formats through the same call.
+function parseFileBuffer(buffer, filename) {
+  const ext = String(filename || '').toLowerCase().split('.').pop();
+  if (ext === 'xlsx' || ext === 'xls') return parseXlsxBuffer(buffer);
+  return parseCsvBuffer(buffer);
 }
 
 // Parses dd/mm/yyyy (and a couple of common fallbacks) into a JS Date at local midnight.
@@ -28,4 +59,4 @@ function parseNumber(value) {
   return isNaN(n) ? 0 : n;
 }
 
-module.exports = { parseCsvBuffer, parseDMY, parseNumber };
+module.exports = { parseCsvBuffer, parseFileBuffer, parseDMY, parseNumber };

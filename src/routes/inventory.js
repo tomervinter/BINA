@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
-const { parseCsvBuffer, parseDMY, parseNumber } = require('../lib/csv');
+const { parseFileBuffer, parseDMY, parseNumber } = require('../lib/csv');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -22,9 +22,9 @@ router.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'לא נבחר קובץ' });
   let records;
   try {
-    records = parseCsvBuffer(req.file.buffer);
+    records = parseFileBuffer(req.file.buffer, req.file.originalname);
   } catch (err) {
-    return res.status(400).json({ error: 'שגיאה בקריאת הקובץ — ודאו שזהו קובץ CSV תקין' });
+    return res.status(400).json({ error: 'שגיאה בקריאת הקובץ — ודאו שזהו קובץ CSV או Excel תקין' });
   }
   if (!records.length) return res.status(400).json({ error: 'הקובץ ריק' });
 
