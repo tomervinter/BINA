@@ -54,7 +54,7 @@ function createDataTable(container, columns, rows, opts) {
     html += '<div class="table-scroll"><table><thead><tr>';
     columns.forEach((col) => {
       const sortCls = state.sortCol === col.key ? (' sorted-' + state.sortDir) : '';
-      html += '<th><span class="th-inner js-sortBtn' + sortCls + '" data-col="' + col.key + '">' + Layout.escapeHtml(col.label) +
+      html += '<th><span class="th-inner js-sortBtn' + sortCls + '" data-col="' + col.key + '"><span class="th-label">' + Layout.escapeHtml(col.label) + '</span>' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10l5 5 5-5"/></svg></span></th>';
     });
     html += '</tr><tr class="filter-row">';

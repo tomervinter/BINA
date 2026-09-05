@@ -85,7 +85,7 @@ function createServerTable(container, columns, opts) {
       const sortable = col.sortable !== false;
       const sortCls = state.sortBy === col.key ? (' sorted-' + state.sortDir) : '';
       if (sortable) {
-        html += '<th><span class="th-inner js-sortBtn' + sortCls + '" data-col="' + col.key + '">' + Layout.escapeHtml(col.label) +
+        html += '<th><span class="th-inner js-sortBtn' + sortCls + '" data-col="' + col.key + '"><span class="th-label">' + Layout.escapeHtml(col.label) + '</span>' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10l5 5 5-5"/></svg></span></th>';
       } else {
         html += '<th><span class="th-inner">' + Layout.escapeHtml(col.label) + '</span></th>';
