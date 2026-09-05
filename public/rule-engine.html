@@ -1,0 +1,30 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>כללי מנוע התובנות — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>כללי מנוע התובנות</span>
+          <button class="btn btn-ghost btn-sm" id="resetAllBtn" type="button">איפוס כל הכללים לברירת המחדל</button>
+        </div>
+        <p style="color:var(--text-muted);font-size:13px;margin:0 0 6px;">כל כלל קבוע במבנה שלו — ניתן לשנות רק את הערכים המספריים המודגשים, ישירות בתוך הטקסט.</p>
+        <div id="rulesContainer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/rule-engine-page.js"></script>
+  <script>initRuleEnginePage();</script>
+</body>
+</html>

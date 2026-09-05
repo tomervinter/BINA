@@ -1,0 +1,55 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>הרשמה — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="auth-wrap">
+    <h1>הרשמה</h1>
+    <div class="sub">פתיחת חשבון חדש לחברה שלך</div>
+    <div class="error-box" id="errorBox"></div>
+    <form id="signupForm">
+      <label>שם החברה</label>
+      <input type="text" id="organizationName" required>
+      <label>שם מלא</label>
+      <input type="text" id="name">
+      <label>אימייל</label>
+      <input type="email" id="email" required>
+      <label>סיסמה (8 תווים לפחות)</label>
+      <input type="password" id="password" required minlength="8">
+      <button class="btn" type="submit" style="width:100%;justify-content:center;">יצירת חשבון</button>
+    </form>
+    <p style="margin-top:16px;text-align:center;font-size:13px;color:var(--text-muted);">
+      כבר יש לך חשבון? <a class="link" href="login.html">התחברות</a>
+    </p>
+  </div>
+  <script>
+    document.getElementById('signupForm').addEventListener('submit', async function(e){
+      e.preventDefault();
+      const errorBox = document.getElementById('errorBox');
+      errorBox.style.display = 'none';
+      const body = {
+        organizationName: document.getElementById('organizationName').value.trim(),
+        name: document.getElementById('name').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value
+      };
+      try {
+        const res = await fetch('/api/auth/signup', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials: 'include', body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if(!res.ok){ errorBox.textContent = data.error || 'שגיאה בהרשמה'; errorBox.style.display = 'block'; return; }
+        window.location.href = 'dashboard.html';
+      } catch(err){
+        errorBox.textContent = 'שגיאת רשת — נסו שוב';
+        errorBox.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

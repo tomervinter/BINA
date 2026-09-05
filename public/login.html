@@ -1,0 +1,49 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>התחברות — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="auth-wrap">
+    <h1>התחברות</h1>
+    <div class="sub">רדאר מכירות — מערכת תובנות B2B</div>
+    <div class="error-box" id="errorBox"></div>
+    <form id="loginForm">
+      <label>אימייל</label>
+      <input type="email" id="email" required>
+      <label>סיסמה</label>
+      <input type="password" id="password" required>
+      <button class="btn" type="submit" style="width:100%;justify-content:center;">התחברות</button>
+    </form>
+    <p style="margin-top:16px;text-align:center;font-size:13px;color:var(--text-muted);">
+      אין לך חשבון? <a class="link" href="signup.html">הרשמה</a>
+    </p>
+  </div>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async function(e){
+      e.preventDefault();
+      const errorBox = document.getElementById('errorBox');
+      errorBox.style.display = 'none';
+      const body = {
+        email: document.getElementById('email').value.trim(),
+        password: document.getElementById('password').value
+      };
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          credentials: 'include', body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if(!res.ok){ errorBox.textContent = data.error || 'שגיאה בהתחברות'; errorBox.style.display = 'block'; return; }
+        window.location.href = 'dashboard.html';
+      } catch(err){
+        errorBox.textContent = 'שגיאת רשת — נסו שוב';
+        errorBox.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

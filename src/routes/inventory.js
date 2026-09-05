@@ -1,0 +1,56 @@
+const express = require('express');
+const multer = require('multer');
+const prisma = require('../lib/prisma');
+const requireAuth = require('../middleware/requireAuth');
+const { parseCsvBuffer, parseDMY, parseNumber } = require('../lib/csv');
+
+const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
+
+router.use(requireAuth);
+
+router.get('/', async (req, res) => {
+  const rows = await prisma.inventoryRecord.findMany({
+    where: { organizationId: req.user.organizationId },
+    orderBy: { date: 'desc' },
+    take: 2000
+  });
+  res.json(rows);
+});
+
+router.post('/upload', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'לא נבחר קובץ' });
+  let records;
+  try {
+    records = parseCsvBuffer(req.file.buffer);
+  } catch (err) {
+    return res.status(400).json({ error: 'שגיאה בקריאת הקובץ — ודאו שזהו קובץ CSV תקין' });
+  }
+  if (!records.length) return res.status(400).json({ error: 'הקובץ ריק' });
+
+  const orgId = req.user.organizationId;
+  const rows = records.map((r) => {
+    const date = parseDMY(r['תאריך']);
+    return {
+      organizationId: orgId,
+      sku: String(r['מק"ט'] || r['מק״ט'] || '').trim(),
+      productName: r['שם מוצר'] || null,
+      date: date || new Date(0),
+      stock: parseNumber(r['מלאי'])
+    };
+  }).filter((r) => r.sku);
+
+  await prisma.$transaction([
+    prisma.inventoryRecord.deleteMany({ where: { organizationId: orgId } }),
+    prisma.inventoryRecord.createMany({ data: rows })
+  ]);
+
+  res.json({ ok: true, count: rows.length });
+});
+
+router.delete('/', async (req, res) => {
+  await prisma.inventoryRecord.deleteMany({ where: { organizationId: req.user.organizationId } });
+  res.json({ ok: true });
+});
+
+module.exports = router;

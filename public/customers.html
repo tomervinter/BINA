@@ -1,0 +1,51 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>לקוחות — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="card">
+        <div class="card-title">טעינת קובץ לקוחות (CSV)</div>
+        <div class="upload-row">
+          <input type="file" id="csvFile" accept=".csv">
+          <button class="btn" id="uploadBtn">העלאה (מחליף את כל הרשימה)</button>
+        </div>
+        <div class="status-line" id="uploadStatus"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">רשימת לקוחות</div>
+        <div id="tableContainer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/table.js"></script>
+  <script src="js/list-page.js"></script>
+  <script>
+    initListPage({
+      pageKey: 'customers',
+      apiBase: '/api/customers',
+      exportFilename: 'customers',
+      columns: [
+        { key: 'customerNumber', label: 'מספר לקוח' },
+        { key: 'name', label: 'שם לקוח' },
+        { key: 'primaryClass', label: 'סיווג ראשי' },
+        { key: 'customerType', label: 'סוג לקוח' },
+        { key: 'city', label: 'עיר' },
+        { key: 'centralCustomer', label: 'לקוח מרכז' },
+        { key: 'status', label: 'סטטוס' }
+      ]
+    });
+  </script>
+</body>
+</html>

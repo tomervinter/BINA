@@ -1,0 +1,61 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>כרטסת תחקור לקוח — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="card">
+        <div class="card-title">כרטסת תחקור לקוח</div>
+        <label style="margin-bottom:6px;">בחר לקוח</label>
+        <select id="customerSelect" style="min-width:280px;"></select>
+      </div>
+
+      <p id="cpEmptyState" style="color:var(--text-faint);font-size:13px;">בחרו לקוח כדי לראות את הפרופיל המלא שלו.</p>
+
+      <div id="cpContent" hidden>
+        <div class="card">
+          <div id="cpIdentity"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">מדדים עיקריים</div>
+          <div class="kpi-grid" id="cpKpis"></div>
+        </div>
+        <div class="card">
+          <div class="section-title" style="margin-top:0;">תובנות פתוחות ללקוח זה</div>
+          <div id="cpInsights"></div>
+        </div>
+        <div class="card">
+          <div class="section-title" style="margin-top:0;">מחזור חודשי (6 חודשים אחרונים)</div>
+          <div id="cpMonthly"></div>
+        </div>
+        <div class="card">
+          <div class="section-title" style="margin-top:0;">פירוט לפי מוצר</div>
+          <div id="cpProducts"></div>
+        </div>
+        <div class="card">
+          <div class="section-title" style="margin-top:0;">השוואה לקבוצת הסיווג</div>
+          <div id="cpSegment"></div>
+        </div>
+        <div class="card">
+          <div class="section-title" style="margin-top:0;">פערי מגוון מוצרים (לעומת לקוחות דומים מאותו סוג)</div>
+          <div id="cpVarietyGaps"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/table.js"></script>
+  <script src="js/type-meta.js"></script>
+  <script src="js/customer-profile-page.js"></script>
+  <script>initCustomerProfilePage();</script>
+</body>
+</html>

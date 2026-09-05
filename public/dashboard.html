@@ -1,0 +1,50 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>דשבורד — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="card">
+        <div class="card-title">טעינת נתונים יומית (CSV)</div>
+        <div class="upload-row">
+          <label style="margin:0;">לקוחות:</label>
+          <input type="file" id="customersFile" accept=".csv">
+          <button class="btn" data-target="customers">העלאה</button>
+        </div>
+        <div class="upload-row" style="margin-top:10px;">
+          <label style="margin:0;">מוצרים:</label>
+          <input type="file" id="productsFile" accept=".csv">
+          <button class="btn" data-target="products">העלאה</button>
+        </div>
+        <div class="upload-row" style="margin-top:10px;">
+          <label style="margin:0;">מכירות:</label>
+          <input type="file" id="salesFile" accept=".csv">
+          <button class="btn" data-target="sales">העלאה</button>
+        </div>
+        <div class="upload-row" style="margin-top:10px;">
+          <label style="margin:0;">מלאי:</label>
+          <input type="file" id="inventoryFile" accept=".csv">
+          <button class="btn" data-target="inventory">העלאה</button>
+        </div>
+        <div class="status-line" id="uploadStatus"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">תובנות פתוחות (<span id="insightsCount">0</span>)</div>
+        <p style="color:var(--text-muted);font-size:13px;margin:0 0 10px;">לרשימה המלאה עם סינון, מיון וייצוא — <a class="link" href="insights.html">יומן תובנות</a>.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

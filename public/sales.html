@@ -1,0 +1,55 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מכירות — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="card">
+        <div class="card-title">טעינת קובץ מכירות (CSV)</div>
+        <div class="upload-row">
+          <input type="file" id="csvFile" accept=".csv">
+          <button class="btn" id="uploadBtn">העלאה (מחליף את כל הרשימה)</button>
+        </div>
+        <div class="status-line" id="uploadStatus"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">מכירות (עד 2000 האחרונות)</div>
+        <div id="tableContainer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/table.js"></script>
+  <script src="js/list-page.js"></script>
+  <script>
+    function fmtDate(iso) {
+      const d = new Date(iso);
+      const p = (n) => String(n).padStart(2, '0');
+      return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear();
+    }
+    initListPage({
+      pageKey: 'sales',
+      apiBase: '/api/sales',
+      exportFilename: 'sales',
+      columns: [
+        { key: 'customerNumber', label: 'מספר לקוח' },
+        { key: 'productCode', label: 'קוד פריט' },
+        { key: 'date', label: 'תאריך', render: (r) => fmtDate(r.date), sortValue: (r) => new Date(r.date).getTime() },
+        { key: 'quantity', label: 'מכר כמותי' },
+        { key: 'revenue', label: 'מכר כספי' },
+        { key: 'weight', label: 'משקל' }
+      ]
+    });
+  </script>
+</body>
+</html>

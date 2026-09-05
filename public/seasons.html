@@ -1,0 +1,38 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ניהול עונתיות — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="card">
+        <div class="card-title">ניהול עונתיות</div>
+        <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px;">הגדירו כאן טווחי תאריכים לעונות (קיץ, חורף וכד') — משמש להשוואות עונתיות באותו אופן שבו חגים משמשים להשוואה שנתית.</p>
+        <div id="tableContainer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/inline-edit-table.js"></script>
+  <script>
+    initInlineEditTable({
+      pageKey: 'seasons',
+      apiBase: '/api/seasons',
+      fields: [
+        { key: 'name', label: 'עונה' },
+        { key: 'year', label: 'שנה', type: 'number', default: new Date().getFullYear() },
+        { key: 'fromDate', label: 'מתאריך', type: 'date' },
+        { key: 'toDate', label: 'עד תאריך', type: 'date' }
+      ]
+    });
+  </script>
+</body>
+</html>

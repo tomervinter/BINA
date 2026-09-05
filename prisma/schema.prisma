@@ -1,0 +1,152 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users               User[]
+  customers           Customer[]
+  products            Product[]
+  sales               Sale[]
+  inventoryRecords    InventoryRecord[]
+  holidays            Holiday[]
+  seasons             Season[]
+  relevanceOverrides  RelevanceOverride[]
+  ruleSettings        RuleSetting[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String
+  name           String?
+  role           String       @default("admin")
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+}
+
+model Customer {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  customerNumber  String
+  name            String
+  primaryClass    String?
+  customerType    String?
+  city            String?
+  centralCustomer String?
+  status          String       @default("פעיל")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([organizationId, customerNumber])
+  @@index([organizationId])
+}
+
+model Product {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  itemCode       String
+  name           String
+  type           String?
+  superType      String?
+  department     String?
+  unit           String?
+  status         String       @default("פעיל")
+  forProcurement String?
+  forMarketing   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, itemCode])
+  @@index([organizationId])
+}
+
+model Sale {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  customerNumber String
+  productCode    String
+  date           DateTime
+  quantity       Float
+  revenue        Float
+  weight         Float?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([organizationId, customerNumber])
+  @@index([organizationId, productCode])
+}
+
+model InventoryRecord {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  sku            String
+  productName    String?
+  date           DateTime
+  stock          Float
+
+  @@index([organizationId])
+}
+
+model Holiday {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  year           Int
+  fromDate       DateTime
+  toDate         DateTime
+  daysBefore     Int          @default(0)
+  daysAfter      Int          @default(0)
+
+  @@index([organizationId])
+}
+
+model Season {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  year           Int
+  fromDate       DateTime
+  toDate         DateTime
+
+  @@index([organizationId])
+}
+
+model RelevanceOverride {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  productCode    String
+  source         String
+  name           String
+  value          Boolean
+
+  @@unique([organizationId, productCode, source, name])
+  @@index([organizationId])
+}
+
+model RuleSetting {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  paramId        String
+  value          Float
+
+  @@unique([organizationId, paramId])
+  @@index([organizationId])
+}

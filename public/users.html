@@ -1,0 +1,53 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>משתמשים — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="card" id="inviteCard">
+        <div class="card-title">הוספת משתמש לחברה</div>
+        <form id="inviteForm">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:160px;">
+              <label>שם מלא</label>
+              <input type="text" id="inviteName">
+            </div>
+            <div style="flex:1;min-width:160px;">
+              <label>אימייל</label>
+              <input type="email" id="inviteEmail" required>
+            </div>
+            <div style="flex:1;min-width:160px;">
+              <label>סיסמה זמנית (8 תווים לפחות)</label>
+              <input type="password" id="invitePassword" required minlength="8">
+            </div>
+            <div style="min-width:140px;">
+              <label>תפקיד</label>
+              <select id="inviteRole"><option value="member">חבר צוות</option><option value="admin">מנהל</option></select>
+            </div>
+          </div>
+          <button class="btn" type="submit">הוספת משתמש</button>
+        </form>
+        <div class="status-line" id="inviteStatus" style="display:none;"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">משתמשי החברה</div>
+        <div id="usersTable"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/table.js"></script>
+  <script src="js/users-page.js"></script>
+  <script>initUsersPage();</script>
+</body>
+</html>

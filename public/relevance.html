@@ -1,0 +1,27 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>שיוך חג ועונה למוצר — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="card">
+        <div class="card-title">שיוך חג ועונה למוצר</div>
+        <p style="color:var(--text-muted);font-size:13px;margin:0 0 14px;">המערכת מזהה אוטומטית קשר בין מוצר לחג/עונה לפי נתוני המכירות בפועל. ניתן לאשר/לדחות ידנית — קביעה ידנית תמיד גוברת, וקובעת אילו מוצרים ייכללו בתובנות עונתיות.</p>
+        <div id="matrixContainer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/relevance.js"></script>
+  <script>initRelevancePage();</script>
+</body>
+</html>

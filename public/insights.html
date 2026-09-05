@@ -1,0 +1,29 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>יומן תובנות — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="card">
+        <div class="card-title">יומן תובנות</div>
+        <p style="color:var(--text-muted);font-size:13px;margin:0 0 10px;">כל התראות החריגה וההזדמנויות במקום אחד — ניתן לסנן ולמיין לפי כל עמודה וללחוץ על שורת לקוח למעבר לכרטסת התחקור שלו.</p>
+        <div id="tableContainer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/table.js"></script>
+  <script src="js/type-meta.js"></script>
+  <script src="js/insights-page.js"></script>
+  <script>initInsightsPage();</script>
+</body>
+</html>
