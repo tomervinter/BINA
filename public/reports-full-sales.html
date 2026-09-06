@@ -1,0 +1,30 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>דוח מכירות מלא — BINA</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="page-title">דוח מכירות מלא</div>
+      <div class="page-subtitle">כל שורות המכירות בצירוף כל פרטי הלקוח והמוצר מטבלאות המאסטר — מסך אחד לכל הנתונים, ללא צורך לחפש בטבלאות נפרדות.</div>
+
+      <div class="card">
+        <div class="card-title">נתוני המכירות המלאים</div>
+        <div id="tableContainer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/server-table.js"></script>
+  <script src="js/reports-full-sales-page.js"></script>
+  <script>initFullSalesReportPage();</script>
+</body>
+</html>

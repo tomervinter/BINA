@@ -16,6 +16,7 @@ const NAV_ICONS = {
   'rule-engine': '<path d="M4 19.5V6a2 2 0 0 1 2-2h9l5 5v10.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"></path><path d="M9 12h6M9 15.5h6M9 8.5h3"></path>',
   users: '<circle cx="9" cy="8" r="3.1"></circle><path d="M3.5 19.5c.6-3.4 2.9-5.3 5.5-5.3s4.9 1.9 5.5 5.3"></path><circle cx="17" cy="9" r="2.3"></circle>',
   'reports-yoy': '<path d="M4 19.5h16"></path><path d="M7 19.5v-6M12 19.5v-10M17 19.5v-3.5"></path>',
+  'reports-full-sales': '<rect x="3.5" y="4" width="17" height="16" rx="1.6"></rect><path d="M3.5 9.5h17M3.5 14.5h17M9 4v16"></path>',
   'product-substitutes': '<path d="M7 7h11l-2.5-2.5"></path><path d="M17 17H6l2.5 2.5"></path>'
 };
 
@@ -38,6 +39,7 @@ const NAV_GROUPS = [
   ] },
   { title: 'דוחות', items: [
     { key: 'insights', href: 'insights.html', label: 'יומן תובנות' },
+    { key: 'reports-full-sales', href: 'reports-full-sales.html', label: 'דוח מכירות מלא' },
     { key: 'reports-yoy', href: 'reports-yoy.html', label: 'דוח שנה מול שנה' },
     { key: 'customer-profile', href: 'customer-profile.html', label: 'כרטסת תחקור תובנה' },
     { key: 'rule-engine', href: 'rule-engine.html', label: 'כללי מנוע התובנות' }
@@ -51,7 +53,7 @@ const PAGE_LABELS = {
   dashboard: 'בית', sales: 'טעינת קובץ מכירות', customers: 'טעינת לקוחות', products: 'טעינת מוצרים',
   inventory: 'טעינת מלאי', holidays: 'ניהול חגים', seasons: 'ניהול עונתיות', relevance: 'שיוך חג ועונה למוצר',
   insights: 'יומן תובנות', 'customer-profile': 'כרטסת תחקור תובנה', 'rule-engine': 'כללי מנוע התובנות', users: 'משתמשים',
-  'reports-yoy': 'דוח שנה מול שנה', 'product-substitutes': 'מוצרים תחליפיים'
+  'reports-yoy': 'דוח שנה מול שנה', 'product-substitutes': 'מוצרים תחליפיים', 'reports-full-sales': 'דוח מכירות מלא'
 };
 
 const Layout = (function () {
