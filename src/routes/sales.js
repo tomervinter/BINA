@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
-const { parseFileBuffer, parseDMY, parseNumber } = require('../lib/csv');
+const { parseFileBuffer, parseNumber } = require('../lib/csv');
 const { parseListQuery } = require('../lib/listQuery');
 const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
 const { replaceAll } = require('../lib/bulkInsert');
@@ -15,15 +15,11 @@ router.use(requireAuth);
 const SORTABLE = ['customerNumber', 'productCode', 'date', 'quantity', 'revenue', 'weight'];
 const FILTERABLE = ['customerNumber', 'productCode'];
 const MAX_EXPORT_ROWS = 100000;
-function fmtDate(d) {
-  const dt = new Date(d);
-  const p = (n) => String(n).padStart(2, '0');
-  return p(dt.getDate()) + '/' + p(dt.getMonth() + 1) + '/' + dt.getFullYear();
-}
 const EXPORT_COLUMNS = [
   { key: 'customerNumber', label: 'מספר לקוח' },
   { key: 'productCode', label: 'קוד פריט' },
-  { key: 'date', label: 'תאריך', value: (r) => fmtDate(r.date) },
+  { key: 'year', label: 'שנה', value: (r) => new Date(r.date).getFullYear() },
+  { key: 'month', label: 'חודש', value: (r) => new Date(r.date).getMonth() + 1 },
   { key: 'quantity', label: 'מכר כמותי' },
   { key: 'revenue', label: 'מכר כספי' },
   { key: 'weight', label: 'משקל' }
@@ -75,17 +71,21 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
   const orgId = req.user.organizationId;
   const rows = records.map((r) => {
-    const date = parseDMY(r['תאריך']);
+    const year = parseInt(r['שנה'], 10);
+    const month = parseInt(r['חודש'], 10);
+    const validPeriod = year > 1900 && month >= 1 && month <= 12;
     return {
       organizationId: orgId,
       customerNumber: String(r['מספר לקוח'] || '').trim(),
       productCode: String(r['קוד פריט'] || '').trim(),
-      date: date || new Date(0),
+      // Sales are now recorded at month granularity only (no exact day) — stored as the
+      // 1st of the month so existing day/week-based Date math keeps working unmodified.
+      date: validPeriod ? new Date(year, month - 1, 1) : null,
       quantity: parseNumber(r['מכר כמותי']),
       revenue: parseNumber(r['מכר כספי']),
       weight: r['משקל'] != null ? parseNumber(r['משקל']) : null
     };
-  }).filter((r) => r.customerNumber && r.productCode && r.date.getTime() !== new Date(0).getTime());
+  }).filter((r) => r.customerNumber && r.productCode && r.date);
 
   await replaceAll(prisma, 'sale', { organizationId: orgId }, rows);
 

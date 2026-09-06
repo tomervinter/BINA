@@ -19,6 +19,8 @@ const seasonsRoutes = require('./routes/seasons');
 const relevanceRoutes = require('./routes/relevance');
 const navCountsRoutes = require('./routes/navCounts');
 const templatesRoutes = require('./routes/templates');
+const dashboardYoyRoutes = require('./routes/dashboardYoy');
+const productSubstitutesRoutes = require('./routes/productSubstitutes');
 
 const app = express();
 
@@ -43,8 +45,15 @@ app.use('/api/seasons', seasonsRoutes);
 app.use('/api/relevance', relevanceRoutes);
 app.use('/api/nav-counts', navCountsRoutes);
 app.use('/api/templates', templatesRoutes);
+app.use('/api/dashboard-yoy', dashboardYoyRoutes);
+app.use('/api/product-substitutes', productSubstitutesRoutes);
 
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// no-cache (not no-store): browsers still revalidate with a fast 304, but never
+// silently serve a stale cached JS/CSS file after a deploy — avoids the confusing
+// "I pushed the fix but the site still shows the old bug" class of report.
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache')
+}));
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

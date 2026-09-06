@@ -24,12 +24,6 @@ function dayKey(t) {
   const d = new Date(t);
   return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
 }
-function weekKey(t) {
-  const d = new Date(t);
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  const diffDays = Math.floor((d - jan1) / DAY_MS);
-  return d.getFullYear() + '-W' + Math.floor(diffDays / 7);
-}
 function monthKey(t) {
   const d = new Date(t);
   const mm = d.getMonth() + 1;
@@ -51,7 +45,7 @@ const DEFAULT_PARAMS = {
   upsell_popularityPct: 50,
   anomaly_minMonths: 4, anomaly_pctThreshold: 40, anomaly_highPct: 70,
   freq_minTotalDrops: 4, freq_windowDays: 30, freq_minPrevDrops: 2, freq_pctThreshold: 40, freq_highPct: 60,
-  weekly_recentActivityDays: 60, weekly_establishedWeeksNeeded: 3, weekly_totalWeeksChecked: 5, weekly_highWeeksNeeded: 4,
+  monthlyBreak_recentActivityDays: 90, monthlyBreak_establishedMonthsNeeded: 3, monthlyBreak_totalMonthsChecked: 5, monthlyBreak_highMonthsNeeded: 4,
   variety_minGroupSize: 3, variety_popularityPct: 50,
   monthly_pctThreshold: 30, monthly_highPct: 50, monthly_minBaseRevenue: 100, monthly_topN: 3,
   seasonal_pctThreshold: 40, seasonal_highPct: 70, seasonal_minBaseRevenue: 100
@@ -305,35 +299,41 @@ async function computeInsights(organizationId) {
     }
   });
 
-  // 8. weekly product purchase break (inventory-aware — suppressed when out of stock)
+  // 8. monthly product purchase break (inventory-aware — suppressed when out of stock)
+  // Sales are recorded at month granularity only (no exact day), so the original
+  // week-over-week pattern check is replaced by a month-over-month one: did the
+  // customer buy this product in most of the recent months, but skip the current one.
   Object.keys(byPair).forEach((key) => {
     const idx = key.indexOf('|');
     const cid = key.slice(0, idx), pid = key.slice(idx + 1);
     const cust = custIndex[cid];
     if (isInactive(cust)) return;
     if (isProductInactive(prodIndex[pid])) return;
-    const recentAny = (byCustomer[cid] || []).some((e) => e.t > now - params.weekly_recentActivityDays * DAY_MS);
+    const recentAny = (byCustomer[cid] || []).some((e) => e.t > now - params.monthlyBreak_recentActivityDays * DAY_MS);
     if (!recentAny) return;
 
-    const weeksSet = {};
-    byPair[key].forEach((e) => { weeksSet[weekKey(e.t)] = true; });
-    const recentWeekKeys = [];
-    for (let w = 0; w <= params.weekly_totalWeeksChecked; w++) recentWeekKeys.push(weekKey(now - w * 7 * DAY_MS));
-    const lastWeek = recentWeekKeys[0];
-    const priorWeeks = recentWeekKeys.slice(1);
-    const establishedCount = priorWeeks.filter((wk) => weeksSet[wk]).length;
+    const monthsSet = {};
+    byPair[key].forEach((e) => { monthsSet[monthKey(e.t)] = true; });
+    const nowDate = new Date(now);
+    const recentMonthKeys = [];
+    for (let m = 0; m <= params.monthlyBreak_totalMonthsChecked; m++) {
+      recentMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1)));
+    }
+    const currentMonth = recentMonthKeys[0];
+    const priorMonths = recentMonthKeys.slice(1);
+    const establishedCount = priorMonths.filter((mk) => monthsSet[mk]).length;
 
-    if (establishedCount >= params.weekly_establishedWeeksNeeded && !weeksSet[lastWeek]) {
+    if (establishedCount >= params.monthlyBreak_establishedMonthsNeeded && !monthsSet[currentMonth]) {
       const invRow = invIndex[pid];
       const stock = invRow ? invRow.stock : null;
       if (stock !== null && stock <= 0) return;
       insights.push({
-        type: 'weeklyProductBreak',
-        severity: establishedCount >= params.weekly_highWeeksNeeded ? 'high' : 'medium',
+        type: 'monthlyProductBreak',
+        severity: establishedCount >= params.monthlyBreak_highMonthsNeeded ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הלקוח רכש את ${prodLabel(pid)} ב-${establishedCount} מתוך ${params.weekly_totalWeeksChecked} השבועות האחרונים, אך לא רכש השבוע — דפוס רכישה שבועי שנקטע.`,
+        message: `הלקוח רכש את ${prodLabel(pid)} ב-${establishedCount} מתוך ${params.monthlyBreak_totalMonthsChecked} החודשים האחרונים, אך לא רכש החודש — דפוס רכישה חודשי שנקטע.`,
         metric: establishedCount
       });
     }

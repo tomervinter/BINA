@@ -21,6 +21,7 @@ model Organization {
   seasons             Season[]
   relevanceOverrides  RelevanceOverride[]
   ruleSettings        RuleSetting[]
+  productSubstitutes  ProductSubstitute[]
 }
 
 model User {
@@ -148,5 +149,19 @@ model RuleSetting {
   value          Float
 
   @@unique([organizationId, paramId])
+  @@index([organizationId])
+}
+
+// A directional suggestion: productCode can be substituted BY substituteCode when
+// out of stock. Not symmetric — A may substitute for B without B substituting for A.
+model ProductSubstitute {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  productCode    String
+  substituteCode String
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, productCode, substituteCode])
   @@index([organizationId])
 }

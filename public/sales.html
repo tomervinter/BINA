@@ -30,15 +30,11 @@
   </div>
 
   <script src="js/layout.js"></script>
+  <script src="js/confirm-modal.js"></script>
   <script src="js/server-table.js"></script>
   <script src="js/upload-widget.js"></script>
   <script src="js/list-page.js"></script>
   <script>
-    function fmtDate(iso) {
-      const d = new Date(iso);
-      const p = (n) => String(n).padStart(2, '0');
-      return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear();
-    }
     initListPage({
       pageKey: 'sales',
       apiBase: '/api/sales',
@@ -46,7 +42,8 @@
       columns: [
         { key: 'customerNumber', label: 'מספר לקוח' },
         { key: 'productCode', label: 'קוד פריט' },
-        { key: 'date', label: 'תאריך', render: (r) => fmtDate(r.date), filterable: false },
+        { key: 'year', label: 'שנה', sortKey: 'date', render: (r) => new Date(r.date).getFullYear(), filterable: false },
+        { key: 'month', label: 'חודש', sortKey: 'date', render: (r) => new Date(r.date).getMonth() + 1, filterable: false },
         { key: 'quantity', label: 'מכר כמותי', filterable: false },
         { key: 'revenue', label: 'מכר כספי', filterable: false },
         { key: 'weight', label: 'משקל', filterable: false }

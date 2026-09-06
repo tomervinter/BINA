@@ -50,11 +50,12 @@ function createServerTable(container, columns, opts) {
     window.location.href = opts.apiBase + '/export?' + buildParams().toString();
   }
 
-  async function deleteAll() {
-    if (!confirm('למחוק את כל הנתונים? פעולה זו אינה הפיכה.')) return;
-    await fetch(opts.apiBase, { method: 'DELETE', credentials: 'include' });
-    state.page = 1;
-    await load();
+  function deleteAll() {
+    confirmDangerousDelete('פעולה זו תמחק את כל הנתונים בטבלה זו לצמיתות ואינה הפיכה.', async () => {
+      await fetch(opts.apiBase, { method: 'DELETE', credentials: 'include' });
+      state.page = 1;
+      await load();
+    });
   }
 
   function clearFilters() {
@@ -83,9 +84,10 @@ function createServerTable(container, columns, opts) {
     html += '<div class="table-scroll"><table><thead><tr>';
     columns.forEach((col) => {
       const sortable = col.sortable !== false;
-      const sortCls = state.sortBy === col.key ? (' sorted-' + state.sortDir) : '';
+      const sortKey = col.sortKey || col.key;
+      const sortCls = state.sortBy === sortKey ? (' sorted-' + state.sortDir) : '';
       if (sortable) {
-        html += '<th><span class="th-inner js-sortBtn' + sortCls + '" data-col="' + col.key + '"><span class="th-label">' + Layout.escapeHtml(col.label) + '</span>' +
+        html += '<th><span class="th-inner js-sortBtn' + sortCls + '" data-col="' + sortKey + '"><span class="th-label">' + Layout.escapeHtml(col.label) + '</span>' +
           '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10l5 5 5-5"/></svg></span></th>';
       } else {
         html += '<th><span class="th-inner">' + Layout.escapeHtml(col.label) + '</span></th>';

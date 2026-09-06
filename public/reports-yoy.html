@@ -1,0 +1,50 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>דוח שנה מול שנה — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="page-title">דוח שנה מול שנה</div>
+      <div class="page-subtitle" id="pageSubtitle">טוען...</div>
+
+      <div id="yoyContent">
+        <div class="kpi-grid" id="kpiGrid" style="margin-bottom:22px;"></div>
+
+        <div class="card">
+          <div class="card-title">מחזור מצטבר לפי חודש</div>
+          <canvas id="monthlyChart" height="90"></canvas>
+        </div>
+
+        <div class="card">
+          <div class="card-title">מחזור לפי ערוץ מכר (סיווג ראשי לקוח)</div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:24px;align-items:center;">
+            <canvas id="channelChart" height="220"></canvas>
+            <canvas id="channelDonut" height="220"></canvas>
+          </div>
+          <div id="channelTable" style="margin-top:18px;"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">מחזור לפי טיפוס על</div>
+          <canvas id="superTypeChart" height="200"></canvas>
+          <div id="superTypeTable" style="margin-top:18px;"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/table.js"></script>
+  <script src="js/reports-yoy-page.js"></script>
+  <script>initYoyReportPage();</script>
+</body>
+</html>

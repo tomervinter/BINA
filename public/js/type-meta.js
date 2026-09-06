@@ -5,7 +5,7 @@ const TYPE_META = {
   dropoff: { label: 'הפסקת מוצר', category: 'התראה' },
   frequencyDecline: { label: 'ירידת תדירות', category: 'התראה' },
   anomaly: { label: 'חריגה לא צפויה', category: 'התראה' },
-  weeklyProductBreak: { label: 'שבירת דפוס שבועי', category: 'התראה' },
+  monthlyProductBreak: { label: 'שבירת דפוס חודשי', category: 'התראה' },
   monthlyDeclineDetail: { label: 'ירידה חודשית מפורטת', category: 'התראה' },
   seasonalDecline: { label: 'ירידה עונתית/חג', category: 'התראה' },
   lookalike: { label: 'פוטנציאל צמיחה', category: 'הזדמנות' },

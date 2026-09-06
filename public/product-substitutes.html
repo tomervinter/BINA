@@ -1,0 +1,48 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מוצרים תחליפיים — רדאר מכירות</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="page-title">מוצרים תחליפיים</div>
+      <div class="page-subtitle">כאשר מוצר חסר במלאי, המערכת תוכל להציע ללקוח את המוצר התחליפי המוגדר עבורו כאן. ההתאמה חד-כיוונית — מוצר א׳ יכול להיות תחליף למוצר ב׳ בלי שהדבר נכון גם הפוך.</div>
+
+      <div class="card">
+        <div class="card-title">הוספת התאמה</div>
+        <p class="card-text">חפשו לפי שם מוצר או הדביקו קוד מוצר קיים — שני הצדדים חייבים להופיע בטבלת המוצרים (המאסטר).</p>
+        <datalist id="productsDatalist"></datalist>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1;min-width:220px;">
+            <label>מוצר (חסר במלאי)</label>
+            <input type="text" id="primaryProductInput" list="productsDatalist" placeholder="חיפוש לפי שם או קוד מוצר...">
+          </div>
+          <div style="flex:1;min-width:220px;">
+            <label>מוצר תחליפי</label>
+            <input type="text" id="substituteProductInput" list="productsDatalist" placeholder="חיפוש לפי שם או קוד מוצר...">
+          </div>
+          <button class="btn btn-primary" id="addSubBtn" type="button" style="margin-bottom:14px;">הוספת התאמה</button>
+        </div>
+        <div class="status-line" id="subStatus" style="display:none;"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">רשימת ההתאמות</div>
+        <div id="subsTable"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/table.js"></script>
+  <script src="js/product-substitutes-page.js"></script>
+  <script>initProductSubstitutesPage();</script>
+</body>
+</html>

@@ -7,20 +7,25 @@
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-  <div class="auth-wrap">
-    <h1>התחברות</h1>
-    <div class="sub">רדאר מכירות — מערכת תובנות B2B</div>
-    <div class="error-box" id="errorBox"></div>
-    <form id="loginForm">
-      <label>אימייל</label>
-      <input type="email" id="email" required>
-      <label>סיסמה</label>
-      <input type="password" id="password" required>
-      <button class="btn" type="submit" style="width:100%;justify-content:center;">התחברות</button>
-    </form>
-    <p style="margin-top:16px;text-align:center;font-size:13px;color:var(--text-muted);">
-      אין לך חשבון? <a class="link" href="signup.html">הרשמה</a>
-    </p>
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="3.4"></circle><path d="M12 3.5V6M12 18v2.5M3.5 12H6M18 12h2.5"></path></svg>
+      </div>
+      <h1>רדאר מכירות</h1>
+      <div class="sub">ניהול תובנות מכירה חכם</div>
+      <div class="error-box" id="errorBox"></div>
+      <form id="loginForm">
+        <label>אימייל</label>
+        <input type="email" id="email" required>
+        <label>סיסמה</label>
+        <input type="password" id="password" required>
+        <button class="btn" type="submit">התחברות</button>
+      </form>
+      <p style="margin-top:16px;text-align:center;font-size:13px;color:var(--text-muted);">
+        אין לך חשבון? <a class="link" href="signup.html">הרשמה</a>
+      </p>
+    </div>
   </div>
   <script>
     document.getElementById('loginForm').addEventListener('submit', async function(e){

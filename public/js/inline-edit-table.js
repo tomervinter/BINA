@@ -75,10 +75,11 @@ async function initInlineEditTable(config) {
       const res = await fetch(config.apiBase, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
       if (res.ok) await load();
     });
-    container.querySelector('.js-deleteAllBtn').addEventListener('click', async () => {
-      if (!confirm('למחוק את כל הנתונים? פעולה זו אינה הפיכה.')) return;
-      await fetch(config.apiBase, { method: 'DELETE', credentials: 'include' });
-      await load();
+    container.querySelector('.js-deleteAllBtn').addEventListener('click', () => {
+      confirmDangerousDelete('פעולה זו תמחק את כל הנתונים בטבלה זו לצמיתות ואינה הפיכה.', async () => {
+        await fetch(config.apiBase, { method: 'DELETE', credentials: 'include' });
+        await load();
+      });
     });
     container.querySelector('.js-exportBtn').addEventListener('click', () => {
       window.location.href = config.apiBase + '/export';
