@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>מכירות — רדאר מכירות</title>
+<title>מכירות — BINA</title>
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -41,11 +41,13 @@
       defaultSort: { field: 'date', dir: 'desc' },
       columns: [
         { key: 'customerNumber', label: 'מספר לקוח' },
+        { key: 'customerName', label: 'שם לקוח', sortable: false, filterable: false },
         { key: 'productCode', label: 'קוד פריט' },
+        { key: 'productName', label: 'שם פריט', sortable: false, filterable: false },
         { key: 'year', label: 'שנה', sortKey: 'date', render: (r) => new Date(r.date).getFullYear(), filterable: false },
         { key: 'month', label: 'חודש', sortKey: 'date', render: (r) => new Date(r.date).getMonth() + 1, filterable: false },
-        { key: 'quantity', label: 'מכר כמותי', filterable: false },
         { key: 'revenue', label: 'מכר כספי', filterable: false },
+        { key: 'quantity', label: 'מכר כמותי', filterable: false },
         { key: 'weight', label: 'משקל', filterable: false }
       ]
     });

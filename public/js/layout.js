@@ -62,8 +62,8 @@ const Layout = (function () {
   function renderSidebar(activeKey, counts) {
     let html =
       '<div class="brand-row">' +
-      '<div class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"></circle><circle cx="12" cy="12" r="3.4"></circle><path d="M12 3.5V6M12 18v2.5M3.5 12H6M18 12h2.5"></path></svg></div>' +
-      '<div class="brand-text"><div class="brand-name">רדאר מכירות</div><div class="brand-tagline">ניהול תובנות מכירה חכם</div></div>' +
+      '<div class="brand-icon"><img src="img/logo.gif" alt="BINA"></div>' +
+      '<div class="brand-text"><div class="brand-name">BINA</div><div class="brand-tagline">BINA. The Art of Smart Selling</div></div>' +
       '</div>' +
       '<a class="nav-cta' + (activeKey === 'dashboard' ? ' active' : '') + '" href="dashboard.html">' + navSvg('dashboard') + 'דשבורד</a>' +
       '<div class="nav-scroll">';

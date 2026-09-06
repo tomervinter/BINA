@@ -17,13 +17,36 @@ const FILTERABLE = ['customerNumber', 'productCode'];
 const MAX_EXPORT_ROWS = 100000;
 const EXPORT_COLUMNS = [
   { key: 'customerNumber', label: 'מספר לקוח' },
+  { key: 'customerName', label: 'שם לקוח' },
   { key: 'productCode', label: 'קוד פריט' },
+  { key: 'productName', label: 'שם פריט' },
   { key: 'year', label: 'שנה', value: (r) => new Date(r.date).getFullYear() },
   { key: 'month', label: 'חודש', value: (r) => new Date(r.date).getMonth() + 1 },
-  { key: 'quantity', label: 'מכר כמותי' },
   { key: 'revenue', label: 'מכר כספי' },
+  { key: 'quantity', label: 'מכר כמותי' },
   { key: 'weight', label: 'משקל' }
 ];
+
+// Sale rows only store the customer/product code (the master tables are the single
+// source of truth for names, wholesale-replaced on every master upload) — join in
+// the display name for the current page/export rather than denormalizing it onto Sale.
+async function attachNames(rows, organizationId) {
+  const customerNumbers = Array.from(new Set(rows.map((r) => r.customerNumber)));
+  const productCodes = Array.from(new Set(rows.map((r) => r.productCode)));
+  const [customers, products] = await Promise.all([
+    prisma.customer.findMany({ where: { organizationId, customerNumber: { in: customerNumbers } }, select: { customerNumber: true, name: true } }),
+    prisma.product.findMany({ where: { organizationId, itemCode: { in: productCodes } }, select: { itemCode: true, name: true } })
+  ]);
+  const custNameByNumber = {};
+  customers.forEach((c) => { custNameByNumber[c.customerNumber] = c.name; });
+  const prodNameByCode = {};
+  products.forEach((p) => { prodNameByCode[p.itemCode] = p.name; });
+  return rows.map((r) => ({
+    ...r,
+    customerName: custNameByNumber[r.customerNumber] || '',
+    productName: prodNameByCode[r.productCode] || ''
+  }));
+}
 
 // Sales can run into the hundreds of thousands of rows, so filtering is limited to the
 // text columns (customerNumber/productCode) — DB-level substring search on numbers/dates
@@ -35,10 +58,11 @@ router.get('/', async (req, res) => {
     defaultSort: { field: 'date', dir: 'desc' }
   });
   const fullWhere = { organizationId: req.user.organizationId, ...where };
-  const [rows, total] = await Promise.all([
+  const [rawRows, total] = await Promise.all([
     prisma.sale.findMany({ where: fullWhere, orderBy: { [sortBy]: sortDir }, skip, take }),
     prisma.sale.count({ where: fullWhere })
   ]);
+  const rows = await attachNames(rawRows, req.user.organizationId);
   res.json({ rows, total, page, pageSize });
 });
 
@@ -48,11 +72,12 @@ router.get('/export', async (req, res) => {
     filterableFields: FILTERABLE,
     defaultSort: { field: 'date', dir: 'desc' }
   });
-  const rows = await prisma.sale.findMany({
+  const rawRows = await prisma.sale.findMany({
     where: { organizationId: req.user.organizationId, ...where },
     orderBy: { [sortBy]: sortDir },
     take: MAX_EXPORT_ROWS
   });
+  const rows = await attachNames(rawRows, req.user.organizationId);
   const buffer = rowsToXlsxBuffer(EXPORT_COLUMNS, rows);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="sales.xlsx"');

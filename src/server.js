@@ -57,5 +57,5 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`רדאר מכירות (SaaS) listening on http://localhost:${PORT}`);
+  console.log(`BINA (SaaS) listening on http://localhost:${PORT}`);
 });
