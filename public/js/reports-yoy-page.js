@@ -91,12 +91,12 @@ async function initYoyReportPage() {
     { key: 'thisYear', label: String(report.period.year), render: (r) => fmtMoney(r.thisYear) },
     { key: 'lastYear', label: String(report.period.priorYear), render: (r) => fmtMoney(r.lastYear) },
     { key: 'deltaPct', label: 'שינוי', html: true, render: deltaCell }
-  ], report.byChannel, { exportFilename: 'yoy-by-channel' });
+  ], report.byChannel, { exportFilename: 'yoy-by-channel', tableKey: 'reports-yoy-channel' });
 
   createDataTable(document.getElementById('superTypeTable'), [
     { key: 'name', label: 'טיפוס על' },
     { key: 'thisYear', label: String(report.period.year), render: (r) => fmtMoney(r.thisYear) },
     { key: 'lastYear', label: String(report.period.priorYear), render: (r) => fmtMoney(r.lastYear) },
     { key: 'deltaPct', label: 'שינוי', html: true, render: deltaCell }
-  ], report.bySuperType, { exportFilename: 'yoy-by-supertype' });
+  ], report.bySuperType, { exportFilename: 'yoy-by-supertype', tableKey: 'reports-yoy-supertype' });
 }

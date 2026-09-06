@@ -23,6 +23,7 @@ const dashboardYoyRoutes = require('./routes/dashboardYoy');
 const productSubstitutesRoutes = require('./routes/productSubstitutes');
 const salesFullReportRoutes = require('./routes/salesFullReport');
 const dashboardSalesSummaryRoutes = require('./routes/dashboardSalesSummary');
+const columnOrderRoutes = require('./routes/columnOrder');
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.use('/api/dashboard-yoy', dashboardYoyRoutes);
 app.use('/api/product-substitutes', productSubstitutesRoutes);
 app.use('/api/sales-full-report', salesFullReportRoutes);
 app.use('/api/dashboard-sales-summary', dashboardSalesSummaryRoutes);
+app.use('/api/column-order', columnOrderRoutes);
 
 // no-cache (not no-store): browsers still revalidate with a fast 304, but never
 // silently serve a stale cached JS/CSS file after a deploy — avoids the confusing

@@ -78,7 +78,7 @@ async function initCustomerProfilePage() {
       { key: 'qty', label: 'כמות' },
       { key: 'rev', label: 'מחזור', render: (r) => fmtMoney(r.rev) },
       { key: 'daysSince', label: 'ימים מאז רכישה אחרונה' }
-    ], p.products, { exportFilename: 'customer-products' });
+    ], p.products, { exportFilename: 'customer-products', tableKey: 'customer-profile-products' });
 
     document.getElementById('cpSegment').innerHTML = p.segmentName
       ? '<p style="font-size:13px;color:var(--text-muted);">מחזור הלקוח: <b>' + fmtMoney(p.totalRevenue) + '</b> — ממוצע בקבוצת "' + Layout.escapeHtml(p.segmentName) + '" (' + p.segmentSize + ' לקוחות פעילים): <b>' + fmtMoney(p.segmentAvg) + '</b>.</p>'

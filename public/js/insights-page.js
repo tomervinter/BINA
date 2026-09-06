@@ -24,6 +24,7 @@ async function initInsightsPage() {
 
   createDataTable(document.getElementById('tableContainer'), columns, insights, {
     exportUrl: '/api/insights/export',
-    onRowClick: (r) => { if (r.customerId) window.location.href = 'customer-profile.html?customer=' + encodeURIComponent(r.customerId); }
+    onRowClick: (r) => { if (r.customerId) window.location.href = 'customer-profile.html?customer=' + encodeURIComponent(r.customerId); },
+    tableKey: 'insights'
   });
 }

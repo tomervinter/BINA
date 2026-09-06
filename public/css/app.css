@@ -47,6 +47,7 @@ input[type=text],input[type=email],input[type=password],input[type=number]{
 /* ---------- App shell ---------- */
 .app-shell{display:grid;grid-template-columns:272px 1fr;min-height:100vh;background:var(--bg);}
 .main-content{padding:22px 30px 46px;max-width:1500px;width:100%;min-width:0;}
+.main-content.full-width{max-width:none;}
 
 /* ---------- Sidebar ---------- */
 .sidebar{background:linear-gradient(180deg,var(--sidebar),var(--sidebar-2) 130%);color:var(--sidebar-text);display:flex;flex-direction:column;padding:20px 16px 16px;gap:16px;position:sticky;top:0;height:100vh;overflow-y:auto;}
@@ -143,6 +144,9 @@ th{font-weight:800;color:var(--text);}
 .th-inner:hover,.th-inner:hover svg{color:var(--accent);}
 .th-inner.sorted-asc,.th-inner.sorted-desc{color:var(--accent);}
 .th-inner.sorted-desc svg{transform:rotate(180deg);}
+.th-draggable{cursor:grab;}
+.th-dragging{opacity:.4;}
+.th-drag-over{box-shadow:inset 0 0 0 2px var(--accent);}
 .filter-row td{background:var(--surface-2);padding:6px 10px;}
 .filter-input{width:100%;min-width:64px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 8px;font-size:11.5px;color:var(--text);}
 .filter-input::placeholder{color:var(--text-faint);}

@@ -4,6 +4,7 @@
 // original Artifact (count-pill, delete-all, clear-filter, real .xlsx export).
 function createServerTable(container, columns, opts) {
   opts = opts || {};
+  const originalColumns = columns.slice();
   const state = {
     page: 1,
     pageSize: opts.pageSize || 50,
@@ -64,6 +65,18 @@ function createServerTable(container, columns, opts) {
     load();
   }
 
+  function reorderColumns(newCols) {
+    columns = newCols;
+    saveColumnOrder(opts.tableKey, columns);
+    render();
+  }
+
+  async function resetColumnOrderAndRerender() {
+    await resetColumnOrder(opts.tableKey);
+    columns = applyColumnOrder(originalColumns, await loadColumnOrder(opts.tableKey));
+    render();
+  }
+
   function render(loadError) {
     const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize));
     let html = '';
@@ -76,6 +89,7 @@ function createServerTable(container, columns, opts) {
         'מחיקת כל הנתונים</button>';
     }
     html += '<button class="btn btn-ghost btn-sm js-clearFilterBtn" type="button">נקה סינון</button>' +
+      (opts.tableKey ? '<button class="btn btn-ghost btn-sm js-resetColOrder" type="button">איפוס סדר עמודות</button>' : '') +
       '<span class="spacer"></span>' +
       '<button class="btn btn-success btn-sm js-exportBtn" type="button">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2"></rect><path d="M3.5 9.5h17M3.5 14.5h17M9.5 3.5v17"></path></svg>' +
@@ -121,8 +135,11 @@ function createServerTable(container, columns, opts) {
 
     container.innerHTML = html;
 
+    wireColumnDragReorder(container.querySelector('thead tr'), columns, reorderColumns);
     container.querySelector('.js-exportBtn').addEventListener('click', exportXlsx);
     container.querySelector('.js-clearFilterBtn').addEventListener('click', clearFilters);
+    const resetColBtn = container.querySelector('.js-resetColOrder');
+    if (resetColBtn) resetColBtn.addEventListener('click', resetColumnOrderAndRerender);
     const deleteBtn = container.querySelector('.js-deleteAllBtn');
     if (deleteBtn) deleteBtn.addEventListener('click', deleteAll);
     container.querySelector('.js-prevPage').addEventListener('click', () => { if (state.page > 1) { state.page--; load(); } });
@@ -152,6 +169,9 @@ function createServerTable(container, columns, opts) {
     }
   }
 
-  load();
+  (async () => {
+    if (opts.tableKey) columns = applyColumnOrder(originalColumns, await loadColumnOrder(opts.tableKey));
+    load();
+  })();
   return { reload: load };
 }

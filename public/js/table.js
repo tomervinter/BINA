@@ -2,6 +2,7 @@
 // list/report page instead of duplicating table wiring per page.
 function createDataTable(container, columns, rows, opts) {
   opts = opts || {};
+  const originalColumns = columns.slice();
   const state = { filters: {}, sortCol: opts.defaultSortCol || null, sortDir: opts.defaultSortDir || 'asc', focusedCol: null };
 
   function cellValue(col, row) {
@@ -46,10 +47,18 @@ function createDataTable(container, columns, rows, opts) {
     URL.revokeObjectURL(url);
   }
 
+  function reorderColumns(newCols) {
+    columns = newCols;
+    saveColumnOrder(opts.tableKey, columns);
+    render();
+  }
+
   function render() {
     const data = filteredSorted();
     let html = '<div class="table-head-row"><div class="table-head-right"></div><div class="table-head-left"><span class="count-pill">' + data.length.toLocaleString('he-IL') + ' רשומות</span></div></div>';
-    html += '<div class="toolbar"><span class="spacer"></span><button class="btn btn-success btn-sm js-exportBtn" type="button">' +
+    html += '<div class="toolbar">' +
+      (opts.tableKey ? '<button class="btn btn-ghost btn-sm js-resetColOrder" type="button">איפוס סדר עמודות</button>' : '') +
+      '<span class="spacer"></span><button class="btn btn-success btn-sm js-exportBtn" type="button">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2"></rect><path d="M3.5 9.5h17M3.5 14.5h17M9.5 3.5v17"></path></svg>ייצוא לאקסל</button></div>';
     html += '<div class="table-scroll"><table><thead><tr>';
     columns.forEach((col) => {
@@ -78,7 +87,15 @@ function createDataTable(container, columns, rows, opts) {
     html += '</tbody></table></div>';
     container.innerHTML = html;
 
+    wireColumnDragReorder(container.querySelector('thead tr'), columns, reorderColumns);
     container.querySelector('.js-exportBtn').addEventListener('click', exportCsv);
+    const resetBtn = container.querySelector('.js-resetColOrder');
+    if (resetBtn) resetBtn.addEventListener('click', async () => {
+      await resetColumnOrder(opts.tableKey);
+      const order = await loadColumnOrder(opts.tableKey);
+      columns = applyColumnOrder(originalColumns, order);
+      render();
+    });
     container.querySelectorAll('.js-sortBtn').forEach((el) => {
       el.addEventListener('click', () => {
         const col = el.getAttribute('data-col');
@@ -110,6 +127,9 @@ function createDataTable(container, columns, rows, opts) {
     }
   }
 
-  render();
+  (async () => {
+    if (opts.tableKey) columns = applyColumnOrder(originalColumns, await loadColumnOrder(opts.tableKey));
+    render();
+  })();
   return { refresh: (newRows) => { rows = newRows; render(); } };
 }

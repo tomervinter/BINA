@@ -8,7 +8,8 @@ async function initListPage(config) {
     if (table) { table.reload(); return; }
     table = createServerTable(document.getElementById('tableContainer'), config.columns, {
       apiBase: config.apiBase,
-      defaultSort: config.defaultSort
+      defaultSort: config.defaultSort,
+      tableKey: config.pageKey
     });
   }
 

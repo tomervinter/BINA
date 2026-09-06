@@ -38,7 +38,7 @@ async function initUsersPage() {
         render: (r) => r.id === data.user.id ? '' : '<button class="icon-btn js-removeUser" data-id="' + r.id + '" type="button" title="הסרה">✕</button>'
       });
     }
-    createDataTable(document.getElementById('usersTable'), columns, rows, { exportFilename: 'users' });
+    createDataTable(document.getElementById('usersTable'), columns, rows, { exportFilename: 'users', tableKey: 'users' });
   }
 
   // Delegated on the container (not the buttons) since table.js rebuilds the

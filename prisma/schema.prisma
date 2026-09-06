@@ -22,6 +22,7 @@ model Organization {
   relevanceOverrides  RelevanceOverride[]
   ruleSettings        RuleSetting[]
   productSubstitutes  ProductSubstitute[]
+  columnOrders        ColumnOrder[]
 }
 
 model User {
@@ -33,6 +34,7 @@ model User {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   createdAt      DateTime     @default(now())
+  columnOrders   ColumnOrder[]
 }
 
 model Customer {
@@ -164,4 +166,22 @@ model ProductSubstitute {
 
   @@unique([organizationId, productCode, substituteCode])
   @@index([organizationId])
+}
+
+// Per-user column order for a given table, saved as a JSON array of column keys.
+// A user with no saved row falls back to the organization admin's saved order for
+// that table (the "default" a reset reverts to), and failing that, the page's own
+// hardcoded column order.
+model ColumnOrder {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  tableKey       String
+  order          String
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([userId, tableKey])
+  @@index([organizationId, tableKey])
 }

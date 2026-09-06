@@ -60,7 +60,7 @@ async function initProductSubstitutesPage() {
       { key: 'productName', label: 'מוצר' },
       { key: 'substituteName', label: 'מוצר תחליפי' },
       { key: 'actions', label: '', html: true, sortable: false, filterable: false, render: (r) => '<button class="icon-btn js-deleteSub" data-id="' + r.id + '" type="button" title="מחיקה">✕</button>' }
-    ], rows, { exportFilename: 'product-substitutes' });
+    ], rows, { exportFilename: 'product-substitutes', tableKey: 'product-substitutes' });
   }
 
   document.getElementById('subsTable').addEventListener('click', async (e) => {
