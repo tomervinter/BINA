@@ -12,7 +12,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(requireAuth);
 
-const LIST_FIELDS = ['itemCode', 'name', 'type', 'superType', 'department', 'unit', 'status'];
+const LIST_FIELDS = ['itemCode', 'name', 'type', 'superType', 'department', 'unit', 'status', 'forProcurement', 'forMarketing'];
 const EXPORT_COLUMNS = [
   { key: 'itemCode', label: 'קוד פריט' },
   { key: 'name', label: 'שם פריט' },
