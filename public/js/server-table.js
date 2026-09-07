@@ -10,7 +10,7 @@ function createServerTable(container, columns, opts) {
     pageSize: opts.pageSize || 50,
     sortBy: (opts.defaultSort && opts.defaultSort.field) || null,
     sortDir: (opts.defaultSort && opts.defaultSort.dir) || 'asc',
-    filters: {},
+    filters: Object.assign({}, opts.initialFilters || {}),
     total: 0,
     rows: [],
     focusedCol: null

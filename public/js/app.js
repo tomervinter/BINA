@@ -11,18 +11,26 @@ async function init() {
 }
 
 async function refreshDashboard() {
-  const [insightsRes, countsRes] = await Promise.all([
-    fetch('/api/insights', { credentials: 'include' }),
-    fetch('/api/nav-counts', { credentials: 'include' })
-  ]);
+  const insightsRes = await fetch('/api/insights', { credentials: 'include' });
   const insights = insightsRes.ok ? await insightsRes.json() : [];
-  const counts = countsRes.ok ? await countsRes.json() : {};
 
-  document.getElementById('kpiChurn').textContent = insights.filter((i) => i.type === 'churn').length.toLocaleString('he-IL');
-  document.getElementById('kpiDecline').textContent = insights.filter((i) => i.type === 'decline').length.toLocaleString('he-IL');
-  document.getElementById('kpiDropoff').textContent = insights.filter((i) => i.type === 'dropoff').length.toLocaleString('he-IL');
-  document.getElementById('kpiActiveCustomers').textContent = (counts.activeCustomers || 0).toLocaleString('he-IL');
-  document.getElementById('kpiActiveDesc').textContent = 'לקוחות פעילים מתוך ' + (counts.customers || 0).toLocaleString('he-IL') + ' לקוחות בבסיס הנתונים';
+  const highCount = insights.filter((i) => i.severity === 'high').length;
+  const alertCount = insights.filter((i) => (TYPE_META[i.type] || {}).category === 'התראה').length;
+  const opportunityCount = insights.filter((i) => (TYPE_META[i.type] || {}).category === 'הזדמנות').length;
+
+  document.getElementById('insightsSummaryKpiGrid').innerHTML = [
+    ['blue', 'v-blue', insights.length.toLocaleString('he-IL'), 'סה"כ תובנות פעילות'],
+    ['red', 'v-red', highCount.toLocaleString('he-IL'), 'בחומרה גבוהה — דורשות טיפול'],
+    ['red', 'v-red', alertCount.toLocaleString('he-IL'), 'התראות'],
+    ['green', 'v-green', opportunityCount.toLocaleString('he-IL'), 'הזדמנויות']
+  ].map(([dot, cls, value, desc]) => (
+    '<div class="kpi-card">' +
+    '<div class="kpi-blob" style="background:var(--' + dot + '-dot);"></div>' +
+    '<div class="kpi-blob b2" style="background:var(--' + dot + ');"></div>' +
+    '<div class="kpi-value ' + cls + '">' + Layout.escapeHtml(value) + '</div>' +
+    '<div class="kpi-desc">' + Layout.escapeHtml(desc) + '</div>' +
+    '</div>'
+  )).join('');
 
   const top = insights.slice(0, 8);
   const list = document.getElementById('dashInsightsList');
@@ -32,7 +40,7 @@ async function refreshDashboard() {
     '<div><div class="dash-insight-entity">' + Layout.escapeHtml((TYPE_META[i.type] || {}).label || i.type) + (i.customerName ? ' — ' + Layout.escapeHtml(i.customerName) : '') + '</div>' +
     '<div class="dash-insight-msg">' + Layout.escapeHtml(i.message) + '</div></div>' +
     '</div>'
-  )).join('') : '<div class="dash-insight-empty">אין עדיין תובנות — טענו נתוני לקוחות ומכירות.</div>';
+  )).join('') : '<div class="dash-insight-empty">לא נוצרו תובנות עדיין — עברו למסך <a href="insights.html">יומן תובנות</a> וייצרו אותן.</div>';
 }
 
 init();

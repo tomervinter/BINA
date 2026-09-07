@@ -17,55 +17,43 @@
       <div class="greeting" id="greeting">שלום</div>
       <div class="update-line" id="updateLine"></div>
 
-      <div class="kpi-section">
-        <div>
-          <div class="kpi-col-title">נתונים חודשיים</div>
-          <div class="kpi-grid">
-            <div class="kpi-card">
-              <div class="kpi-blob" style="background:var(--red-dot);"></div>
-              <div class="kpi-blob b2" style="background:var(--red);"></div>
-              <div class="kpi-value v-red" id="kpiChurn">0</div>
-              <div class="kpi-desc">לקוחות בסיכון נטישה — לא הזמינו הרבה מעבר לקצב הרגיל שלהם</div>
-            </div>
-            <div class="kpi-card">
-              <div class="kpi-blob" style="background:var(--red-dot);"></div>
-              <div class="kpi-blob b2" style="background:var(--red);"></div>
-              <div class="kpi-value v-red" id="kpiDecline">0</div>
-              <div class="kpi-desc">לקוחות עם ירידה במחזור — מעל 30% ביחס לתקופת השוואה</div>
-            </div>
-            <div class="kpi-card">
-              <div class="kpi-blob" style="background:var(--red-dot);"></div>
-              <div class="kpi-blob b2" style="background:var(--red);"></div>
-              <div class="kpi-value v-red" id="kpiDropoff">0</div>
-              <div class="kpi-desc">זוגות לקוח-מוצר שהופסקה רכישתם באופן לא צפוי</div>
-            </div>
-            <div class="kpi-card">
-              <div class="kpi-blob" style="background:var(--green-dot);"></div>
-              <div class="kpi-blob b2" style="background:var(--green);"></div>
-              <div class="kpi-value v-green" id="kpiActiveCustomers">0</div>
-              <div class="kpi-desc" id="kpiActiveDesc">לקוחות פעילים מתוך לקוחות בבסיס הנתונים</div>
-            </div>
-          </div>
-        </div>
+      <div class="card" style="margin-top:16px;">
+        <div class="card-title">חיפוש לקוח מהיר</div>
+        <datalist id="dashCustomerList"></datalist>
+        <input type="text" id="dashCustomerSearch" list="dashCustomerList" placeholder="הקלידו שם לקוח כדי לעבור לכרטסת שלו...">
       </div>
 
-      <div class="card">
-        <div class="table-head-row">
-          <div class="table-head-right">
-            <div class="card-title" style="margin-bottom:2px;">תובנות אחרונות</div>
-            <div class="page-subtitle" style="margin-bottom:0;">התובנות בעדיפות הגבוהה ביותר, מחושבות אוטומטית מתוך נתוני המכירות, הלקוחות והמוצרים שנטענו.</div>
-          </div>
-          <div class="table-head-left">
-            <a href="insights.html" class="btn btn-ghost btn-sm">לצפייה בכל התובנות</a>
-          </div>
+      <div class="table-head-row" style="margin-top:6px;">
+        <div class="table-head-right">
+          <div class="card-title" style="margin-bottom:2px;">סיכום מנהלים — תובנות</div>
+          <div class="page-subtitle" style="margin-bottom:0;">תמונת מצב כוללת של כל התובנות שזוהו לאחרונה, לפי חומרה וקטגוריה.</div>
         </div>
+        <div class="table-head-left">
+          <a href="insights.html" class="btn btn-ghost btn-sm">לצפייה בכל התובנות</a>
+        </div>
+      </div>
+      <div class="kpi-grid" id="insightsSummaryKpiGrid" style="margin-bottom:10px;"></div>
+
+      <div class="card">
+        <div class="card-title" style="margin-bottom:2px;">תובנות אחרונות</div>
+        <div class="page-subtitle" style="margin-bottom:10px;">התובנות בעדיפות הגבוהה ביותר, מחושבות מתוך נתוני המכירות, הלקוחות והמוצרים שנטענו.</div>
         <div id="dashInsightsList"></div>
       </div>
 
       <div class="table-head-row" style="margin-top:6px;">
         <div class="table-head-right">
+          <div class="card-title" style="margin-bottom:2px;">מחזור מכירות לפי חודשים</div>
+          <div class="page-subtitle" style="margin-bottom:0;">12 החודשים האחרונים. לחצו על חודש כדי לצפות בשורות המכירה שלו בדוח המלא.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="position:relative;height:260px;"><canvas id="monthlyTrendChart"></canvas></div>
+      </div>
+
+      <div class="table-head-row" style="margin-top:6px;">
+        <div class="table-head-right">
           <div class="card-title" style="margin-bottom:2px;">תמונת מכירות כוללת</div>
-          <div class="page-subtitle" style="margin-bottom:0;">מבוסס על דוח המכירות המלא — כל שורות המכירות בצירוף נתוני הלקוחות והמוצרים.</div>
+          <div class="page-subtitle" style="margin-bottom:0;">מבוסס על דוח המכירות המלא — כל שורות המכירות בצירוף נתוני הלקוחות והמוצרים. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.</div>
         </div>
         <div class="table-head-left">
           <a href="reports-full-sales.html" class="btn btn-ghost btn-sm">לצפייה בדוח המלא</a>
@@ -73,17 +61,26 @@
       </div>
       <div class="kpi-grid" id="salesSummaryKpiGrid" style="margin-bottom:22px;"></div>
 
-      <div class="card">
-        <div class="card-title">מחזור לפי סוג לקוח</div>
-        <div style="position:relative;height:260px;"><canvas id="customerTypeChart"></canvas></div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">מחזור לפי מחלקת מוצר</div>
-        <div style="position:relative;height:220px;"><canvas id="departmentChart"></canvas></div>
-      </div>
-
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;">
+        <div class="card">
+          <div class="card-title">מחזור לפי סיווג ראשי לקוח (ערוץ מכר)</div>
+          <div style="position:relative;height:230px;"><canvas id="primaryClassChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">מחזור לפי סוג לקוח</div>
+          <div style="position:relative;height:230px;"><canvas id="customerTypeChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">מחזור לפי טיפוס על</div>
+          <div style="position:relative;height:230px;"><canvas id="superTypeChart"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">מחזור לפי מחלקת מוצר</div>
+          <div style="position:relative;height:230px;"><canvas id="departmentChart"></canvas></div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px;">
         <div class="card">
           <div class="card-title">5 הלקוחות המובילים במחזור</div>
           <div style="position:relative;height:220px;"><canvas id="topCustomersChart"></canvas></div>
@@ -100,5 +97,6 @@
   <script src="js/type-meta.js"></script>
   <script src="js/app.js"></script>
   <script src="js/dashboard-sales-summary.js"></script>
+  <script src="js/dashboard-customer-search.js"></script>
 </body>
 </html>

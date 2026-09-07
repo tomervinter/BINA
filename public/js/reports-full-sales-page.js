@@ -7,6 +7,13 @@ async function initFullSalesReportPage() {
   const data = await Layout.init('reports-full-sales');
   if (!data) return;
 
+  // Dashboard charts (and anything else) can deep-link here with a pre-applied filter,
+  // e.g. reports-full-sales.html?department=מחלקה+א or ?year=2026&month=4.
+  const FILTERABLE_KEYS = ['customerNumber', 'customerName', 'primaryClass', 'customerType', 'city', 'centralCustomer', 'customerStatus', 'productCode', 'productName', 'type', 'superType', 'department', 'unit', 'productStatus', 'forProcurement', 'forMarketing', 'year', 'month'];
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialFilters = {};
+  FILTERABLE_KEYS.forEach((key) => { const v = urlParams.get(key); if (v) initialFilters[key] = v; });
+
   createServerTable(document.getElementById('tableContainer'), [
     { key: 'customerNumber', label: 'מספר לקוח' },
     { key: 'productCode', label: 'קוד פריט' },
@@ -33,6 +40,7 @@ async function initFullSalesReportPage() {
     apiBase: '/api/sales-full-report',
     defaultSort: { field: 'year', dir: 'desc' },
     deletable: false,
-    tableKey: 'reports-full-sales'
+    tableKey: 'reports-full-sales',
+    initialFilters
   });
 }
