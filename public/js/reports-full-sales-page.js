@@ -9,13 +9,18 @@ async function initFullSalesReportPage() {
 
   createServerTable(document.getElementById('tableContainer'), [
     { key: 'customerNumber', label: 'מספר לקוח' },
+    { key: 'productCode', label: 'קוד פריט' },
+    { key: 'year', label: 'שנה', render: (r) => new Date(r.date).getFullYear() },
+    { key: 'month', label: 'חודש', render: (r) => new Date(r.date).getMonth() + 1 },
+    { key: 'revenue', label: 'מכר כספי' },
+    { key: 'quantity', label: 'מכר כמותי' },
+    { key: 'weight', label: 'משקל' },
     { key: 'customerName', label: 'שם לקוח' },
     { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
     { key: 'customerType', label: 'סוג לקוח' },
     { key: 'city', label: 'עיר' },
     { key: 'centralCustomer', label: 'שם לקוח מרכז' },
     { key: 'customerStatus', label: 'סטטוס לקוח' },
-    { key: 'productCode', label: 'קוד פריט' },
     { key: 'productName', label: 'שם פריט' },
     { key: 'type', label: 'טיפוס' },
     { key: 'superType', label: 'טיפוס על' },
@@ -23,12 +28,7 @@ async function initFullSalesReportPage() {
     { key: 'unit', label: 'יחידת מידה' },
     { key: 'productStatus', label: 'סטטוס מוצר' },
     { key: 'forProcurement', label: 'לעיתוד' },
-    { key: 'forMarketing', label: 'לשיווק' },
-    { key: 'year', label: 'שנה', render: (r) => new Date(r.date).getFullYear() },
-    { key: 'month', label: 'חודש', render: (r) => new Date(r.date).getMonth() + 1 },
-    { key: 'revenue', label: 'מכר כספי' },
-    { key: 'quantity', label: 'מכר כמותי' },
-    { key: 'weight', label: 'משקל' }
+    { key: 'forMarketing', label: 'לשיווק' }
   ], {
     apiBase: '/api/sales-full-report',
     defaultSort: { field: 'year', dir: 'desc' },
