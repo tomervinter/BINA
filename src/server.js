@@ -5,6 +5,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 
 const authRoutes = require('./routes/auth');
 const customerRoutes = require('./routes/customers');
@@ -30,6 +31,7 @@ const app = express();
 // CSP disabled: the login/signup pages use inline <script> tags. Tighten this
 // (nonce-based CSP) before hosting on a public domain.
 app.use(helmet({ contentSecurityPolicy: false }));
+app.use(compression());
 app.use(cors({ origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
@@ -54,11 +56,13 @@ app.use('/api/sales-full-report', salesFullReportRoutes);
 app.use('/api/dashboard-sales-summary', dashboardSalesSummaryRoutes);
 app.use('/api/column-order', columnOrderRoutes);
 
-// no-cache (not no-store): browsers still revalidate with a fast 304, but never
-// silently serve a stale cached JS/CSS file after a deploy — avoids the confusing
-// "I pushed the fix but the site still shows the old bug" class of report.
+// A short max-age (not no-cache): every navigation was paying a full network
+// round-trip per static JS/CSS file just to revalidate a file that almost never
+// changes between requests. A 60s cache still surfaces a fresh deploy within a
+// minute, but lets an active browsing session reuse assets from disk instead of
+// re-fetching them on every single page.
 app.use(express.static(path.join(__dirname, '..', 'public'), {
-  setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache')
+  setHeaders: (res) => res.setHeader('Cache-Control', 'public, max-age=60')
 }));
 
 const PORT = process.env.PORT || 4000;

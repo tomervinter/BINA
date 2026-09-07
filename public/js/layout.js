@@ -111,14 +111,19 @@ const Layout = (function () {
   }
 
   async function init(pageKey) {
-    const res = await fetch('/api/auth/me', { credentials: 'include' });
+    // Fired together, not sequentially — nav-counts only needs the same auth cookie
+    // auth/me checks, not auth/me's response, and this runs on every single page
+    // navigation in the app, so the round-trip it saves adds up.
+    const [res, countsRes] = await Promise.all([
+      fetch('/api/auth/me', { credentials: 'include' }),
+      fetch('/api/nav-counts', { credentials: 'include' }).catch(() => null)
+    ]);
     if (!res.ok) { window.location.href = 'login.html'; return null; }
     const data = await res.json();
 
     let counts = null;
     try {
-      const countsRes = await fetch('/api/nav-counts', { credentials: 'include' });
-      if (countsRes.ok) counts = await countsRes.json();
+      if (countsRes && countsRes.ok) counts = await countsRes.json();
     } catch (err) { /* badges are cosmetic — ignore failures */ }
 
     const sidebarMount = document.getElementById('sidebarMount');
