@@ -1,18 +1,75 @@
 // Ported from the artifact: each rule's description is a fixed sentence with the
 // tunable numbers embedded as inline <input> elements, right inside the text.
+// `rule` is deliberately kept to one short sentence; `detail` (optional, for the
+// more complex rules) carries secondary parameters and nuance in a muted subtitle.
 const INSIGHT_RULES = [
-  { type: 'churn', title: 'סיכון נטישה', rule: 'לקוח פעיל עם {churn_minPurchases}+ רכישות היסטוריות שלא רכש מעל הסף: המקסימום בין {churn_dayFloor} יום לבין פי {churn_gapMultiplier} מקצב הרכישה הרגיל שלו (חציון המרווחים בין רכישות עבר). חומרה גבוהה כשחלף פי {churn_highMultiplier} מהסף.' },
-  { type: 'decline', title: 'ירידת מחזור', rule: 'ירידה של {decline_pctThreshold}%+ במחזור ב-{decline_currentWindowDays} הימים האחרונים, בהשוואה לתקופה המקבילה אשתקד (אם קיימת) או לתקופה קודמת בת {decline_priorWindowDays} ימים נוספים אם אין נתוני שנה קודמת. נדרש מחזור בסיס של לפחות {decline_minBaseRevenue}₪. חומרה גבוהה מעל {decline_highPct}%.' },
-  { type: 'dropoff', title: 'הפסקת מוצר', rule: 'לקוח פעיל עם פעילות כלשהי ב-{dropoff_recentActivityDays} הימים האחרונים, שרכש מוצר מסוים {dropoff_minPurchases}+ פעמים בעבר אך לא רכש אותו מעבר לסף: המקסימום בין {dropoff_dayFloor} יום לפי {dropoff_gapMultiplier} מקצב הרכישה הרגיל שלו למוצר זה. חומרה גבוהה מעל פי {dropoff_highGapMultiplier}.' },
-  { type: 'lookalike', title: 'פוטנציאל צמיחה', rule: 'לקוח פעיל שמחזורו נמוך מ-{lookalike_pctOfAvg}% מהמחזור הממוצע בקבוצת "סיווג ראשי לקוח" שלו (נדרשים {lookalike_minGroupSize}+ לקוחות פעילים בקבוצה להשוואה). חומרה גבוהה מתחת ל-{lookalike_highPctOfAvg}%.' },
-  { type: 'upsell', title: 'הזדמנות Upsell', rule: 'מוצר (פעיל) שרוב הלקוחות ({upsell_popularityPct}%+) מאותה קבוצת "סיווג ראשי לקוח" רוכשים, אך הלקוח הנוכחי לא רוכש כלל.' },
-  { type: 'anomaly', title: 'חריגה לא צפויה', rule: 'שינוי של {anomaly_pctThreshold}%+ בכמות המכירה החודשית של מוצר (פעיל) לעומת ממוצע {anomaly_minMonths} החודשים הקודמים לו — אלא אם החודש חופף לחג/עונה שסומנו כרלוונטיים לאותו מוצר במסך השיוך, ואז החריגה נחשבת צפויה ולא מדווחת. חומרה גבוהה מעל {anomaly_highPct}%.' },
-  { type: 'frequencyDecline', title: 'ירידת תדירות', rule: 'ירידה של {freq_pctThreshold}%+ במספר ה"דרופים" (תאריכי רכישה נפרדים וייחודיים, ללא קשר לכמות המוצרים בכל רכישה) ב-{freq_windowDays} הימים האחרונים לעומת {freq_windowDays} הימים שלפניהם (נדרשים {freq_minPrevDrops}+ דרופים בתקופת הבסיס, ו-{freq_minTotalDrops}+ בסך הכול). חומרה גבוהה מעל {freq_highPct}%.' },
-  { type: 'monthlyProductBreak', title: 'שבירת דפוס חודשי', rule: 'לקוח פעיל שרכש מוצר (פעיל) ב-{monthlyBreak_establishedMonthsNeeded}+ מתוך {monthlyBreak_totalMonthsChecked} החודשים האחרונים, ולא רכש אותו החודש הנוכחי — אלא אם למוצר מוגדר מלאי 0 בטבלת המלאי, ואז התובנה מדוכאת (אין מה למכור). חומרה גבוהה מעל {monthlyBreak_highMonthsNeeded} חודשים.' },
-  { type: 'productVarietyGap', title: 'פער מגוון מוצרים', rule: 'מוצר (פעיל) שרוב הלקוחות ({variety_popularityPct}%+) מאותו "סוג לקוח" רוכשים, אך הלקוח הנוכחי לא (נדרשים {variety_minGroupSize}+ לקוחות פעילים מאותו סוג להשוואה).' },
-  { type: 'monthlyDeclineDetail', title: 'ירידה חודשית מפורטת', rule: 'ירידה של {monthly_pctThreshold}%+ במחזור החודש הקלנדרי הנוכחי מול החודש הקלנדרי הקודם (מחזור בסיס מינימלי {monthly_minBaseRevenue}₪), עם זיהוי עד {monthly_topN} מוצרים (פעילים בלבד) שתרמו הכי הרבה לירידה, כולל הסכום בשקלים לכל אחד. חומרה גבוהה מעל {monthly_highPct}%.' },
-  { type: 'seasonalGrowth', title: 'צמיחה עונתית/חגית', rule: 'לקוח שקנה מוצר (פעיל) המסומן כרלוונטי לחג/עונה מסוימים, ועלה ב-{seasonal_pctThreshold}%+ ברכישתו בתקופת האירוע האחרונה לעומת התקופה המקבילה באירוע הקודם (שנה קודמת) — נדרש מחזור בסיס של {seasonal_minBaseRevenue}₪ ולפחות 2 מופעים של אותו חג/עונה בנתונים. חומרה גבוהה מעל {seasonal_highPct}%.' },
-  { type: 'seasonalDecline', title: 'ירידה עונתית/חגית', rule: 'אותו חישוב בדיוק כמו "צמיחה עונתית/חגית", בכיוון ההפוך: ירידה של {seasonal_pctThreshold}%+ ברכישת מוצר רלוונטי בין שני המופעים האחרונים של אותו חג/עונה. חומרה גבוהה מעל {seasonal_highPct}%.' }
+  { type: 'churn', category: 'התראה', title: 'סיכון נטישה',
+    rule: 'לקוח פעיל שלא רכש מעבר לזמן הרגיל שלו (לפחות {churn_dayFloor} יום, ולפחות פי {churn_gapMultiplier} מקצב הרכישה הרגיל שלו).',
+    detail: 'נדרשות {churn_minPurchases}+ רכישות היסטוריות כדי לחשב את הקצב הרגיל. חומרה גבוהה כשחלף פי {churn_highMultiplier} מהסף.' },
+  { type: 'decline', category: 'התראה', title: 'ירידת מחזור',
+    rule: 'ירידה של {decline_pctThreshold}%+ במחזור הלקוח ב-{decline_currentWindowDays} הימים האחרונים, לעומת התקופה המקבילה אשתקד.',
+    detail: 'נדרש מחזור בסיס של {decline_minBaseRevenue}₪. אם אין נתוני שנה קודמת, ההשוואה תהיה לתקופה קודמת בת {decline_priorWindowDays} ימים. חומרה גבוהה מעל {decline_highPct}%.' },
+  { type: 'cumulativeYoyDecline', category: 'התראה', title: 'ירידה מצטברת שנתית',
+    rule: 'ירידה של {cumulativeYoy_pctThreshold}%+ במחזור המצטבר מתחילת השנה, לעומת אותה תקופה אשתקד.',
+    detail: 'משלים את "ירידת מחזור" עם חלון רגיש יותר וממוקד-שנה. נדרש מחזור בסיס של {cumulativeYoy_minBaseRevenue}₪ אשתקד. חומרה גבוהה מעל {cumulativeYoy_highPct}%.' },
+  { type: 'quarterlyDecline', category: 'התראה', title: 'ירידה רבעונית',
+    rule: 'ירידה של {quarterlyDecline_pctThreshold}%+ במחזור הרבעון האחרון, לעומת הרבעון הקודם או המקביל אשתקד.',
+    detail: 'נדרש מחזור בסיס של {quarterlyDecline_minBaseRevenue}₪, בעדיפות להשוואה מול הרבעון המקביל אשתקד אם קיים. חומרה גבוהה מעל {quarterlyDecline_highPct}%.' },
+  { type: 'decliningTrend', category: 'התראה', title: 'מגמת קיטון',
+    rule: 'מחזור לקוח שיורד ברציפות {decliningTrend_monthsRequired} חודשים ברצף, בכ-{decliningTrend_pctPerMonth}%+ בכל חודש.',
+    detail: 'כל אחד מהחודשים הנבדקים חייב לכלול מכירה בפועל.' },
+  { type: 'monthlyDeclineDetail', category: 'התראה', title: 'ירידה חודשית מפורטת',
+    rule: 'ירידה של {monthly_pctThreshold}%+ במחזור הלקוח החודש מול החודש הקודם.',
+    detail: 'נדרש מחזור בסיס של {monthly_minBaseRevenue}₪. מוצגים עד {monthly_topN} המוצרים שתרמו הכי הרבה לירידה. חומרה גבוהה מעל {monthly_highPct}%.' },
+  { type: 'dropoff', category: 'התראה', title: 'הפסקת מוצר',
+    rule: 'לקוח פעיל שהפסיק לרכוש מוצר שקנה בעבר {dropoff_minPurchases}+ פעמים, מעבר לזמן הרגיל שלו למוצר הזה.',
+    detail: 'נבדק רק אם ללקוח יש פעילות כלשהי ב-{dropoff_recentActivityDays} הימים האחרונים. לא מוצג אם המוצר חסר במלאי. הסף: מקסימום בין {dropoff_dayFloor} יום לפי {dropoff_gapMultiplier} מקצב הרגיל. חומרה גבוהה מעל פי {dropoff_highGapMultiplier}.' },
+  { type: 'varietyNarrowing', category: 'התראה', title: 'צמצום מגוון רכישות',
+    rule: 'ירידה של {varietyNarrowing_pctThreshold}%+ במספר סוגי המוצרים שהלקוח קונה, ב-{varietyNarrowing_windowDays} הימים האחרונים לעומת התקופה הקודמת.',
+    detail: 'נדרשים {varietyNarrowing_minPriorProducts}+ מוצרים שונים בתקופת הבסיס. חומרה גבוהה מעל {varietyNarrowing_highPct}%.' },
+  { type: 'frequencyDecline', category: 'התראה', title: 'ירידת תדירות',
+    rule: 'ירידה של {freq_pctThreshold}%+ בתדירות הרכישות של לקוח ב-{freq_windowDays} הימים האחרונים לעומת התקופה שלפניה.',
+    detail: 'נדרשים {freq_minTotalDrops}+ רכישות נפרדות בסך הכול ו-{freq_minPrevDrops}+ בתקופת הבסיס. חומרה גבוהה מעל {freq_highPct}%.' },
+  { type: 'monthlyProductBreak', category: 'התראה', title: 'שבירת דפוס חודשי',
+    rule: 'לקוח שרכש מוצר בקביעות ({monthlyBreak_establishedMonthsNeeded}+ מתוך {monthlyBreak_totalMonthsChecked} החודשים האחרונים) ולא רכש אותו החודש.',
+    detail: 'לא מוצג אם המוצר חסר במלאי. חומרה גבוהה מעל {monthlyBreak_highMonthsNeeded} חודשים.' },
+  { type: 'anomaly', category: 'התראה', title: 'חריגה לא צפויה',
+    rule: 'שינוי חד ({anomaly_pctThreshold}%+) בכמות המכירה החודשית של מוצר, לעומת הממוצע של {anomaly_minMonths} החודשים הקודמים.',
+    detail: 'לא מוצג אם השינוי מוסבר על ידי חג/עונה שסומנו כרלוונטיים למוצר. חומרה גבוהה מעל {anomaly_highPct}%.' },
+  { type: 'seasonalDecline', category: 'התראה', title: 'ירידה עונתית/חג',
+    rule: 'ירידה של {seasonal_pctThreshold}%+ ברכישת מוצר רלוונטי לחג/עונה, לעומת אותו אירוע אשתקד.',
+    detail: 'המוצר חייב להיות מסומן כרלוונטי לאירוע במסך שיוך חג ועונה למוצר, ונדרש מחזור בסיס של {seasonal_minBaseRevenue}₪. חומרה גבוהה מעל {seasonal_highPct}%.' },
+
+  { type: 'lookalike', category: 'הזדמנות', title: 'פוטנציאל צמיחה',
+    rule: 'לקוח שמחזורו נמוך מ-{lookalike_pctOfAvg}% מהממוצע בקבוצת הלקוחות הדומה לו (סיווג ראשי).',
+    detail: 'נדרשים {lookalike_minGroupSize}+ לקוחות פעילים בקבוצה להשוואה. חומרה גבוהה מתחת ל-{lookalike_highPctOfAvg}%.' },
+  { type: 'upsell', category: 'הזדמנות', title: 'הזדמנות Upsell',
+    rule: 'מוצר שרוב הלקוחות הדומים ({upsell_popularityPct}%+ מאותו סיווג ראשי) רוכשים, אך הלקוח הזה לא.',
+    detail: 'מוצג רק אם המוצר במלאי.' },
+  { type: 'productVarietyGap', category: 'הזדמנות', title: 'פער מגוון מוצרים',
+    rule: 'מוצר שרוב הלקוחות מאותו סוג לקוח ({variety_popularityPct}%+) רוכשים, אך הלקוח הזה לא.',
+    detail: 'נדרשים {variety_minGroupSize}+ לקוחות פעילים מאותו סוג להשוואה. מוצג רק אם המוצר במלאי.' },
+  { type: 'hierarchyUpsell', category: 'הזדמנות', title: 'הזדמנות ממחלקת מוצר',
+    rule: 'מוצר ממחלקה מסוימת שרוב הלקוחות הקונים מאותה מחלקה רוכשים ({hierarchyUpsell_popularityPct}%+), אך הלקוח הזה לא.',
+    detail: 'הקבוצה נקבעת לפי התנהגות קנייה בפועל (איזו מחלקת מוצרים הלקוח קונה ממנה בכלל), לא לפי שיוך מוצהר. נדרשים {hierarchyUpsell_minGroupSize}+ לקוחות בקבוצה, והמוצר חייב להיות במלאי.' },
+  { type: 'centralCustomerCrossSell', category: 'הזדמנות', title: 'הזדמנות בין-סניפית',
+    rule: 'מוצר שרוב הסניפים תחת אותו "לקוח מרכז" רוכשים ({centralCross_popularityPct}%+), אך הסניף הזה לא.',
+    detail: 'נדרשים {centralCross_minGroupSize}+ סניפים תחת אותו לקוח מרכז, והמוצר חייב להיות במלאי.' },
+  { type: 'substituteOpportunity', category: 'הזדמנות', title: 'הצעת מוצר תחליפי',
+    rule: 'מוצר חסר במלאי שיש לו תחליף פעיל במלאי — מוצע ללקוחות שקנו אותו ב-{substOpp_lookbackDays} הימים האחרונים.',
+    detail: 'לפי טבלת "מוצרים תחליפיים". רלוונטי רק אם גם המוצר התחליפי במלאי.' },
+  { type: 'standingOrderOpportunity', category: 'הזדמנות', title: 'הצעת הזמנה שוטפת',
+    rule: 'לקוח שרוכש כמעט כל חודש ({standingOrder_minMonthsActive}+ מתוך {standingOrder_windowMonths} החודשים האחרונים) וטרם רכש החודש.',
+    detail: 'נבדק רק החל מיום {standingOrder_dayOfMonthGate} בחודש, כדי לא להתריע מוקדם מדי בחודש.' },
+  { type: 'marketingUnderperformance', category: 'הזדמנות', title: 'מוצר משווק שלא נמכר',
+    rule: 'מוצר המסומן ל"שיווק" שנמכר {marketingUnderperf_maxUnits} יחידות או פחות ב-{marketingUnderperf_lookbackMonths} החודשים האחרונים.',
+    detail: 'תובנה ברמת המוצר, לא לקוח ספציפי. לא מוצגת אם המוצר חסר במלאי (זו אז בעיית היצע, לא שיווק).' },
+  { type: 'upcomingEventReminder', category: 'הזדמנות', title: 'תזכורת לקראת אירוע',
+    rule: 'חג/עונה מתקרבים (עד {upcomingEvent_daysAhead} ימים), ולקוח שקנה מוצר רלוונטי באירוע המקביל אשתקד עדיין לא הזמין השנה.',
+    detail: 'המוצר חייב להיות מסומן כרלוונטי לאירוע במסך שיוך חג ועונה למוצר.' },
+  { type: 'seasonalGrowth', category: 'הזדמנות', title: 'צמיחה עונתית/חג',
+    rule: 'עלייה של {seasonal_pctThreshold}%+ ברכישת מוצר רלוונטי לחג/עונה, לעומת אותו אירוע אשתקד.',
+    detail: 'המוצר חייב להיות מסומן כרלוונטי לאירוע במסך שיוך חג ועונה למוצר, ונדרש מחזור בסיס של {seasonal_minBaseRevenue}₪. חומרה גבוהה מעל {seasonal_highPct}%.' }
 ];
 
 async function initRuleEnginePage() {
@@ -35,8 +92,16 @@ async function initRuleEnginePage() {
   function render() {
     const container = document.getElementById('rulesContainer');
     let html = '';
+    let lastCategory = null;
     INSIGHT_RULES.forEach((r) => {
-      html += '<div class="rule-card"><div class="rule-title">' + Layout.escapeHtml(r.title) + '</div><div class="rule-text">' + renderRuleTemplate(r.rule) + '</div></div>';
+      if (r.category !== lastCategory) {
+        html += '<div class="rules-category-heading">' + Layout.escapeHtml(r.category === 'התראה' ? 'התראות' : 'הזדמנויות') + '</div>';
+        lastCategory = r.category;
+      }
+      html += '<div class="rule-card"><div class="rule-title">' + Layout.escapeHtml(r.title) + '</div>' +
+        '<div class="rule-text">' + renderRuleTemplate(r.rule) + '</div>' +
+        (r.detail ? '<div class="rule-detail">' + renderRuleTemplate(r.detail) + '</div>' : '') +
+        '</div>';
     });
     container.innerHTML = html;
 

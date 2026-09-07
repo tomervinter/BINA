@@ -35,10 +35,11 @@ function prevMonthKeyOf(mk) {
   if (m < 1) { m = 12; y -= 1; }
   return y + '-' + (m < 10 ? '0' + m : m);
 }
+function quarterOf(d) { return Math.floor(d.getMonth() / 3); }
 
 // Mirrors the artifact's editable RULE_PARAM_DEFS — same names, same defaults.
 const DEFAULT_PARAMS = {
-  churn_minPurchases: 3, churn_dayFloor: 45, churn_gapMultiplier: 2.5, churn_highMultiplier: 1.6,
+  churn_minPurchases: 3, churn_dayFloor: 35, churn_gapMultiplier: 1.3, churn_highMultiplier: 1.6,
   decline_currentWindowDays: 90, decline_priorWindowDays: 90, decline_pctThreshold: 30, decline_highPct: 50, decline_minBaseRevenue: 100,
   dropoff_minPurchases: 3, dropoff_recentActivityDays: 60, dropoff_dayFloor: 45, dropoff_gapMultiplier: 2, dropoff_highGapMultiplier: 3,
   lookalike_minGroupSize: 3, lookalike_pctOfAvg: 50, lookalike_highPctOfAvg: 25,
@@ -48,7 +49,17 @@ const DEFAULT_PARAMS = {
   monthlyBreak_recentActivityDays: 90, monthlyBreak_establishedMonthsNeeded: 3, monthlyBreak_totalMonthsChecked: 5, monthlyBreak_highMonthsNeeded: 4,
   variety_minGroupSize: 3, variety_popularityPct: 50,
   monthly_pctThreshold: 30, monthly_highPct: 50, monthly_minBaseRevenue: 100, monthly_topN: 3,
-  seasonal_pctThreshold: 40, seasonal_highPct: 70, seasonal_minBaseRevenue: 100
+  seasonal_pctThreshold: 40, seasonal_highPct: 70, seasonal_minBaseRevenue: 100,
+  substOpp_lookbackDays: 90,
+  hierarchyUpsell_minGroupSize: 3, hierarchyUpsell_popularityPct: 50,
+  standingOrder_minMonthsActive: 4, standingOrder_windowMonths: 8, standingOrder_dayOfMonthGate: 20,
+  cumulativeYoy_pctThreshold: 5, cumulativeYoy_highPct: 15, cumulativeYoy_minBaseRevenue: 100,
+  varietyNarrowing_windowDays: 90, varietyNarrowing_minPriorProducts: 3, varietyNarrowing_pctThreshold: 40, varietyNarrowing_highPct: 60,
+  decliningTrend_monthsRequired: 3, decliningTrend_pctPerMonth: 10,
+  quarterlyDecline_pctThreshold: 20, quarterlyDecline_highPct: 35, quarterlyDecline_minBaseRevenue: 100,
+  centralCross_minGroupSize: 2, centralCross_popularityPct: 50,
+  marketingUnderperf_lookbackMonths: 3, marketingUnderperf_maxUnits: 0,
+  upcomingEvent_daysAhead: 21
 };
 
 async function loadParams(organizationId) {
@@ -63,15 +74,17 @@ async function loadParams(organizationId) {
 // bought again) simply stops appearing the next time this runs. No cleanup step
 // is ever needed.
 async function computeInsights(organizationId) {
-  const [customers, products, sales, inventory, relCtx] = await Promise.all([
+  const [customers, products, sales, inventory, substitutes, relCtx] = await Promise.all([
     prisma.customer.findMany({ where: { organizationId } }),
     prisma.product.findMany({ where: { organizationId } }),
     prisma.sale.findMany({ where: { organizationId } }),
     prisma.inventoryRecord.findMany({ where: { organizationId } }),
+    prisma.productSubstitute.findMany({ where: { organizationId } }),
     relevanceEngine.loadContext(organizationId)
   ]);
   const params = await loadParams(organizationId);
   const now = Date.now();
+  const nowDate = new Date(now);
 
   const custIndex = {};
   customers.forEach((c) => { custIndex[c.customerNumber] = c; });
@@ -79,6 +92,11 @@ async function computeInsights(organizationId) {
   products.forEach((p) => { prodIndex[p.itemCode] = p; });
   const invIndex = {};
   inventory.forEach((r) => { if (r.sku && !(r.sku in invIndex)) invIndex[r.sku] = r; });
+  function isOutOfStock(pid) {
+    const row = invIndex[pid];
+    const stock = row ? row.stock : null;
+    return stock !== null && stock <= 0;
+  }
 
   const s = sales.map((r) => ({
     cid: r.customerNumber, pid: r.productCode, t: new Date(r.date).getTime(), qty: r.quantity, rev: r.revenue
@@ -146,13 +164,15 @@ async function computeInsights(organizationId) {
     }
   });
 
-  // 3. product dropoff
+  // 3. product dropoff (suppressed if the product is currently out of stock — the
+  // customer isn't ignoring it, there's nothing to sell them)
   Object.keys(byPair).forEach((key) => {
     const idx = key.indexOf('|');
     const cid = key.slice(0, idx), pid = key.slice(idx + 1);
     const cust = custIndex[cid];
     if (isInactive(cust)) return;
     if (isProductInactive(prodIndex[pid])) return;
+    if (isOutOfStock(pid)) return;
     const recentAny = (byCustomer[cid] || []).some((e) => e.t > now - params.dropoff_recentActivityDays * DAY_MS);
     if (!recentAny) return;
     const events = byPair[key].slice().sort((a, b) => a.t - b.t);
@@ -198,7 +218,7 @@ async function computeInsights(organizationId) {
     const avgRev = revs.reduce((a, b) => a + b, 0) / (revs.length || 1);
     const productCounts = {};
     ids.forEach((id) => { Object.keys(custProducts[id] || {}).forEach((pid) => { productCounts[pid] = (productCounts[pid] || 0) + 1; }); });
-    const popularPids = Object.keys(productCounts).filter((pid) => productCounts[pid] >= Math.ceil(ids.length * upsellPopPct) && !isProductInactive(prodIndex[pid]));
+    const popularPids = Object.keys(productCounts).filter((pid) => productCounts[pid] >= Math.ceil(ids.length * upsellPopPct) && !isProductInactive(prodIndex[pid]) && !isOutOfStock(pid));
 
     ids.forEach((id) => {
       const rev = custRevenue[id] || 0;
@@ -300,21 +320,18 @@ async function computeInsights(organizationId) {
   });
 
   // 8. monthly product purchase break (inventory-aware — suppressed when out of stock)
-  // Sales are recorded at month granularity only (no exact day), so the original
-  // week-over-week pattern check is replaced by a month-over-month one: did the
-  // customer buy this product in most of the recent months, but skip the current one.
   Object.keys(byPair).forEach((key) => {
     const idx = key.indexOf('|');
     const cid = key.slice(0, idx), pid = key.slice(idx + 1);
     const cust = custIndex[cid];
     if (isInactive(cust)) return;
     if (isProductInactive(prodIndex[pid])) return;
+    if (isOutOfStock(pid)) return;
     const recentAny = (byCustomer[cid] || []).some((e) => e.t > now - params.monthlyBreak_recentActivityDays * DAY_MS);
     if (!recentAny) return;
 
     const monthsSet = {};
     byPair[key].forEach((e) => { monthsSet[monthKey(e.t)] = true; });
-    const nowDate = new Date(now);
     const recentMonthKeys = [];
     for (let m = 0; m <= params.monthlyBreak_totalMonthsChecked; m++) {
       recentMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1)));
@@ -324,9 +341,6 @@ async function computeInsights(organizationId) {
     const establishedCount = priorMonths.filter((mk) => monthsSet[mk]).length;
 
     if (establishedCount >= params.monthlyBreak_establishedMonthsNeeded && !monthsSet[currentMonth]) {
-      const invRow = invIndex[pid];
-      const stock = invRow ? invRow.stock : null;
-      if (stock !== null && stock <= 0) return;
       insights.push({
         type: 'monthlyProductBreak',
         severity: establishedCount >= params.monthlyBreak_highMonthsNeeded ? 'high' : 'medium',
@@ -350,7 +364,7 @@ async function computeInsights(organizationId) {
     const ids2 = members.map((c) => c.customerNumber).filter(Boolean);
     const productCounts2 = {};
     ids2.forEach((id) => { Object.keys(custProducts[id] || {}).forEach((pid) => { productCounts2[pid] = (productCounts2[pid] || 0) + 1; }); });
-    const popularPids2 = Object.keys(productCounts2).filter((pid) => productCounts2[pid] >= Math.ceil(ids2.length * varietyPct) && !isProductInactive(prodIndex[pid]));
+    const popularPids2 = Object.keys(productCounts2).filter((pid) => productCounts2[pid] >= Math.ceil(ids2.length * varietyPct) && !isProductInactive(prodIndex[pid]) && !isOutOfStock(pid));
     ids2.forEach((id) => {
       const owned = custProducts[id] || {};
       popularPids2.forEach((pid) => {
@@ -466,6 +480,327 @@ async function computeInsights(organizationId) {
   }
   processSeasonalSource(relCtx.holidays, 'holiday');
   processSeasonalSource(relCtx.seasons, 'season');
+
+  // 13. substitute-for-shortage opportunity: product X is out of stock, a substitute
+  // exists (and is itself in stock) — offer it to X's regular buyers.
+  const substByProduct = groupBy(substitutes, (r) => r.productCode);
+  Object.keys(substByProduct).forEach((pid) => {
+    if (!isOutOfStock(pid)) return;
+    if (isProductInactive(prodIndex[pid])) return;
+    const options = substByProduct[pid].map((r) => r.substituteCode).filter((sub) => !isOutOfStock(sub) && !isProductInactive(prodIndex[sub]));
+    if (!options.length) return;
+    const buyers = (byProduct[pid] || []).filter((e) => e.t > now - params.substOpp_lookbackDays * DAY_MS);
+    const buyerIds = Array.from(new Set(buyers.map((e) => e.cid)));
+    buyerIds.forEach((cid) => {
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const sub = options[0];
+      insights.push({
+        type: 'substituteOpportunity',
+        severity: 'medium',
+        customerId: cid,
+        customerName: custLabel(cid),
+        productCode: pid,
+        message: `${prodLabel(pid)} חסר במלאי — ללקוח יש היסטוריית רכישה של המוצר, ניתן להציע את ${prodLabel(sub)} כתחליף.`,
+        metric: options.length
+      });
+    });
+  });
+
+  // 14. hierarchy-based upsell: customers grouped by which product DEPARTMENT they
+  // actually buy from (behavioral cohort, not a declared customer attribute) — if most
+  // of that cohort buys a specific product in the department and this customer doesn't.
+  const deptGroups = {};
+  Object.keys(custProducts).forEach((cid) => {
+    const depts = new Set();
+    Object.keys(custProducts[cid]).forEach((pid) => {
+      const dept = prodIndex[pid] && prodIndex[pid].department;
+      if (dept) depts.add(dept);
+    });
+    depts.forEach((dept) => { (deptGroups[dept] = deptGroups[dept] || []).push(cid); });
+  });
+  const hierarchyMinGroup = params.hierarchyUpsell_minGroupSize;
+  const hierarchyPct = params.hierarchyUpsell_popularityPct / 100;
+  Object.keys(deptGroups).forEach((dept) => {
+    const ids = deptGroups[dept].filter((cid) => !isInactive(custIndex[cid]));
+    if (ids.length < hierarchyMinGroup) return;
+    const deptProductCounts = {};
+    ids.forEach((cid) => {
+      Object.keys(custProducts[cid] || {}).forEach((pid) => {
+        if (prodIndex[pid] && prodIndex[pid].department === dept) deptProductCounts[pid] = (deptProductCounts[pid] || 0) + 1;
+      });
+    });
+    const popularPids = Object.keys(deptProductCounts).filter((pid) => deptProductCounts[pid] >= Math.ceil(ids.length * hierarchyPct) && !isProductInactive(prodIndex[pid]) && !isOutOfStock(pid));
+    ids.forEach((cid) => {
+      const owned = custProducts[cid] || {};
+      popularPids.forEach((pid) => {
+        if (owned[pid]) return;
+        insights.push({
+          type: 'hierarchyUpsell',
+          severity: 'low',
+          customerId: cid,
+          customerName: custLabel(cid),
+          productCode: pid,
+          message: `רוב הלקוחות שקונים ממחלקת "${dept}" רוכשים גם את ${prodLabel(pid)}, אך לקוח זה לא — הזדמנות למכירה נוספת.`,
+          metric: deptProductCounts[pid]
+        });
+      });
+    });
+  });
+
+  // 15. standing-order opportunity: customer buys almost every month overall (not tied
+  // to one product) and hasn't bought anything yet this month — only checked from
+  // mid-to-late month onward, to avoid flagging everyone in the first days of a month.
+  if (nowDate.getDate() >= params.standingOrder_dayOfMonthGate) {
+    const curMonth = monthKey(now);
+    Object.keys(byCustomer).forEach((cid) => {
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const monthsSet = {};
+      byCustomer[cid].forEach((e) => { monthsSet[monthKey(e.t)] = true; });
+      if (monthsSet[curMonth]) return;
+      let activeMonths = 0;
+      for (let m = 1; m <= params.standingOrder_windowMonths; m++) {
+        const mk = monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1));
+        if (monthsSet[mk]) activeMonths++;
+      }
+      if (activeMonths >= params.standingOrder_minMonthsActive) {
+        insights.push({
+          type: 'standingOrderOpportunity',
+          severity: 'low',
+          customerId: cid,
+          customerName: custLabel(cid),
+          message: `הלקוח רכש ב-${activeMonths} מתוך ${params.standingOrder_windowMonths} החודשים האחרונים אך טרם רכש החודש — הזדמנות להציע הזמנה שוטפת קבועה.`,
+          metric: activeMonths
+        });
+      }
+    });
+  }
+
+  // 16. cumulative revenue this year (Jan through the last fully completed month) vs
+  // the same period last year, per customer — a more sensitive, earlier-warning
+  // companion to the rolling-90-day "ירידת מחזור" rule above.
+  {
+    const year = nowDate.getFullYear();
+    const lastCompletedMonth = Math.max(1, nowDate.getMonth());
+    const startThis = new Date(year, 0, 1).getTime();
+    const endThis = new Date(year, lastCompletedMonth, 1).getTime();
+    const startLast = new Date(year - 1, 0, 1).getTime();
+    const endLast = new Date(year - 1, lastCompletedMonth, 1).getTime();
+    Object.keys(byCustomer).forEach((cid) => {
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const events = byCustomer[cid];
+      const thisRev = events.filter((e) => e.t >= startThis && e.t < endThis).reduce((a, e) => a + e.rev, 0);
+      const lastRev = events.filter((e) => e.t >= startLast && e.t < endLast).reduce((a, e) => a + e.rev, 0);
+      if (lastRev < params.cumulativeYoy_minBaseRevenue) return;
+      const delta = (thisRev - lastRev) / lastRev;
+      if (delta <= -params.cumulativeYoy_pctThreshold / 100) {
+        insights.push({
+          type: 'cumulativeYoyDecline',
+          severity: delta <= -params.cumulativeYoy_highPct / 100 ? 'high' : 'medium',
+          customerId: cid,
+          customerName: custLabel(cid),
+          message: `ירידה של ${Math.round(-delta * 100)}% במחזור המצטבר השנה (מתחילת השנה עד החודש שעבר) לעומת אותה תקופה אשתקד.`,
+          metric: Math.round(delta * 100)
+        });
+      }
+    });
+  }
+
+  // 17. shrinking product variety: the customer is buying a much narrower range of
+  // products than before, even if total revenue hasn't obviously dropped yet.
+  {
+    const winMs = params.varietyNarrowing_windowDays * DAY_MS;
+    Object.keys(byCustomer).forEach((cid) => {
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const events = byCustomer[cid];
+      const curSet = new Set(events.filter((e) => e.t > now - winMs && e.t <= now).map((e) => e.pid));
+      const prevSet = new Set(events.filter((e) => e.t > now - 2 * winMs && e.t <= now - winMs).map((e) => e.pid));
+      if (prevSet.size < params.varietyNarrowing_minPriorProducts) return;
+      const delta = (curSet.size - prevSet.size) / prevSet.size;
+      if (delta <= -params.varietyNarrowing_pctThreshold / 100) {
+        insights.push({
+          type: 'varietyNarrowing',
+          severity: delta <= -params.varietyNarrowing_highPct / 100 ? 'high' : 'medium',
+          customerId: cid,
+          customerName: custLabel(cid),
+          message: `הלקוח קנה ${curSet.size} סוגי מוצרים שונים ב-${params.varietyNarrowing_windowDays} הימים האחרונים, לעומת ${prevSet.size} בתקופה הקודמת — ירידה במגוון הרכישות.`,
+          metric: Math.round(delta * 100)
+        });
+      }
+    });
+  }
+
+  // 18. consecutive-month declining trend (not just one month vs the last one).
+  {
+    const monthsNeeded = params.decliningTrend_monthsRequired;
+    Object.keys(byCustomer).forEach((cid) => {
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const byMonth = groupBy(byCustomer[cid], (e) => monthKey(e.t));
+      const series = [];
+      for (let m = monthsNeeded; m >= 0; m--) {
+        const mk = monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1));
+        const rev = (byMonth[mk] || []).reduce((a, e) => a + e.rev, 0);
+        series.push(rev);
+      }
+      if (series.some((v) => v <= 0)) return;
+      let allDeclining = true;
+      const pcts = [];
+      for (let i = 1; i < series.length; i++) {
+        const pct = (series[i] - series[i - 1]) / series[i - 1];
+        pcts.push(pct);
+        if (pct > -params.decliningTrend_pctPerMonth / 100) allDeclining = false;
+      }
+      if (!allDeclining) return;
+      const avgPct = Math.round(-(pcts.reduce((a, b) => a + b, 0) / pcts.length) * 100);
+      insights.push({
+        type: 'decliningTrend',
+        severity: avgPct >= params.decliningTrend_pctPerMonth * 1.5 ? 'high' : 'medium',
+        customerId: cid,
+        customerName: custLabel(cid),
+        message: `מחזור הלקוח יורד ברציפות זה ${monthsNeeded} חודשים, בממוצע כ-${avgPct}% בחודש.`,
+        metric: avgPct
+      });
+    });
+  }
+
+  // 19. quarter-over-quarter and quarter-over-same-quarter-last-year decline (uses the
+  // last fully completed quarter, to avoid comparing a partial in-progress quarter).
+  {
+    const curQStartMonth = quarterOf(nowDate) * 3;
+    const lastCompletedQEnd = new Date(nowDate.getFullYear(), curQStartMonth, 1).getTime();
+    const lastCompletedQStart = new Date(nowDate.getFullYear(), curQStartMonth - 3, 1).getTime();
+    const priorQStart = new Date(nowDate.getFullYear(), curQStartMonth - 6, 1).getTime();
+    const priorQEnd = lastCompletedQStart;
+    const yoyQStart = new Date(nowDate.getFullYear() - 1, curQStartMonth - 3, 1).getTime();
+    const yoyQEnd = new Date(nowDate.getFullYear() - 1, curQStartMonth, 1).getTime();
+    Object.keys(byCustomer).forEach((cid) => {
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const events = byCustomer[cid];
+      const sum = (from, to) => events.filter((e) => e.t >= from && e.t < to).reduce((a, e) => a + e.rev, 0);
+      const curQ = sum(lastCompletedQStart, lastCompletedQEnd);
+      if (curQ <= 0) return;
+      const priorQ = sum(priorQStart, priorQEnd);
+      const yoyQ = sum(yoyQStart, yoyQEnd);
+      let basis, baseRev;
+      if (yoyQ >= params.quarterlyDecline_minBaseRevenue) { basis = 'לרבעון המקביל אשתקד'; baseRev = yoyQ; }
+      else if (priorQ >= params.quarterlyDecline_minBaseRevenue) { basis = 'לרבעון הקודם'; baseRev = priorQ; }
+      else return;
+      const delta = (curQ - baseRev) / baseRev;
+      if (delta <= -params.quarterlyDecline_pctThreshold / 100) {
+        insights.push({
+          type: 'quarterlyDecline',
+          severity: delta <= -params.quarterlyDecline_highPct / 100 ? 'high' : 'medium',
+          customerId: cid,
+          customerName: custLabel(cid),
+          message: `ירידה של ${Math.round(-delta * 100)}% במחזור הרבעון האחרון ביחס ${basis}.`,
+          metric: Math.round(delta * 100)
+        });
+      }
+    });
+  }
+
+  // 20. central-customer (chain / franchise) cross-sell: sibling accounts under the
+  // same "שם לקוח מרכז" tend to buy the same products.
+  const centralGroups = groupBy(activeCustomers.filter((c) => c.centralCustomer), (c) => c.centralCustomer);
+  const centralMinGroup = params.centralCross_minGroupSize;
+  const centralPct = params.centralCross_popularityPct / 100;
+  Object.keys(centralGroups).forEach((centralName) => {
+    const members = centralGroups[centralName];
+    if (members.length < centralMinGroup) return;
+    const ids = members.map((c) => c.customerNumber).filter(Boolean);
+    const productCounts = {};
+    ids.forEach((id) => { Object.keys(custProducts[id] || {}).forEach((pid) => { productCounts[pid] = (productCounts[pid] || 0) + 1; }); });
+    const popularPids = Object.keys(productCounts).filter((pid) => productCounts[pid] >= Math.ceil(ids.length * centralPct) && !isProductInactive(prodIndex[pid]) && !isOutOfStock(pid));
+    ids.forEach((id) => {
+      const owned = custProducts[id] || {};
+      popularPids.forEach((pid) => {
+        if (owned[pid]) return;
+        insights.push({
+          type: 'centralCustomerCrossSell',
+          severity: 'low',
+          customerId: id,
+          customerName: custLabel(id),
+          productCode: pid,
+          message: `סניפים אחרים תחת "${centralName}" רוכשים את ${prodLabel(pid)}, אך לקוח זה לא — הזדמנות להציע גם כאן.`,
+          metric: productCounts[pid]
+        });
+      });
+    });
+  });
+
+  // 21. product flagged for marketing push but barely selling (business-level, not
+  // tied to one customer) — excluded if it's simply out of stock right now.
+  Object.keys(prodIndex).forEach((pid) => {
+    const prod = prodIndex[pid];
+    if (isProductInactive(prod)) return;
+    if (String(prod.forMarketing || '').trim() !== 'כן') return;
+    if (isOutOfStock(pid)) return;
+    const qty = (byProduct[pid] || [])
+      .filter((e) => e.t > now - params.marketingUnderperf_lookbackMonths * 31 * DAY_MS)
+      .reduce((a, e) => a + e.qty, 0);
+    if (qty > params.marketingUnderperf_maxUnits) return;
+    insights.push({
+      type: 'marketingUnderperformance',
+      severity: 'low',
+      productCode: pid,
+      message: `${prodLabel(pid)} מסומן לשיווק אך כמעט ולא נמכר ב-${params.marketingUnderperf_lookbackMonths} החודשים האחרונים (${Math.round(qty)} יחידות).`,
+      metric: Math.round(qty)
+    });
+  });
+
+  // 22. upcoming holiday/season reminder: the event starts soon, and a customer who
+  // bought a relevant product at last year's occurrence hasn't ordered it again yet.
+  function processUpcomingEvents(rows, source) {
+    const byName = groupBy(rows, (r) => String(r.name || '').trim());
+    Object.keys(byName).forEach((name) => {
+      if (!name) return;
+      const instances = byName[name].slice().sort((a, b) => new Date(a.fromDate) - new Date(b.fromDate));
+      instances.forEach((inst, i) => {
+        const startT = new Date(inst.fromDate).getTime();
+        const daysUntil = (startT - now) / DAY_MS;
+        if (daysUntil < 0 || daysUntil > params.upcomingEvent_daysAhead) return;
+        if (i === 0) return;
+        const prevInst = instances[i - 1];
+        const before = source === 'holiday' ? (prevInst.daysBefore || 0) : 0;
+        const after = source === 'holiday' ? (prevInst.daysAfter || 0) : 0;
+        const prevStart = new Date(prevInst.fromDate).getTime() - before * DAY_MS;
+        const prevEnd = new Date(prevInst.toDate).getTime() + after * DAY_MS;
+
+        Object.keys(byCustomer).forEach((cid) => {
+          const cust = custIndex[cid];
+          if (isInactive(cust)) return;
+          const pairEvents = {};
+          byCustomer[cid].forEach((e) => { (pairEvents[e.pid] = pairEvents[e.pid] || []).push(e); });
+          Object.keys(pairEvents).forEach((pid) => {
+            if (isProductInactive(prodIndex[pid])) return;
+            const rel = relevanceEngine.isRelevant(relCtx, pid, source, name);
+            if (!rel.known || !rel.value) return;
+            const boughtLastTime = pairEvents[pid].some((e) => e.t >= prevStart && e.t <= prevEnd);
+            if (!boughtLastTime) return;
+            const boughtSinceThen = pairEvents[pid].some((e) => e.t > prevEnd);
+            if (boughtSinceThen) return;
+            const eventKind = source === 'holiday' ? 'חג' : 'עונת';
+            insights.push({
+              type: 'upcomingEventReminder',
+              severity: 'low',
+              customerId: cid,
+              customerName: custLabel(cid),
+              productCode: pid,
+              message: `${eventKind} ${name} מתקרב (בעוד ${Math.round(daysUntil)} ימים) — הלקוח רכש את ${prodLabel(pid)} באירוע המקביל אשתקד וטרם הזמין השנה.`,
+              metric: Math.round(daysUntil)
+            });
+          });
+        });
+      });
+    });
+  }
+  processUpcomingEvents(relCtx.holidays, 'holiday');
+  processUpcomingEvents(relCtx.seasons, 'season');
 
   const sevRank = { high: 0, medium: 1, low: 2 };
   insights.sort((a, b) => sevRank[a.severity] - sevRank[b.severity] || Math.abs(b.metric) - Math.abs(a.metric));
