@@ -23,6 +23,7 @@ model Organization {
   ruleSettings        RuleSetting[]
   productSubstitutes  ProductSubstitute[]
   columnOrders        ColumnOrder[]
+  insights            Insight[]
 }
 
 model User {
@@ -140,6 +141,26 @@ model RelevanceOverride {
   value          Boolean
 
   @@unique([organizationId, productCode, source, name])
+  @@index([organizationId])
+}
+
+// A generated snapshot of one insight. Insights are NOT computed live on every
+// page load — they're computed by an explicit "יצירת תובנות" action (see
+// src/routes/insights.js), which replaces whatever was previously stored. This
+// lets a user clear the board mid-day and re-run generation on their own schedule.
+model Insight {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  type           String
+  severity       String
+  customerId     String?
+  customerName   String?
+  productCode    String?
+  message        String
+  metric         Float
+  createdAt      DateTime     @default(now())
+
   @@index([organizationId])
 }
 

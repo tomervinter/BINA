@@ -12,11 +12,28 @@
     <main class="main-content">
       <div class="topbar" id="topbarMount"></div>
 
-      <div class="page-title">יומן תובנות</div>
+      <div class="page-title" style="display:flex;align-items:center;gap:8px;">
+        יומן תובנות
+        <button class="icon-btn" id="insightsInfoBtn" type="button" title="איך נקבעים החומרה והמדד?">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="19" height="19"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5.5"></path><circle cx="12" cy="7.7" r="0.6" fill="currentColor" stroke="none"></circle></svg>
+        </button>
+      </div>
       <div class="page-subtitle">כל התובנות שזוהו אוטומטית מתוך נתוני המכירות, הלקוחות, המוצרים, המלאי, החגים והעונתיות — מרוכזות בטבלה אחת, ניתנות למיון ולסינון בכל עמודה.</div>
 
       <div class="card">
-        <p class="card-text">לחצו על שורת לקוח כדי לעבור ישירות לכרטסת תחקור התובנה שלו.</p>
+        <p class="card-text">לחצו על שורת לקוח כדי לעבור ישירות לכרטסת תחקור התובנה שלו. התובנות אינן מחושבות אוטומטית — יש ליצור אותן מחדש בכל פעם שרוצים לרענן אותן.</p>
+        <div class="toolbar">
+          <button class="btn btn-primary btn-sm" id="generateInsightsBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
+            יצירת תובנות
+          </button>
+          <button class="btn btn-danger btn-sm" id="deleteAllInsightsBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"></path><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"></path><path d="M7 7l1 12.5A1.5 1.5 0 0 0 9.5 21h5a1.5 1.5 0 0 0 1.5-1.5L17 7"></path></svg>
+            מחיקת כל התובנות
+          </button>
+          <span class="spacer"></span>
+          <span class="status-line" id="insightsGenStatus" style="display:block;"></span>
+        </div>
         <div id="tableContainer"></div>
       </div>
     </main>
@@ -24,6 +41,7 @@
 
   <script src="js/layout.js"></script>
   <script src="js/column-order.js"></script>
+  <script src="js/confirm-modal.js"></script>
   <script src="js/table.js"></script>
   <script src="js/type-meta.js"></script>
   <script src="js/insights-page.js"></script>

@@ -35,14 +35,14 @@ const NAV_GROUPS = [
     { key: 'holidays', href: 'holidays.html', label: 'ניהול חגים', countKey: 'holidays' },
     { key: 'seasons', href: 'seasons.html', label: 'ניהול עונתיות', countKey: 'seasons' },
     { key: 'relevance', href: 'relevance.html', label: 'שיוך חג ועונה למוצר' },
-    { key: 'product-substitutes', href: 'product-substitutes.html', label: 'מוצרים תחליפיים' }
+    { key: 'product-substitutes', href: 'product-substitutes.html', label: 'מוצרים תחליפיים' },
+    { key: 'rule-engine', href: 'rule-engine.html', label: 'כללי מנוע התובנות' }
   ] },
   { title: 'דוחות', items: [
     { key: 'insights', href: 'insights.html', label: 'יומן תובנות' },
     { key: 'reports-full-sales', href: 'reports-full-sales.html', label: 'דוח מכירות מלא' },
     { key: 'reports-yoy', href: 'reports-yoy.html', label: 'דוח שנה מול שנה' },
-    { key: 'customer-profile', href: 'customer-profile.html', label: 'כרטסת תחקור תובנה' },
-    { key: 'rule-engine', href: 'rule-engine.html', label: 'כללי מנוע התובנות' }
+    { key: 'customer-profile', href: 'customer-profile.html', label: 'כרטסת תחקור תובנה' }
   ] },
   { title: 'ניהול חברה', items: [
     { key: 'users', href: 'users.html', label: 'משתמשים' }

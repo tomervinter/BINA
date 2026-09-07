@@ -136,7 +136,7 @@ input[type=text],input[type=email],input[type=password],input[type=number]{
 .table-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-s);}
 table{border-collapse:collapse;width:100%;font-size:12.8px;}
 thead th{position:sticky;top:0;background:var(--surface-2);z-index:1;}
-th,td{padding:10px 12px;text-align:start;white-space:nowrap;border-bottom:1px solid var(--border);}
+th,td{padding:10px 12px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--border);}
 th{font-weight:800;color:var(--text);}
 .th-inner{display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none;}
 .th-label{unicode-bidi:isolate;}
@@ -239,8 +239,8 @@ tr.rel-row-unclassified:hover td{background:var(--red-soft);filter:brightness(.9
 tr.rel-row-unclassified td.rel-product-name{background:var(--red-soft);}
 
 /* ---------- Inline-editable rows (holidays/seasons) ---------- */
-.inline-edit-table td{padding:5px 8px;}
-.inline-edit-table input{width:100%;padding:4px 8px;border:1px solid var(--border);border-radius:7px;font-size:12.5px;font-family:inherit;background:var(--surface);}
+.inline-edit-table td{padding:2px 8px;}
+.inline-edit-table input{width:100%;padding:2px 8px;border:1px solid var(--border);border-radius:7px;font-size:12.5px;font-family:inherit;background:var(--surface);}
 .icon-btn,.btn-icon{width:28px;height:28px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}
 .icon-btn{border:none;background:transparent;font-size:15px;padding:4px 8px;}
 .icon-btn:hover,.btn-icon:hover{color:var(--red);background:var(--surface-2);}
