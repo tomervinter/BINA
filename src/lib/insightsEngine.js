@@ -2,6 +2,16 @@ const prisma = require('./prisma');
 const relevanceEngine = require('./relevanceEngine');
 
 const DAY_MS = 86400000;
+const MONTH_NAMES_HE = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+
+// Every insight's message names the exact months/dates and figures behind the
+// decision — not just "ירד באחוז X" but which months were compared and what the
+// actual revenue/quantity/day-count was, so the number can be traced back by hand.
+function fmtMonthYear(t) { const d = new Date(t); return MONTH_NAMES_HE[d.getMonth()] + ' ' + d.getFullYear(); }
+function fmtMonthYearKey(mk) { const [y, m] = mk.split('-'); return MONTH_NAMES_HE[+m - 1] + ' ' + y; }
+function fmtDateHe(t) { const d = new Date(t); const p = (n) => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear(); }
+function fmtMoneyHe(n) { return Math.round(n || 0).toLocaleString('he-IL') + '₪'; }
+function quarterLabel(t) { const d = new Date(t); return 'רבעון ' + (Math.floor(d.getMonth() / 3) + 1) + ' ' + d.getFullYear(); }
 
 function median(arr) {
   if (!arr.length) return 0;
@@ -118,7 +128,8 @@ async function computeInsights(organizationId) {
     const gaps = [];
     for (let i = 1; i < events.length; i++) gaps.push((events[i].t - events[i - 1].t) / DAY_MS);
     const typicalGap = median(gaps) || 30;
-    const daysSince = (now - events[events.length - 1].t) / DAY_MS;
+    const lastT = events[events.length - 1].t;
+    const daysSince = (now - lastT) / DAY_MS;
     const threshold = Math.max(params.churn_dayFloor, typicalGap * params.churn_gapMultiplier);
     if (daysSince > threshold) {
       insights.push({
@@ -126,7 +137,7 @@ async function computeInsights(organizationId) {
         severity: daysSince > threshold * params.churn_highMultiplier ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
-        message: `לא בוצעה רכישה כבר ${Math.round(daysSince)} ימים (קצב רגיל: כל כ-${Math.round(typicalGap)} ימים).`,
+        message: `רכישה אחרונה בוצעה ב-${fmtMonthYear(lastT)} (${fmtDateHe(lastT)}) — לפני ${Math.round(daysSince)} ימים מהיום. קצב הרכישה הרגיל של הלקוח, לפי חציון המרווחים בין ${events.length} הרכישות ההיסטוריות שלו, הוא כ-${Math.round(typicalGap)} ימים; סף ההתראה נקבע ל-${Math.round(threshold)} ימים (המקסימום בין ${params.churn_dayFloor} ימים לבין פי ${params.churn_gapMultiplier} מהקצב הרגיל).`,
         metric: Math.round(daysSince)
       });
     }
@@ -137,18 +148,25 @@ async function computeInsights(organizationId) {
     const cust = custIndex[cid];
     if (isInactive(cust)) return;
     const events = byCustomer[cid];
-    const cur = events.filter((e) => e.t > now - params.decline_currentWindowDays * DAY_MS && e.t <= now);
+    const curFrom = now - params.decline_currentWindowDays * DAY_MS;
+    const cur = events.filter((e) => e.t > curFrom && e.t <= now);
     if (!cur.length) return;
     const curRev = cur.reduce((a, e) => a + e.rev, 0);
-    const yoy = events.filter((e) => e.t > now - (365 + params.decline_currentWindowDays) * DAY_MS && e.t <= now - 365 * DAY_MS);
-    let basis, baseRev;
+    const yoyFrom = now - (365 + params.decline_currentWindowDays) * DAY_MS;
+    const yoyTo = now - 365 * DAY_MS;
+    const yoy = events.filter((e) => e.t > yoyFrom && e.t <= yoyTo);
+    let basis, baseRev, baseFrom, baseTo;
     if (yoy.length) {
       basis = 'לתקופה המקבילה אשתקד';
       baseRev = yoy.reduce((a, e) => a + e.rev, 0);
+      baseFrom = yoyFrom; baseTo = yoyTo;
     } else {
-      const prev = events.filter((e) => e.t > now - (params.decline_currentWindowDays + params.decline_priorWindowDays) * DAY_MS && e.t <= now - params.decline_currentWindowDays * DAY_MS);
-      basis = 'לרבעון הקודם';
+      const prevFrom = now - (params.decline_currentWindowDays + params.decline_priorWindowDays) * DAY_MS;
+      const prevTo = curFrom;
+      const prev = events.filter((e) => e.t > prevFrom && e.t <= prevTo);
+      basis = 'לתקופה הקודמת';
       baseRev = prev.reduce((a, e) => a + e.rev, 0);
+      baseFrom = prevFrom; baseTo = prevTo;
     }
     if (baseRev < params.decline_minBaseRevenue) return;
     const delta = (curRev - baseRev) / baseRev;
@@ -158,7 +176,7 @@ async function computeInsights(organizationId) {
         severity: delta <= -params.decline_highPct / 100 ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
-        message: `ירידה של ${Math.round(-delta * 100)}% במחזור ביחס ${basis}.`,
+        message: `מחזור הלקוח בין ${fmtDateHe(curFrom)} ל-${fmtDateHe(now)} (${params.decline_currentWindowDays} הימים האחרונים) עמד על ${fmtMoneyHe(curRev)} — ירידה של ${Math.round(-delta * 100)}% ${basis} (${fmtDateHe(baseFrom)}–${fmtDateHe(baseTo)}, ${fmtMoneyHe(baseRev)}).`,
         metric: Math.round(delta * 100)
       });
     }
@@ -180,7 +198,8 @@ async function computeInsights(organizationId) {
     const gaps = [];
     for (let i = 1; i < events.length; i++) gaps.push((events[i].t - events[i - 1].t) / DAY_MS);
     const typicalGap = median(gaps) || 30;
-    const daysSince = (now - events[events.length - 1].t) / DAY_MS;
+    const lastT = events[events.length - 1].t;
+    const daysSince = (now - lastT) / DAY_MS;
     if (daysSince > Math.max(params.dropoff_dayFloor, typicalGap * params.dropoff_gapMultiplier)) {
       insights.push({
         type: 'dropoff',
@@ -188,7 +207,7 @@ async function computeInsights(organizationId) {
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הלקוח פעיל אך הפסיק לרכוש את המוצר ${prodLabel(pid)} — ${Math.round(daysSince)} ימים ללא רכישה (קצב רגיל: כ-${Math.round(typicalGap)} ימים).`,
+        message: `הלקוח פעיל, אך לא רכש את ${prodLabel(pid)} מאז ${fmtMonthYear(lastT)} (${fmtDateHe(lastT)}) — ${Math.round(daysSince)} ימים ללא רכישה. קצב הרכישה הרגיל שלו למוצר זה, מתוך ${events.length} רכישות עבר, הוא כ-${Math.round(typicalGap)} ימים.`,
         metric: Math.round(daysSince)
       });
     }
@@ -228,7 +247,7 @@ async function computeInsights(organizationId) {
           severity: rev < avgRev * lookalikeHighPct ? 'high' : 'medium',
           customerId: id,
           customerName: custLabel(id),
-          message: `מחזור הלקוח נמוך משמעותית מהממוצע בקבוצת "${seg}" (${Math.round(rev).toLocaleString('he-IL')} לעומת ממוצע ${Math.round(avgRev).toLocaleString('he-IL')}) — פוטנציאל צמיחה לא ממומש.`,
+          message: `מחזור הלקוח בסך הכול (${fmtMoneyHe(rev)}) נמוך משמעותית מהממוצע בקבוצת "${seg}" — ${fmtMoneyHe(avgRev)}, מחושב לפי ${ids.length} לקוחות פעילים באותה קבוצת סיווג ראשי — פוטנציאל צמיחה לא ממומש.`,
           metric: Math.round((rev / avgRev) * 100)
         });
       }
@@ -241,7 +260,7 @@ async function computeInsights(organizationId) {
           customerId: id,
           customerName: custLabel(id),
           productCode: pid,
-          message: `רוב הלקוחות הדומים בקבוצת "${seg}" רוכשים את ${prodLabel(pid)}, אך לקוח זה לא — הזדמנות ל-Upsell.`,
+          message: `${productCounts[pid]} מתוך ${ids.length} הלקוחות בקבוצת הסיווג הראשי "${seg}" רכשו אי-פעם את ${prodLabel(pid)}, אך לקוח זה לא רכש אותו כלל — הזדמנות ל-Upsell.`,
           metric: productCounts[pid]
         });
       });
@@ -289,7 +308,7 @@ async function computeInsights(organizationId) {
       type: 'anomaly',
       severity: Math.abs(delta) >= params.anomaly_highPct / 100 ? 'high' : 'medium',
       productCode: pid,
-      message: `${delta > 0 ? 'עלייה חדה' : 'ירידה חדה'} לא צפויה של ${Math.round(Math.abs(delta) * 100)}% במכירות ${prodLabel(pid)} בחודש האחרון, ללא הסבר עונתי/חג ידוע.`,
+      message: `${delta > 0 ? 'עלייה חדה' : 'ירידה חדה'} של ${Math.round(Math.abs(delta) * 100)}% בכמות המכירה של ${prodLabel(pid)} ב-${fmtMonthYearKey(lastMonth)} (${Math.round(lastQty)} יח') לעומת הממוצע ב-${priorMonths.length} החודשים שלפני כן — ${priorMonths.map(fmtMonthYearKey).join(', ')} (ממוצע ${Math.round(baseline)} יח'), ללא הסבר עונתי/חג ידוע.`,
       metric: Math.round(delta * 100)
     });
   });
@@ -303,8 +322,10 @@ async function computeInsights(organizationId) {
     events.forEach((e) => { dropSet[dayKey(e.t)] = e.t; });
     const dropTimes = Object.keys(dropSet).map((k) => dropSet[k]).sort((a, b) => a - b);
     if (dropTimes.length < params.freq_minTotalDrops) return;
-    const curDrops = dropTimes.filter((t) => t > now - params.freq_windowDays * DAY_MS && t <= now).length;
-    const prevDrops = dropTimes.filter((t) => t > now - 2 * params.freq_windowDays * DAY_MS && t <= now - params.freq_windowDays * DAY_MS).length;
+    const curFrom = now - params.freq_windowDays * DAY_MS;
+    const prevFrom = now - 2 * params.freq_windowDays * DAY_MS;
+    const curDrops = dropTimes.filter((t) => t > curFrom && t <= now).length;
+    const prevDrops = dropTimes.filter((t) => t > prevFrom && t <= curFrom).length;
     if (prevDrops < params.freq_minPrevDrops) return;
     const delta = (curDrops - prevDrops) / prevDrops;
     if (delta <= -params.freq_pctThreshold / 100) {
@@ -313,7 +334,7 @@ async function computeInsights(organizationId) {
         severity: delta <= -params.freq_highPct / 100 ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
-        message: `קצב הביקורים (דרופים) ירד מ-${prevDrops} ל-${curDrops} ב-${params.freq_windowDays} הימים האחרונים לעומת ${params.freq_windowDays} הימים שלפניהם.`,
+        message: `מספר ה"דרופים" (ימי רכישה נפרדים) ירד מ-${prevDrops} בין ${fmtDateHe(prevFrom)}–${fmtDateHe(curFrom)} ל-${curDrops} בין ${fmtDateHe(curFrom)}–${fmtDateHe(now)} (חלונות של ${params.freq_windowDays} ימים כל אחד).`,
         metric: Math.round(delta * 100)
       });
     }
@@ -338,7 +359,8 @@ async function computeInsights(organizationId) {
     }
     const currentMonth = recentMonthKeys[0];
     const priorMonths = recentMonthKeys.slice(1);
-    const establishedCount = priorMonths.filter((mk) => monthsSet[mk]).length;
+    const boughtMonths = priorMonths.filter((mk) => monthsSet[mk]);
+    const establishedCount = boughtMonths.length;
 
     if (establishedCount >= params.monthlyBreak_establishedMonthsNeeded && !monthsSet[currentMonth]) {
       insights.push({
@@ -347,7 +369,7 @@ async function computeInsights(organizationId) {
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הלקוח רכש את ${prodLabel(pid)} ב-${establishedCount} מתוך ${params.monthlyBreak_totalMonthsChecked} החודשים האחרונים, אך לא רכש החודש — דפוס רכישה חודשי שנקטע.`,
+        message: `הלקוח רכש את ${prodLabel(pid)} ב-${establishedCount} מתוך ${params.monthlyBreak_totalMonthsChecked} החודשים האחרונים (${boughtMonths.map(fmtMonthYearKey).join(', ')}), אך לא רכש אותו ב-${fmtMonthYearKey(currentMonth)} — דפוס רכישה חודשי שנקטע.`,
         metric: establishedCount
       });
     }
@@ -375,7 +397,7 @@ async function computeInsights(organizationId) {
           customerId: id,
           customerName: custLabel(id),
           productCode: pid,
-          message: `רוב הלקוחות מסוג "${typeName}" רוכשים את ${prodLabel(pid)}, אך לקוח זה לא — פער במגוון המוצרים.`,
+          message: `${productCounts2[pid]} מתוך ${ids2.length} הלקוחות מסוג "${typeName}" רכשו את ${prodLabel(pid)}, אך לקוח זה לא — פער במגוון המוצרים.`,
           metric: productCounts2[pid]
         });
       });
@@ -409,14 +431,14 @@ async function computeInsights(organizationId) {
     const diffs = Object.keys(allPids).map((pid) => ({ pid, diff: (curByPid[pid] || 0) - (prevByPid[pid] || 0) }))
       .filter((d) => d.diff < 0 && !isProductInactive(prodIndex[d.pid]))
       .sort((a, b) => a.diff - b.diff);
-    const top = diffs.slice(0, params.monthly_topN).map((d) => `${prodLabel(d.pid)} (${Math.round(d.diff).toLocaleString('he-IL')}₪)`);
+    const top = diffs.slice(0, params.monthly_topN).map((d) => `${prodLabel(d.pid)} (${fmtMoneyHe(d.diff)})`);
 
     insights.push({
       type: 'monthlyDeclineDetail',
       severity: delta <= -monthlyHighPct ? 'high' : 'medium',
       customerId: cid,
       customerName: custLabel(cid),
-      message: `ירידה של ${Math.round(-delta * 100)}% במחזור החודש מול החודש הקודם${top.length ? ', בעיקר במוצרים: ' + top.join(', ') : ''}.`,
+      message: `מחזור הלקוח ב-${fmtMonthYearKey(curMK)} (${fmtMoneyHe(curRev)}) ירד ב-${Math.round(-delta * 100)}% לעומת ${fmtMonthYearKey(prevMK)} (${fmtMoneyHe(prevRev)})${top.length ? ', בעיקר במוצרים: ' + top.join(', ') : ''}.`,
       metric: Math.round(delta * 100)
     });
   });
@@ -471,7 +493,7 @@ async function computeInsights(organizationId) {
             customerId: cid,
             customerName: custLabel(cid),
             productCode: pid,
-            message: `${dirWord} של ${Math.round(Math.abs(delta) * 100)}% ברכישת ${prodLabel(pid)} ב${eventKind} ${name} (${latest.year}) לעומת אותו ${source === 'holiday' ? 'חג' : 'עונה'} אשתקד (${previous.year}) — מוצר זה מסומן כרלוונטי אליו במסך שיוך חג ועונה למוצר.`,
+            message: `${dirWord} של ${Math.round(Math.abs(delta) * 100)}% ברכישת ${prodLabel(pid)} ב${eventKind} ${name} ${latest.year} (${fmtDateHe(latest.start)}–${fmtDateHe(latest.end)}, ${fmtMoneyHe(latestRev)}) לעומת אותו אירוע אשתקד ${previous.year} (${fmtDateHe(previous.start)}–${fmtDateHe(previous.end)}, ${fmtMoneyHe(prevRev)}) — מוצר זה מסומן כרלוונטי אליו במסך שיוך חג ועונה למוצר.`,
             metric: Math.round(delta * 100)
           });
         });
@@ -489,9 +511,11 @@ async function computeInsights(organizationId) {
     if (isProductInactive(prodIndex[pid])) return;
     const options = substByProduct[pid].map((r) => r.substituteCode).filter((sub) => !isOutOfStock(sub) && !isProductInactive(prodIndex[sub]));
     if (!options.length) return;
-    const buyers = (byProduct[pid] || []).filter((e) => e.t > now - params.substOpp_lookbackDays * DAY_MS);
-    const buyerIds = Array.from(new Set(buyers.map((e) => e.cid)));
-    buyerIds.forEach((cid) => {
+    const lookbackFrom = now - params.substOpp_lookbackDays * DAY_MS;
+    const buyers = (byProduct[pid] || []).filter((e) => e.t > lookbackFrom);
+    const buyerLastPurchase = {};
+    buyers.forEach((e) => { if (!buyerLastPurchase[e.cid] || e.t > buyerLastPurchase[e.cid]) buyerLastPurchase[e.cid] = e.t; });
+    Object.keys(buyerLastPurchase).forEach((cid) => {
       const cust = custIndex[cid];
       if (isInactive(cust)) return;
       const sub = options[0];
@@ -501,7 +525,7 @@ async function computeInsights(organizationId) {
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `${prodLabel(pid)} חסר במלאי — ללקוח יש היסטוריית רכישה של המוצר, ניתן להציע את ${prodLabel(sub)} כתחליף.`,
+        message: `${prodLabel(pid)} חסר במלאי כרגע. הלקוח רכש אותו לאחרונה ב-${fmtMonthYear(buyerLastPurchase[cid])} (בטווח ${params.substOpp_lookbackDays} הימים האחרונים, מאז ${fmtDateHe(lookbackFrom)}) — ניתן להציע את ${prodLabel(sub)} כתחליף.`,
         metric: options.length
       });
     });
@@ -541,7 +565,7 @@ async function computeInsights(organizationId) {
           customerId: cid,
           customerName: custLabel(cid),
           productCode: pid,
-          message: `רוב הלקוחות שקונים ממחלקת "${dept}" רוכשים גם את ${prodLabel(pid)}, אך לקוח זה לא — הזדמנות למכירה נוספת.`,
+          message: `${deptProductCounts[pid]} מתוך ${ids.length} הלקוחות שרכשו אי-פעם מוצר כלשהו ממחלקת "${dept}" רוכשים גם את ${prodLabel(pid)}, אך לקוח זה לא — הזדמנות למכירה נוספת.`,
           metric: deptProductCounts[pid]
         });
       });
@@ -559,19 +583,19 @@ async function computeInsights(organizationId) {
       const monthsSet = {};
       byCustomer[cid].forEach((e) => { monthsSet[monthKey(e.t)] = true; });
       if (monthsSet[curMonth]) return;
-      let activeMonths = 0;
+      const activeMonthKeys = [];
       for (let m = 1; m <= params.standingOrder_windowMonths; m++) {
         const mk = monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1));
-        if (monthsSet[mk]) activeMonths++;
+        if (monthsSet[mk]) activeMonthKeys.push(mk);
       }
-      if (activeMonths >= params.standingOrder_minMonthsActive) {
+      if (activeMonthKeys.length >= params.standingOrder_minMonthsActive) {
         insights.push({
           type: 'standingOrderOpportunity',
           severity: 'low',
           customerId: cid,
           customerName: custLabel(cid),
-          message: `הלקוח רכש ב-${activeMonths} מתוך ${params.standingOrder_windowMonths} החודשים האחרונים אך טרם רכש החודש — הזדמנות להציע הזמנה שוטפת קבועה.`,
-          metric: activeMonths
+          message: `הלקוח רכש ב-${activeMonthKeys.length} מתוך ${params.standingOrder_windowMonths} החודשים האחרונים (${activeMonthKeys.map(fmtMonthYearKey).join(', ')}), אך טרם ביצע רכישה ב-${fmtMonthYearKey(curMonth)} (נכון ל-${fmtDateHe(now)}) — הזדמנות להציע הזמנה שוטפת קבועה.`,
+          metric: activeMonthKeys.length
         });
       }
     });
@@ -583,6 +607,7 @@ async function computeInsights(organizationId) {
   {
     const year = nowDate.getFullYear();
     const lastCompletedMonth = Math.max(1, nowDate.getMonth());
+    const rangeLabel = MONTH_NAMES_HE[0] + '–' + MONTH_NAMES_HE[lastCompletedMonth - 1];
     const startThis = new Date(year, 0, 1).getTime();
     const endThis = new Date(year, lastCompletedMonth, 1).getTime();
     const startLast = new Date(year - 1, 0, 1).getTime();
@@ -601,7 +626,7 @@ async function computeInsights(organizationId) {
           severity: delta <= -params.cumulativeYoy_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
-          message: `ירידה של ${Math.round(-delta * 100)}% במחזור המצטבר השנה (מתחילת השנה עד החודש שעבר) לעומת אותה תקופה אשתקד.`,
+          message: `מחזור הלקוח ב-${rangeLabel} ${year} עמד על ${fmtMoneyHe(thisRev)} — ירידה של ${Math.round(-delta * 100)}% לעומת אותה תקופה ב-${year - 1} (${rangeLabel} ${year - 1}, ${fmtMoneyHe(lastRev)}).`,
           metric: Math.round(delta * 100)
         });
       }
@@ -616,8 +641,10 @@ async function computeInsights(organizationId) {
       const cust = custIndex[cid];
       if (isInactive(cust)) return;
       const events = byCustomer[cid];
-      const curSet = new Set(events.filter((e) => e.t > now - winMs && e.t <= now).map((e) => e.pid));
-      const prevSet = new Set(events.filter((e) => e.t > now - 2 * winMs && e.t <= now - winMs).map((e) => e.pid));
+      const curFrom = now - winMs;
+      const prevFrom = now - 2 * winMs;
+      const curSet = new Set(events.filter((e) => e.t > curFrom && e.t <= now).map((e) => e.pid));
+      const prevSet = new Set(events.filter((e) => e.t > prevFrom && e.t <= curFrom).map((e) => e.pid));
       if (prevSet.size < params.varietyNarrowing_minPriorProducts) return;
       const delta = (curSet.size - prevSet.size) / prevSet.size;
       if (delta <= -params.varietyNarrowing_pctThreshold / 100) {
@@ -626,7 +653,7 @@ async function computeInsights(organizationId) {
           severity: delta <= -params.varietyNarrowing_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
-          message: `הלקוח קנה ${curSet.size} סוגי מוצרים שונים ב-${params.varietyNarrowing_windowDays} הימים האחרונים, לעומת ${prevSet.size} בתקופה הקודמת — ירידה במגוון הרכישות.`,
+          message: `הלקוח קנה ${curSet.size} סוגי מוצרים שונים בין ${fmtDateHe(curFrom)}–${fmtDateHe(now)}, לעומת ${prevSet.size} סוגים בתקופה המקבילה שקדמה לה (${fmtDateHe(prevFrom)}–${fmtDateHe(curFrom)}) — ירידה במגוון הרכישות.`,
           metric: Math.round(delta * 100)
         });
       }
@@ -641,10 +668,11 @@ async function computeInsights(organizationId) {
       if (isInactive(cust)) return;
       const byMonth = groupBy(byCustomer[cid], (e) => monthKey(e.t));
       const series = [];
+      const seriesKeys = [];
       for (let m = monthsNeeded; m >= 0; m--) {
         const mk = monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1));
-        const rev = (byMonth[mk] || []).reduce((a, e) => a + e.rev, 0);
-        series.push(rev);
+        seriesKeys.push(mk);
+        series.push((byMonth[mk] || []).reduce((a, e) => a + e.rev, 0));
       }
       if (series.some((v) => v <= 0)) return;
       let allDeclining = true;
@@ -656,12 +684,13 @@ async function computeInsights(organizationId) {
       }
       if (!allDeclining) return;
       const avgPct = Math.round(-(pcts.reduce((a, b) => a + b, 0) / pcts.length) * 100);
+      const seriesLabel = seriesKeys.map((mk, i) => fmtMonthYearKey(mk) + ' (' + fmtMoneyHe(series[i]) + ')').join(' ← ');
       insights.push({
         type: 'decliningTrend',
         severity: avgPct >= params.decliningTrend_pctPerMonth * 1.5 ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
-        message: `מחזור הלקוח יורד ברציפות זה ${monthsNeeded} חודשים, בממוצע כ-${avgPct}% בחודש.`,
+        message: `מחזור הלקוח יורד ברציפות ${monthsNeeded} חודשים, בממוצע כ-${avgPct}% בחודש: ${seriesLabel}.`,
         metric: avgPct
       });
     });
@@ -671,8 +700,8 @@ async function computeInsights(organizationId) {
   // last fully completed quarter, to avoid comparing a partial in-progress quarter).
   {
     const curQStartMonth = quarterOf(nowDate) * 3;
-    const lastCompletedQEnd = new Date(nowDate.getFullYear(), curQStartMonth, 1).getTime();
     const lastCompletedQStart = new Date(nowDate.getFullYear(), curQStartMonth - 3, 1).getTime();
+    const lastCompletedQEnd = new Date(nowDate.getFullYear(), curQStartMonth, 1).getTime();
     const priorQStart = new Date(nowDate.getFullYear(), curQStartMonth - 6, 1).getTime();
     const priorQEnd = lastCompletedQStart;
     const yoyQStart = new Date(nowDate.getFullYear() - 1, curQStartMonth - 3, 1).getTime();
@@ -687,8 +716,8 @@ async function computeInsights(organizationId) {
       const priorQ = sum(priorQStart, priorQEnd);
       const yoyQ = sum(yoyQStart, yoyQEnd);
       let basis, baseRev;
-      if (yoyQ >= params.quarterlyDecline_minBaseRevenue) { basis = 'לרבעון המקביל אשתקד'; baseRev = yoyQ; }
-      else if (priorQ >= params.quarterlyDecline_minBaseRevenue) { basis = 'לרבעון הקודם'; baseRev = priorQ; }
+      if (yoyQ >= params.quarterlyDecline_minBaseRevenue) { basis = `לרבעון המקביל אשתקד (${quarterLabel(yoyQStart)})`; baseRev = yoyQ; }
+      else if (priorQ >= params.quarterlyDecline_minBaseRevenue) { basis = `לרבעון הקודם (${quarterLabel(priorQStart)})`; baseRev = priorQ; }
       else return;
       const delta = (curQ - baseRev) / baseRev;
       if (delta <= -params.quarterlyDecline_pctThreshold / 100) {
@@ -697,7 +726,7 @@ async function computeInsights(organizationId) {
           severity: delta <= -params.quarterlyDecline_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
-          message: `ירידה של ${Math.round(-delta * 100)}% במחזור הרבעון האחרון ביחס ${basis}.`,
+          message: `מחזור הלקוח ב${quarterLabel(lastCompletedQStart)} עמד על ${fmtMoneyHe(curQ)} — ירידה של ${Math.round(-delta * 100)}% ביחס ${basis} (${fmtMoneyHe(baseRev)}).`,
           metric: Math.round(delta * 100)
         });
       }
@@ -726,7 +755,7 @@ async function computeInsights(organizationId) {
           customerId: id,
           customerName: custLabel(id),
           productCode: pid,
-          message: `סניפים אחרים תחת "${centralName}" רוכשים את ${prodLabel(pid)}, אך לקוח זה לא — הזדמנות להציע גם כאן.`,
+          message: `${productCounts[pid]} מתוך ${ids.length} הסניפים תחת לקוח המרכז "${centralName}" רוכשים את ${prodLabel(pid)}, אך סניף זה לא — הזדמנות להציע גם כאן.`,
           metric: productCounts[pid]
         });
       });
@@ -740,15 +769,16 @@ async function computeInsights(organizationId) {
     if (isProductInactive(prod)) return;
     if (String(prod.forMarketing || '').trim() !== 'כן') return;
     if (isOutOfStock(pid)) return;
+    const lookbackFrom = now - params.marketingUnderperf_lookbackMonths * 31 * DAY_MS;
     const qty = (byProduct[pid] || [])
-      .filter((e) => e.t > now - params.marketingUnderperf_lookbackMonths * 31 * DAY_MS)
+      .filter((e) => e.t > lookbackFrom)
       .reduce((a, e) => a + e.qty, 0);
     if (qty > params.marketingUnderperf_maxUnits) return;
     insights.push({
       type: 'marketingUnderperformance',
       severity: 'low',
       productCode: pid,
-      message: `${prodLabel(pid)} מסומן לשיווק אך כמעט ולא נמכר ב-${params.marketingUnderperf_lookbackMonths} החודשים האחרונים (${Math.round(qty)} יחידות).`,
+      message: `${prodLabel(pid)} מסומן לשיווק ("לשיווק=כן"), אך נמכרו ממנו רק ${Math.round(qty)} יחידות בין ${fmtDateHe(lookbackFrom)} ל-${fmtDateHe(now)} (${params.marketingUnderperf_lookbackMonths} החודשים האחרונים).`,
       metric: Math.round(qty)
     });
   });
@@ -791,7 +821,7 @@ async function computeInsights(organizationId) {
               customerId: cid,
               customerName: custLabel(cid),
               productCode: pid,
-              message: `${eventKind} ${name} מתקרב (בעוד ${Math.round(daysUntil)} ימים) — הלקוח רכש את ${prodLabel(pid)} באירוע המקביל אשתקד וטרם הזמין השנה.`,
+              message: `${eventKind} ${name} מתחיל ב-${fmtDateHe(startT)} (בעוד ${Math.round(daysUntil)} ימים). הלקוח רכש את ${prodLabel(pid)} באירוע המקביל אשתקד (${fmtDateHe(prevStart)}–${fmtDateHe(prevEnd)}) וטרם הזמין אותו מאז.`,
               metric: Math.round(daysUntil)
             });
           });

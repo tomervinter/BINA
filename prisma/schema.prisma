@@ -91,6 +91,7 @@ model Sale {
   @@index([organizationId])
   @@index([organizationId, customerNumber])
   @@index([organizationId, productCode])
+  @@index([organizationId, date])
 }
 
 model InventoryRecord {

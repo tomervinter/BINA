@@ -42,7 +42,7 @@ const NAV_GROUPS = [
     { key: 'insights', href: 'insights.html', label: 'יומן תובנות' },
     { key: 'reports-full-sales', href: 'reports-full-sales.html', label: 'דוח מכירות מלא' },
     { key: 'reports-yoy', href: 'reports-yoy.html', label: 'דוח שנה מול שנה' },
-    { key: 'customer-profile', href: 'customer-profile.html', label: 'כרטסת תחקור תובנה' }
+    { key: 'customer-profile', href: 'customer-profile.html', label: 'כרטסת לקוח' }
   ] },
   { title: 'ניהול חברה', items: [
     { key: 'users', href: 'users.html', label: 'משתמשים' }
@@ -52,7 +52,7 @@ const NAV_GROUPS = [
 const PAGE_LABELS = {
   dashboard: 'בית', sales: 'טעינת קובץ מכירות', customers: 'טעינת לקוחות', products: 'טעינת מוצרים',
   inventory: 'טעינת מלאי', holidays: 'ניהול חגים', seasons: 'ניהול עונתיות', relevance: 'שיוך חג ועונה למוצר',
-  insights: 'יומן תובנות', 'customer-profile': 'כרטסת תחקור תובנה', 'rule-engine': 'כללי מנוע התובנות', users: 'משתמשים',
+  insights: 'יומן תובנות', 'customer-profile': 'כרטסת לקוח', 'rule-engine': 'כללי מנוע התובנות', users: 'משתמשים',
   'reports-yoy': 'דוח שנה מול שנה', 'product-substitutes': 'מוצרים תחליפיים', 'reports-full-sales': 'דוח מכירות מלא'
 };
 
