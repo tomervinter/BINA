@@ -47,6 +47,34 @@ function prevMonthKeyOf(mk) {
 }
 function quarterOf(d) { return Math.floor(d.getMonth() / 3); }
 
+// Sales only carry month-level precision (every row is stored on the 1st of its
+// month), but holiday/season windows are real dates that rarely start or end on the
+// 1st. Comparing a sale's exact (fabricated) timestamp against those exact date
+// boundaries would arbitrarily drop or keep whole months depending on where the
+// window edge happens to fall — so "does this window overlap this calendar month"
+// is the only honest test, and the entire month's revenue/quantity counts if it does.
+function monthRangeMs(mk) {
+  const [y, m] = mk.split('-');
+  return [new Date(+y, +m - 1, 1).getTime(), new Date(+y, +m, 1).getTime()];
+}
+function overlappingMonths(start, end) {
+  const months = [];
+  let cursor = new Date(new Date(start).getFullYear(), new Date(start).getMonth(), 1);
+  const endDate = new Date(end);
+  while (cursor.getTime() < end && (cursor.getFullYear() < endDate.getFullYear() || (cursor.getFullYear() === endDate.getFullYear() && cursor.getMonth() <= endDate.getMonth()))) {
+    const mk = monthKey(cursor.getTime());
+    const [ms, me] = monthRangeMs(mk);
+    if (ms < end && me > start) months.push(mk);
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+    if (months.length > 36) break; // safety valve against malformed date ranges
+  }
+  return months;
+}
+function monthOverlapsWindow(mk, start, end) {
+  const [ms, me] = monthRangeMs(mk);
+  return ms < end && me > start;
+}
+
 // Mirrors the artifact's editable RULE_PARAM_DEFS — same names, same defaults.
 const DEFAULT_PARAMS = {
   churn_minPurchases: 3, churn_dayFloor: 35, churn_gapMultiplier: 1.3, churn_highMultiplier: 1.6,
@@ -283,8 +311,6 @@ async function computeInsights(organizationId) {
     const delta = (lastQty - baseline) / baseline;
     if (Math.abs(delta) < params.anomaly_pctThreshold / 100) return;
 
-    const parts = lastMonth.split('-');
-    const lastMonthMidT = new Date(+parts[0], +parts[1] - 1, 15).getTime();
     let explained = false;
     function checkWindows(rows, source) {
       rows.forEach((r) => {
@@ -294,7 +320,7 @@ async function computeInsights(organizationId) {
         const after = source === 'holiday' ? (r.daysAfter || 0) : 0;
         const start = new Date(r.fromDate).getTime() - before * DAY_MS;
         const end = new Date(r.toDate).getTime() + after * DAY_MS;
-        if (lastMonthMidT >= start && lastMonthMidT <= end) {
+        if (monthOverlapsWindow(lastMonth, start, end)) {
           const rel = relevanceEngine.isRelevant(relCtx, pid, source, name);
           if (rel.value) explained = true;
         }
@@ -466,6 +492,10 @@ async function computeInsights(organizationId) {
       const windows = byName[name].slice().sort((a, b) => b.start - a.start);
       if (windows.length < 2) return;
       const latest = windows[0], previous = windows[1];
+      const latestMonths = overlappingMonths(latest.start, latest.end);
+      const previousMonths = overlappingMonths(previous.start, previous.end);
+      const latestLabel = latestMonths.length === 1 ? fmtMonthYearKey(latestMonths[0]) : fmtMonthYearKey(latestMonths[0]) + '–' + fmtMonthYearKey(latestMonths[latestMonths.length - 1]);
+      const previousLabel = previousMonths.length === 1 ? fmtMonthYearKey(previousMonths[0]) : fmtMonthYearKey(previousMonths[0]) + '–' + fmtMonthYearKey(previousMonths[previousMonths.length - 1]);
       Object.keys(byCustomer).forEach((cid) => {
         const cust = custIndex[cid];
         if (isInactive(cust)) return;
@@ -477,8 +507,9 @@ async function computeInsights(organizationId) {
           if (!rel.known || !rel.value) return;
           let latestRev = 0, prevRev = 0;
           pairEvents[pid].forEach((e) => {
-            if (e.t >= latest.start && e.t <= latest.end) latestRev += e.rev;
-            else if (e.t >= previous.start && e.t <= previous.end) prevRev += e.rev;
+            const mk = monthKey(e.t);
+            if (latestMonths.includes(mk)) latestRev += e.rev;
+            else if (previousMonths.includes(mk)) prevRev += e.rev;
           });
           if (prevRev < seasonalMinBase) return;
           const delta = (latestRev - prevRev) / prevRev;
@@ -493,7 +524,7 @@ async function computeInsights(organizationId) {
             customerId: cid,
             customerName: custLabel(cid),
             productCode: pid,
-            message: `${dirWord} של ${Math.round(Math.abs(delta) * 100)}% ברכישת ${prodLabel(pid)} ב${eventKind} ${name} ${latest.year} (${fmtDateHe(latest.start)}–${fmtDateHe(latest.end)}, ${fmtMoneyHe(latestRev)}) לעומת אותו אירוע אשתקד ${previous.year} (${fmtDateHe(previous.start)}–${fmtDateHe(previous.end)}, ${fmtMoneyHe(prevRev)}) — מוצר זה מסומן כרלוונטי אליו במסך שיוך חג ועונה למוצר.`,
+            message: `${dirWord} של ${Math.round(Math.abs(delta) * 100)}% ברכישת ${prodLabel(pid)} בחודשים החופפים ל${eventKind} ${name} ${latest.year} (${latestLabel}, ${fmtMoneyHe(latestRev)}) לעומת החודשים החופפים לאותו אירוע אשתקד ${previous.year} (${previousLabel}, ${fmtMoneyHe(prevRev)}) — מוצר זה מסומן כרלוונטי אליו במסך שיוך חג ועונה למוצר. (המכירות ידועות ברמת חודש בלבד, ולכן ההשוואה היא לפי חודשים מלאים החופפים לתאריכי האירוע, לא לפי הימים המדויקים.)`,
             metric: Math.round(delta * 100)
           });
         });
@@ -800,6 +831,11 @@ async function computeInsights(organizationId) {
         const after = source === 'holiday' ? (prevInst.daysAfter || 0) : 0;
         const prevStart = new Date(prevInst.fromDate).getTime() - before * DAY_MS;
         const prevEnd = new Date(prevInst.toDate).getTime() + after * DAY_MS;
+        // Same month-only-precision issue as the seasonal rule above: compare by
+        // calendar month overlapping the window, not by the sale's exact (fabricated) day.
+        const prevMonths = overlappingMonths(prevStart, prevEnd);
+        const prevLabel = prevMonths.length === 1 ? fmtMonthYearKey(prevMonths[0]) : fmtMonthYearKey(prevMonths[0]) + '–' + fmtMonthYearKey(prevMonths[prevMonths.length - 1]);
+        const lastPrevMonthEnd = monthRangeMs(prevMonths[prevMonths.length - 1])[1];
 
         Object.keys(byCustomer).forEach((cid) => {
           const cust = custIndex[cid];
@@ -810,9 +846,9 @@ async function computeInsights(organizationId) {
             if (isProductInactive(prodIndex[pid])) return;
             const rel = relevanceEngine.isRelevant(relCtx, pid, source, name);
             if (!rel.known || !rel.value) return;
-            const boughtLastTime = pairEvents[pid].some((e) => e.t >= prevStart && e.t <= prevEnd);
+            const boughtLastTime = pairEvents[pid].some((e) => prevMonths.includes(monthKey(e.t)));
             if (!boughtLastTime) return;
-            const boughtSinceThen = pairEvents[pid].some((e) => e.t > prevEnd);
+            const boughtSinceThen = pairEvents[pid].some((e) => e.t >= lastPrevMonthEnd);
             if (boughtSinceThen) return;
             const eventKind = source === 'holiday' ? 'חג' : 'עונת';
             insights.push({
@@ -821,7 +857,7 @@ async function computeInsights(organizationId) {
               customerId: cid,
               customerName: custLabel(cid),
               productCode: pid,
-              message: `${eventKind} ${name} מתחיל ב-${fmtDateHe(startT)} (בעוד ${Math.round(daysUntil)} ימים). הלקוח רכש את ${prodLabel(pid)} באירוע המקביל אשתקד (${fmtDateHe(prevStart)}–${fmtDateHe(prevEnd)}) וטרם הזמין אותו מאז.`,
+              message: `${eventKind} ${name} מתחיל ב-${fmtDateHe(startT)} (בעוד ${Math.round(daysUntil)} ימים). הלקוח רכש את ${prodLabel(pid)} בחודשים החופפים לאירוע המקביל אשתקד (${prevLabel}) וטרם הזמין אותו מאז.`,
               metric: Math.round(daysUntil)
             });
           });
