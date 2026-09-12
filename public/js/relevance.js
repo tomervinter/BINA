@@ -63,19 +63,20 @@ async function initRelevancePage() {
     await load();
   }
 
-  // Bulk reset back to "טרם סווג" (unclassified) — same DELETE the per-cell cycle
-  // already uses to clear a manual classification, just applied to every selected
-  // product's cells for every holiday/season at once.
-  async function bulkUnassign(source) {
+  // Bulk-mark as "לא רלוונטי" (✗) — same PUT the per-cell cycle already uses for an
+  // explicit "not relevant" classification (value:false), just applied to every
+  // selected product's cells for every holiday/season at once. Distinct from clearing
+  // to "?" unclassified: this is a considered "no" answer, not an unset one.
+  async function bulkMarkIrrelevant(source) {
     if (!selected.size) { alert('יש לסמן קודם לפחות שורה אחת (מוצר).'); return; }
     const names = payload.events.filter((ev) => ev.source === source).map((ev) => ev.name);
     if (!names.length) return;
     const label = source === 'holiday' ? 'כל החגים' : 'כל העונות';
-    if (!confirm('לבטל את השיוך של ' + selected.size.toLocaleString('he-IL') + ' מוצרים נבחרים ל' + label + ' (יחזרו למצב "טרם סווג")?')) return;
+    if (!confirm('לסמן ' + selected.size.toLocaleString('he-IL') + ' מוצרים נבחרים כלא רלוונטיים ל' + label + '?')) return;
     const writes = [];
     selected.forEach((productCode) => { names.forEach((name) => { writes.push({ productCode, source, name }); }); });
     await Promise.all(writes.map((w) =>
-      fetch('/api/relevance', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(w) })
+      fetch('/api/relevance', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ...w, value: false }) })
     ));
     await load();
   }
@@ -104,8 +105,8 @@ async function initRelevancePage() {
       '<button class="btn btn-ghost btn-sm js-relOnlyUnclassified' + (onlyUnclassified ? ' active' : '') + '" type="button">הצג רק מוצרים לא מסווגים</button>';
     if (hasHolidays) html += '<button class="btn btn-primary btn-sm js-relBulkHolidays" type="button">סמן נבחרים כרלוונטיים לכל החגים</button>';
     if (hasSeasons) html += '<button class="btn btn-primary btn-sm js-relBulkSeasons" type="button">סמן נבחרים כרלוונטיים לכל העונות</button>';
-    if (hasHolidays) html += '<button class="btn btn-ghost btn-sm js-relBulkUnassignHolidays" type="button">בטל שיוך נבחרים לכל החגים</button>';
-    if (hasSeasons) html += '<button class="btn btn-ghost btn-sm js-relBulkUnassignSeasons" type="button">בטל שיוך נבחרים לכל העונות</button>';
+    if (hasHolidays) html += '<button class="btn btn-ghost btn-sm js-relBulkIrrelevantHolidays" type="button">סמן נבחרים כלא רלוונטיים לכל החגים</button>';
+    if (hasSeasons) html += '<button class="btn btn-ghost btn-sm js-relBulkIrrelevantSeasons" type="button">סמן נבחרים כלא רלוונטיים לכל העונות</button>';
     if (selected.size) html += '<button class="btn btn-ghost btn-sm js-relClearSelection" type="button">נקה בחירה</button>';
     html += '<span class="spacer"></span>' +
       '<input type="text" class="filter-input js-relSearch" placeholder="חיפוש לפי שם מוצר / קוד פריט..." style="max-width:220px;" value="' + Layout.escapeHtml(searchTerm) + '">' +
@@ -138,10 +139,10 @@ async function initRelevancePage() {
     if (holidaysBtn) holidaysBtn.addEventListener('click', () => bulkAssign('holiday'));
     const seasonsBtn = container.querySelector('.js-relBulkSeasons');
     if (seasonsBtn) seasonsBtn.addEventListener('click', () => bulkAssign('season'));
-    const unassignHolidaysBtn = container.querySelector('.js-relBulkUnassignHolidays');
-    if (unassignHolidaysBtn) unassignHolidaysBtn.addEventListener('click', () => bulkUnassign('holiday'));
-    const unassignSeasonsBtn = container.querySelector('.js-relBulkUnassignSeasons');
-    if (unassignSeasonsBtn) unassignSeasonsBtn.addEventListener('click', () => bulkUnassign('season'));
+    const irrelevantHolidaysBtn = container.querySelector('.js-relBulkIrrelevantHolidays');
+    if (irrelevantHolidaysBtn) irrelevantHolidaysBtn.addEventListener('click', () => bulkMarkIrrelevant('holiday'));
+    const irrelevantSeasonsBtn = container.querySelector('.js-relBulkIrrelevantSeasons');
+    if (irrelevantSeasonsBtn) irrelevantSeasonsBtn.addEventListener('click', () => bulkMarkIrrelevant('season'));
     const clearBtn = container.querySelector('.js-relClearSelection');
     if (clearBtn) clearBtn.addEventListener('click', () => { selected.clear(); render(); });
 
