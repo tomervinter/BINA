@@ -54,57 +54,99 @@ function deltaNote(current, compareVal, compareLabel) {
   return ' (' + sign + Math.round(delta) + '% לעומת ' + compareLabel + ')';
 }
 
-// Month-over-month indicator for the trend bar charts: a small arrow + % above each
-// bar (₪ delta shown on hover, to keep the chart itself uncluttered), computed only
-// for months that have fully ended — a still-in-progress month's total is partial,
-// so comparing it would be misleading. `getMonthMeta(datasetIndex, dataIndex)` must
-// return the {year, month} that data point represents, or null/undefined to skip it.
-function computeMomInfo(datasets, getMonthMeta) {
+// Year-over-year indicator for the trend bar charts: one combined arrow + % + ₪
+// label drawn above each month's bar (or pair of bars), comparing that month's value
+// to the exact same calendar month one year earlier — not month-to-month within a
+// series. Skipped for a month that hasn't fully ended yet (its total is partial and
+// comparing it would be misleading), and whenever there's no year-earlier value to
+// compare against.
+function buildYoyEntries(n, getCurrent, getPrior) {
   const now = new Date();
-  return datasets.map((ds, dsIndex) => ds.data.map((val, i) => {
-    if (i === 0) return null; // no prior point in this series to compare against
-    const prev = ds.data[i - 1];
-    if (!prev) return null;
-    const mInfo = getMonthMeta(dsIndex, i);
-    if (!mInfo || new Date(mInfo.year, mInfo.month, 1) > now) return null;
-    const delta = (val - prev) / prev;
-    if (!isFinite(delta) || delta === 0) return null;
-    return { pct: Math.round(delta * 100), moneyDiff: Math.round(val - prev), up: delta > 0 };
-  }));
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const cur = getCurrent(i);
+    const prior = getPrior(i);
+    const meta = cur && cur.meta;
+    if (!prior || !meta || new Date(meta.year, meta.month, 1) > now) continue;
+    const curVal = cur.value;
+    const delta = (curVal - prior) / prior;
+    if (!isFinite(delta) || delta === 0) continue;
+    out.push({ i, pct: Math.round(delta * 100), moneyDiff: Math.round(curVal - prior), up: delta > 0 });
+  }
+  return out;
 }
 
-function momDrawPlugin(momInfo) {
+// Draws a small triangular arrow with a gradient fill and a soft drop shadow (a
+// simple stand-in for a "3D" look in a 2D canvas) plus the % and ₪ figures, centered
+// above whichever bar(s) `dsIndices` point to for that month.
+function yoyDrawPlugin(entries, dsIndices) {
   return {
-    id: 'momIndicator',
+    id: 'yoyIndicator',
     afterDatasetsDraw(chart) {
       const ctx = chart.ctx;
-      chart.data.datasets.forEach((ds, dsIndex) => {
-        const meta = chart.getDatasetMeta(dsIndex);
-        if (meta.hidden) return;
-        (momInfo[dsIndex] || []).forEach((info, i) => {
-          if (!info) return;
-          const bar = meta.data[i];
-          if (!bar) return;
-          const props = bar.getProps(['x', 'y'], true);
-          ctx.save();
-          ctx.font = '700 10px Assistant, Arial, sans-serif';
-          ctx.fillStyle = info.up ? '#1E9E5C' : '#DE4B4B';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillText((info.up ? '▲' : '▼') + (info.up ? '+' : '') + info.pct + '%', props.x, props.y - 4);
-          ctx.restore();
-        });
+      entries.forEach((e) => {
+        const bars = dsIndices.map((dsIdx) => {
+          const meta = chart.getDatasetMeta(dsIdx);
+          return meta && !meta.hidden ? meta.data[e.i] : null;
+        }).filter(Boolean);
+        if (!bars.length) return;
+        const props = bars.map((b) => b.getProps(['x', 'y'], true));
+        const midX = props.reduce((a, p) => a + p.x, 0) / props.length;
+        const topY = Math.min.apply(null, props.map((p) => p.y));
+        const color = e.up ? '#1E9E5C' : '#DE4B4B';
+        const lightColor = e.up ? '#9FE8BE' : '#F7B9B3';
+        const arrowY = topY - 15;
+        const size = 4.5;
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(15,23,42,0.32)';
+        ctx.shadowBlur = 2.5;
+        ctx.shadowOffsetY = 1.2;
+        const grad = ctx.createLinearGradient(midX, arrowY - size, midX, arrowY + size);
+        if (e.up) { grad.addColorStop(0, lightColor); grad.addColorStop(1, color); }
+        else { grad.addColorStop(0, color); grad.addColorStop(1, lightColor); }
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        if (e.up) {
+          ctx.moveTo(midX, arrowY - size);
+          ctx.lineTo(midX + size, arrowY + size * 0.6);
+          ctx.lineTo(midX - size, arrowY + size * 0.6);
+        } else {
+          ctx.moveTo(midX, arrowY + size);
+          ctx.lineTo(midX + size, arrowY - size * 0.6);
+          ctx.lineTo(midX - size, arrowY - size * 0.6);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = '700 9.5px Assistant, Arial, sans-serif';
+        ctx.fillStyle = color;
+        ctx.textBaseline = 'bottom';
+        ctx.fillText((e.up ? '+' : '') + e.pct + '%', midX, topY - 4);
+        ctx.font = '600 8px Assistant, Arial, sans-serif';
+        ctx.fillStyle = '#6A7093';
+        ctx.fillText((e.moneyDiff >= 0 ? '+' : '') + e.moneyDiff.toLocaleString('he-IL') + '₪', midX, arrowY - size - 1);
+        ctx.restore();
       });
     }
   };
 }
 
-function momTooltipAfterLabel(momInfo) {
+// `onlyDsIndex`, when given, restricts the note to that one dataset's bars — the
+// indicator is only ever drawn above specific bars (see `dsIndices` in
+// yoyDrawPlugin), so the tooltip shouldn't claim to explain a bar it wasn't drawn on.
+function yoyTooltipAfterLabel(entries, onlyDsIndex) {
+  const byIndex = {};
+  entries.forEach((e) => { byIndex[e.i] = e; });
   return (tooltipItem) => {
-    const info = momInfo[tooltipItem.datasetIndex] && momInfo[tooltipItem.datasetIndex][tooltipItem.dataIndex];
-    if (!info) return undefined;
-    const sign = info.up ? '+' : '';
-    return 'שינוי מהחודש הקודם: ' + sign + info.pct + '% (' + sign + info.moneyDiff.toLocaleString('he-IL') + '₪)';
+    if (onlyDsIndex != null && tooltipItem.datasetIndex !== onlyDsIndex) return undefined;
+    const e = byIndex[tooltipItem.dataIndex];
+    if (!e) return undefined;
+    const sign = e.up ? '+' : '';
+    return 'לעומת אותו חודש אשתקד: ' + sign + e.pct + '% (' + sign + e.moneyDiff.toLocaleString('he-IL') + '₪)';
   };
 }
 
@@ -126,7 +168,7 @@ async function loadDashboardSalesSummary(filters) {
     document.getElementById('monthlyTrendTitle').textContent = 'השוואת תקופות' + suffix;
     document.getElementById('monthlyTrendSubtitle').textContent =
       'התקופה ' + s.period.label + (s.comparePeriod ? ' לעומת ' + s.comparePeriod.label : '') +
-      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. ▲/▼ מציינים שינוי לעומת החודש הקודם (לחודשים שהסתיימו בלבד; פרטים בריחוף).';
+      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. החץ מציין שינוי לעומת אותו חודש אשתקד (לחודשים שהסתיימו בלבד).';
     document.getElementById('salesSummaryTitle').textContent = 'תמונת מכירות — ' + s.period.label + suffix;
     document.getElementById('salesSummarySubtitle').textContent = 'מבוסס על שורות המכירה בתקופה ' + s.period.label + (s.customerNumber ? (' של ' + s.customerName) : '') + '. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.';
   } else {
@@ -134,7 +176,7 @@ async function loadDashboardSalesSummary(filters) {
     document.getElementById('monthlyTrendTitle').textContent = (years.length > 1 ? 'השוואת מחזור חודשי בין השנים' : 'מחזור מכירות לפי חודשים') + suffix;
     document.getElementById('monthlyTrendSubtitle').textContent =
       (years.length > 1 ? 'השוואה חודשית בין ' + years.join(', ') : 'נתוני שנת ' + years[0]) +
-      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. ▲/▼ מציינים שינוי לעומת החודש הקודם (לחודשים שהסתיימו בלבד; פרטים בריחוף).';
+      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. החץ מציין שינוי לעומת אותו חודש אשתקד (לחודשים שהסתיימו בלבד).';
     document.getElementById('salesSummaryTitle').textContent = (s.customerNumber ? 'תמונת מכירות — הלקוח הנבחר' : 'תמונת מכירות כוללת');
     document.getElementById('salesSummarySubtitle').textContent = s.customerNumber
       ? ('מבוסס על שורות המכירה של ' + s.customerName + ' בלבד. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.')
@@ -169,20 +211,22 @@ async function loadDashboardSalesSummary(filters) {
     const labels = Array.from({ length: n }, (_, i) => 'חודש ' + (i + 1));
     const datasets = [{ label: pt.periodLabel, data: pt.periodData, backgroundColor: DASH_BLUE, borderRadius: 4 }];
     if (pt.compareData) datasets.push({ label: pt.compareLabel, data: pt.compareData, backgroundColor: DASH_NAVY, borderRadius: 4 });
-    const ptMomInfo = computeMomInfo(datasets, (dsIndex, i) => {
-      const months = dsIndex === 0 ? pt.periodMonths : pt.compareMonths;
-      return months ? months[i] : null;
-    });
+    // Always vs. the exact same calendar month one year earlier (pt.yoyData), drawn
+    // above the period's own bar — independent of whatever comparison series is shown.
+    const ptYoyEntries = buildYoyEntries(pt.periodMonths.length,
+      (i) => ({ value: pt.periodData[i], meta: pt.periodMonths[i] }),
+      (i) => pt.yoyData[i]
+    );
     upsertChart('monthlyTrendChart', {
       type: 'bar',
       data: { labels, datasets },
-      plugins: [momDrawPlugin(ptMomInfo)],
+      plugins: [yoyDrawPlugin(ptYoyEntries, [0])],
       options: {
         responsive: true, maintainAspectRatio: false,
-        layout: { padding: { top: 18 } },
+        layout: { padding: { top: 26 } },
         plugins: {
           legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } },
-          tooltip: { callbacks: { afterLabel: momTooltipAfterLabel(ptMomInfo) } }
+          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(ptYoyEntries, 0) } }
         },
         scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
@@ -205,17 +249,27 @@ async function loadDashboardSalesSummary(filters) {
       backgroundColor: YEAR_SERIES_COLORS[(s.yearlyTrend.length - 1 - i) % YEAR_SERIES_COLORS.length],
       borderRadius: 4
     }));
-    const yearlyMomInfo = computeMomInfo(yearlyDatasets, (dsIndex, i) => ({ year: s.yearlyTrend[dsIndex].year, month: i + 1 }));
+    // Year-over-year indicator compares the most recent year to the one immediately
+    // before it (if present among the displayed years), drawn centered above that
+    // pair of bars for each month — not month-to-month within either series.
+    const latestIdx = s.yearlyTrend.length - 1;
+    const latestYear = s.yearlyTrend[latestIdx].year;
+    const priorIdx = s.yearlyTrend.findIndex((yr) => yr.year === latestYear - 1);
+    const yearlyYoyEntries = buildYoyEntries(12,
+      (i) => ({ value: s.yearlyTrend[latestIdx].data[i], meta: { year: latestYear, month: i + 1 } }),
+      (i) => priorIdx >= 0 ? s.yearlyTrend[priorIdx].data[i] : undefined
+    );
+    const yearlyYoyDsIndices = priorIdx >= 0 ? [latestIdx, priorIdx] : [latestIdx];
     upsertChart('monthlyTrendChart', {
       type: 'bar',
       data: { labels: s.monthNames, datasets: yearlyDatasets },
-      plugins: [momDrawPlugin(yearlyMomInfo)],
+      plugins: [yoyDrawPlugin(yearlyYoyEntries, yearlyYoyDsIndices)],
       options: {
         responsive: true, maintainAspectRatio: false,
-        layout: { padding: { top: 18 } },
+        layout: { padding: { top: 26 } },
         plugins: {
           legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } },
-          tooltip: { callbacks: { afterLabel: momTooltipAfterLabel(yearlyMomInfo) } }
+          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(yearlyYoyEntries, latestIdx) } }
         },
         scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {

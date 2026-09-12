@@ -70,19 +70,21 @@ router.get('/', async (req, res) => {
     prisma.sale.groupBy({ by: ['productCode'], where, _sum: { revenue: true } }),
     prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, customerType: true, primaryClass: true } }),
     prisma.product.findMany({ where: { organizationId }, select: { itemCode: true, name: true, department: true, superType: true } }),
-    prisma.sale.findMany({ where, select: { date: true, revenue: true } })
+    // Unrestricted by the period/compare date filters (customer filter still applies)
+    // so the trend chart can always look up a given month's year-earlier counterpart
+    // for the year-over-year indicator, regardless of which months were selected.
+    prisma.sale.findMany({ where: baseWhere, select: { date: true, revenue: true } })
   ];
   if (compareWhere) {
     queries.push(
       prisma.sale.aggregate({ where: compareWhere, _sum: { revenue: true, quantity: true } }),
       prisma.sale.groupBy({ by: ['customerNumber'], where: compareWhere, _sum: { revenue: true } }),
-      prisma.sale.groupBy({ by: ['productCode'], where: compareWhere, _sum: { revenue: true } }),
-      prisma.sale.findMany({ where: compareWhere, select: { date: true, revenue: true } })
+      prisma.sale.groupBy({ by: ['productCode'], where: compareWhere, _sum: { revenue: true } })
     );
   }
   const results = await Promise.all(queries);
   const [totalAgg, byCust, byProd, customers, products, trendRows] = results;
-  const [compareAgg, compareByCust, compareByProd, compareTrendRows] = compareWhere ? results.slice(6) : [null, null, null, null];
+  const [compareAgg, compareByCust, compareByProd] = compareWhere ? results.slice(6) : [null, null, null];
 
   const custMap = {};
   customers.forEach((c) => { custMap[c.customerNumber] = c; });
@@ -118,14 +120,18 @@ router.get('/', async (req, res) => {
     // comparison months, aligned by relative position (1st selected period month vs
     // 1st selected comparison month, etc.) rather than by calendar month — the set
     // need not be contiguous, and the two sets are usually offset by design (e.g.
-    // this quarter's months vs the same quarter last year).
+    // this quarter's months vs the same quarter last year). Independent of whatever
+    // comparison the user picked, `yoyData` always looks up each selected month's
+    // exact same calendar month one year earlier, for the on-chart YoY indicator.
+    const yoyMonths = period.map(({ year, month }) => ({ year: year - 1, month }));
     periodTrend = {
       periodMonths: period,
       periodLabel: monthsLabel(period),
       periodData: monthlyRevenue(trendRows, period),
       compareMonths: compare,
       compareLabel: compare ? monthsLabel(compare) : null,
-      compareData: compare ? monthlyRevenue(compareTrendRows, compare) : null
+      compareData: compare ? monthlyRevenue(trendRows, compare) : null,
+      yoyData: monthlyRevenue(trendRows, yoyMonths)
     };
   } else {
     // Default mode: one 12-value (Jan–Dec) series per calendar year that actually has
