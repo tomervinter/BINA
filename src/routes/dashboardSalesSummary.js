@@ -10,8 +10,9 @@ const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מא
 // Dashboard infographic data, sourced from the same sales-full-report consolidation.
 // Aggregated in the database and grouped by distinct customer/product (bounded by
 // entity count, not raw sale-row count) — never loads the raw sales table into memory,
-// except for the monthly trend, which only ever selects {date, revenue} for a bounded
-// 12-month window.
+// except for the year-over-year trend, which only selects {date, revenue} but for
+// every sale (not windowed to a trailing period), since the chart compares full
+// calendar years side by side rather than a rolling 12 months.
 //
 // An optional ?customerNumber= scopes every aggregation to that one customer's sales,
 // so the whole dashboard can show "all customers" or "just this one" — the filter is
@@ -21,16 +22,14 @@ router.get('/', async (req, res) => {
   const organizationId = req.user.organizationId;
   const customerNumber = req.query.customerNumber ? String(req.query.customerNumber) : null;
   const where = customerNumber ? { organizationId, customerNumber } : { organizationId };
-  const now = new Date();
-  const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
-  const [totalAgg, byCust, byProd, customers, products, monthlyRows] = await Promise.all([
+  const [totalAgg, byCust, byProd, customers, products, yearlyRows] = await Promise.all([
     prisma.sale.aggregate({ where, _sum: { revenue: true, quantity: true } }),
     prisma.sale.groupBy({ by: ['customerNumber'], where, _sum: { revenue: true } }),
     prisma.sale.groupBy({ by: ['productCode'], where, _sum: { revenue: true } }),
     prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, customerType: true, primaryClass: true } }),
     prisma.product.findMany({ where: { organizationId }, select: { itemCode: true, name: true, department: true, superType: true } }),
-    prisma.sale.findMany({ where: Object.assign({}, where, { date: { gte: trendStart } }), select: { date: true, revenue: true } })
+    prisma.sale.findMany({ where, select: { date: true, revenue: true } })
   ]);
 
   const custMap = {};
@@ -55,17 +54,19 @@ router.get('/', async (req, res) => {
       .map((r) => ({ code: r[idField], name: (map[r[idField]] && map[r[idField]].name) || r[idField], revenue: r._sum.revenue || 0 }));
   }
 
-  const monthly = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    monthly.push({ year: d.getFullYear(), month: d.getMonth() + 1, label: MONTH_NAMES[d.getMonth()] + ' ' + d.getFullYear(), revenue: 0 });
-  }
-  const monthlyIndex = {};
-  monthly.forEach((m, idx) => { monthlyIndex[m.year + '-' + m.month] = idx; });
-  monthlyRows.forEach((r) => {
-    const d = new Date(r.date);
-    const key = d.getFullYear() + '-' + (d.getMonth() + 1);
-    if (key in monthlyIndex) monthly[monthlyIndex[key]].revenue += r.revenue;
+  // Year-over-year monthly revenue: one 12-value (Jan–Dec) series per calendar year
+  // that actually has sales data, so the chart compares full years side by side
+  // instead of a rolling trailing window.
+  const yearsWithData = new Set();
+  yearlyRows.forEach((r) => yearsWithData.add(new Date(r.date).getFullYear()));
+  const years = yearsWithData.size ? Array.from(yearsWithData).sort((a, b) => a - b) : [new Date().getFullYear()];
+  const yearlyTrend = years.map((year) => {
+    const data = new Array(12).fill(0);
+    yearlyRows.forEach((r) => {
+      const d = new Date(r.date);
+      if (d.getFullYear() === year) data[d.getMonth()] += r.revenue;
+    });
+    return { year, data };
   });
 
   res.json({
@@ -75,7 +76,8 @@ router.get('/', async (req, res) => {
     totalQuantity: totalAgg._sum.quantity || 0,
     activeCustomerCount: byCust.length,
     activeProductCount: byProd.length,
-    monthly,
+    monthNames: MONTH_NAMES,
+    yearlyTrend,
     byDepartment: groupRevenue(byProd, 'productCode', prodMap, 'department'),
     bySuperType: groupRevenue(byProd, 'productCode', prodMap, 'superType'),
     topCustomers: topN(byCust, 'customerNumber', custMap, 5),
