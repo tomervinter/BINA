@@ -1,7 +1,7 @@
 // Dashboard infographics built from the sales-full-report consolidation: KPI tiles,
 // a year-over-year monthly revenue trend, and breakdown charts by customer/product
 // classification. Every chart is clickable — it deep-links to the full sales report,
-// pre-filtered to whatever bar/point/slice was clicked.
+// pre-filtered to whatever bar/slice was clicked.
 //
 // The whole dashboard can be scoped to one customer (see dashboard-customer-search.js,
 // which drives this via loadDashboardSalesSummary(customerNumber)) — everything here is
@@ -14,9 +14,9 @@ const DASH_CHART_COLORS = ['#3D5CF5', '#2C48D8', '#1B2144', '#64748B', '#93A4C3'
 const DASH_BLUE = '#3D5CF5';
 const DASH_NAVY = '#1B2144';
 const DASH_SLATE = '#64748B';
-// Year-over-year trend lines, ordered so the most recent year is always the most
+// Year-over-year trend bars, ordered so the most recent year is always the most
 // prominent brand blue and older years fade to muted navy/slate/gray.
-const YEAR_LINE_COLORS = ['#3D5CF5', '#1B2144', '#64748B', '#93A4C3', '#2C48D8', '#B9C1E4', '#0F172A'];
+const YEAR_SERIES_COLORS = ['#3D5CF5', '#1B2144', '#64748B', '#93A4C3', '#2C48D8', '#B9C1E4', '#0F172A'];
 
 const dashCharts = {};
 function upsertChart(canvasId, config) {
@@ -55,7 +55,7 @@ async function loadDashboardSalesSummary(customerNumber) {
   document.getElementById('monthlyTrendTitle').textContent = (years.length > 1 ? 'השוואת מחזור חודשי בין השנים' : 'מחזור מכירות לפי חודשים') + suffix;
   document.getElementById('monthlyTrendSubtitle').textContent =
     (years.length > 1 ? 'השוואה חודשית בין ' + years.join(', ') : 'נתוני שנת ' + years[0]) +
-    '. לחצו על נקודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא.';
+    '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא.';
   document.getElementById('salesSummaryTitle').textContent = (s.customerNumber ? 'תמונת מכירות — הלקוח הנבחר' : 'תמונת מכירות כוללת');
   document.getElementById('salesSummarySubtitle').textContent = s.customerNumber
     ? ('מבוסס על שורות המכירה של ' + s.customerName + ' בלבד. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.')
@@ -82,20 +82,17 @@ async function loadDashboardSalesSummary(customerNumber) {
 
   const legendOpts = { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } };
 
-  // Year-over-year monthly revenue trend, one line per calendar year that has data —
-  // click a point to see that year+month's rows in the full report.
+  // Year-over-year monthly revenue trend, one bar series per calendar year that has
+  // data — click a bar to see that year+month's rows in the full report.
   upsertChart('monthlyTrendChart', {
-    type: 'line',
+    type: 'bar',
     data: {
       labels: s.monthNames,
       datasets: s.yearlyTrend.map((yr, i) => ({
         label: String(yr.year),
         data: yr.data,
-        borderColor: YEAR_LINE_COLORS[(s.yearlyTrend.length - 1 - i) % YEAR_LINE_COLORS.length],
-        backgroundColor: YEAR_LINE_COLORS[(s.yearlyTrend.length - 1 - i) % YEAR_LINE_COLORS.length],
-        tension: 0.25,
-        pointRadius: 3,
-        fill: false
+        backgroundColor: YEAR_SERIES_COLORS[(s.yearlyTrend.length - 1 - i) % YEAR_SERIES_COLORS.length],
+        borderRadius: 4
       }))
     },
     options: {
