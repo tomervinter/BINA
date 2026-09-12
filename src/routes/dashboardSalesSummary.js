@@ -170,7 +170,7 @@ router.get('/', async (req, res) => {
     byDepartment: groupRevenue(byProd, 'productCode', prodMap, 'department'),
     bySuperType: groupRevenue(byProd, 'productCode', prodMap, 'superType'),
     topCustomers: topN(byCust, 'customerNumber', custMap, 5),
-    topProducts: topN(byProd, 'productCode', prodMap, 5)
+    topProducts: topN(byProd, 'productCode', prodMap, customerNumber ? 10 : 5)
   });
 });
 

@@ -16,6 +16,7 @@
       <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:20px;">
         <div class="greeting" id="greeting" style="margin:0;">שלום</div>
         <div class="update-line" id="updateLine" style="margin:0;"></div>
+        <div id="dashCompanyPillSlot" style="margin-inline-start:auto;"></div>
       </div>
 
       <div class="card" style="margin-top:16px;">
@@ -58,6 +59,16 @@
 
       <div class="table-head-row" style="margin-top:6px;">
         <div class="table-head-right">
+          <div class="card-title" id="monthlyTrendTitle" style="margin-bottom:2px;">השוואת מחזור חודשי בין השנים</div>
+          <div class="page-subtitle" id="monthlyTrendSubtitle" style="margin-bottom:0;">השוואה חודשית בין כל השנים שקיימים עבורן נתונים. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא.</div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="position:relative;height:300px;"><canvas id="monthlyTrendChart"></canvas></div>
+      </div>
+
+      <div class="table-head-row" style="margin-top:6px;">
+        <div class="table-head-right">
           <div class="card-title" style="margin-bottom:2px;">5 התובנות החשובות ביותר</div>
           <div class="page-subtitle" style="margin-bottom:0;">התובנות בעדיפות הגבוהה ביותר לטיפול — אלו שהטיפול בהן צפוי לתרום למכר בצורה המשמעותית ביותר.</div>
         </div>
@@ -67,16 +78,6 @@
       </div>
       <div class="card">
         <div id="dashTopInsightsList"></div>
-      </div>
-
-      <div class="table-head-row" style="margin-top:6px;">
-        <div class="table-head-right">
-          <div class="card-title" id="monthlyTrendTitle" style="margin-bottom:2px;">השוואת מחזור חודשי בין השנים</div>
-          <div class="page-subtitle" id="monthlyTrendSubtitle" style="margin-bottom:0;">השוואה חודשית בין כל השנים שקיימים עבורן נתונים. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא.</div>
-        </div>
-      </div>
-      <div class="card">
-        <div style="position:relative;height:300px;"><canvas id="monthlyTrendChart"></canvas></div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;">

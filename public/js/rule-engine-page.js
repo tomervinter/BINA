@@ -9,25 +9,19 @@ const INSIGHT_RULES = [
     subrules: [
       { title: 'מגמה חודשית',
         rule: 'ירידה של {monthly_pctThreshold}%+ במחזור הלקוח החודש מול החודש הקודם.',
-        detail: 'נדרש מחזור בסיס של {monthly_minBaseRevenue}₪. מוצגים עד {monthly_topN} המוצרים שתרמו הכי הרבה לירידה. חומרה גבוהה מעל {monthly_highPct}%. עלייה במחזור אינה מופקת כתובנה (ראו הגדרה כללית 7).' },
+        detail: 'נדרש מחזור בסיס של {monthly_minBaseRevenue}₪. מוצג המוצר שתרם הכי הרבה לירידה. חומרה גבוהה מעל {monthly_highPct}%. ירידה שמוסברת ע"י חג/עונה קרובים אינה מופקת כתובנה (ראו הגדרה כללית 8), ועלייה במחזור אינה מופקת כתובנה (ראו הגדרה כללית 7).' },
       { title: 'מגמה רבעונית',
         rule: 'ירידה של {quarterlyDecline_pctThreshold}%+ במחזור הרבעון האחרון, לעומת הרבעון הקודם או המקביל אשתקד.',
         detail: 'נדרש מחזור בסיס של {quarterlyDecline_minBaseRevenue}₪, בעדיפות להשוואה מול הרבעון המקביל אשתקד אם קיים. חומרה גבוהה מעל {quarterlyDecline_highPct}%.' },
       { title: 'מגמה מצטברת שנתית',
         rule: 'ירידה של {cumulativeYoy_pctThreshold}%+ במחזור המצטבר מתחילת השנה, לעומת אותה תקופה אשתקד.',
-        detail: 'משלים את המגמה החודשית עם חלון רגיש יותר וממוקד-שנה. נדרש מחזור בסיס של {cumulativeYoy_minBaseRevenue}₪ אשתקד. חומרה גבוהה מעל {cumulativeYoy_highPct}%.' },
-      { title: 'ירידה עונתית או סביב חג',
-        rule: 'ירידה של {seasonal_pctThreshold}%+ ברכישת מוצר רלוונטי לחג/עונה, לעומת אותו אירוע אשתקד.',
-        detail: 'ההשוואה היא לפי התאריכים המדויקים של החג/העונה השנה מול אשתקד (טבלת ניהול חגים), לא לפי לוח שנה קבוע. המוצר חייב להיות מסומן כרלוונטי לאירוע במסך שיוך חג ועונה למוצר, ונדרש מחזור בסיס של {seasonal_minBaseRevenue}₪. חומרה גבוהה מעל {seasonal_highPct}%.' },
-      { title: 'ירידת מומנטום בין חגים',
-        rule: 'ירידה של {seasonal_pctThreshold}%+ ברכישת מוצר בין חג/עונה לבין החג/העונה האחרים שקדמו לו באותה שנה.',
-        detail: 'משלים את ההשוואה לאשתקד בציר נוסף: האם הביצועים בחג הנוכחי לא ממשיכים את המומנטום מהאירוע האחרון שקדם לו (למשל פורים לעומת פסח). שני האירועים חייבים להיות מסומנים כרלוונטיים למוצר. נדרש מחזור בסיס של {seasonal_minBaseRevenue}₪. חומרה גבוהה מעל {seasonal_highPct}%.' }
+        detail: 'משלים את המגמה החודשית עם חלון רגיש יותר וממוקד-שנה. נדרש מחזור בסיס של {cumulativeYoy_minBaseRevenue}₪ אשתקד. חומרה גבוהה מעל {cumulativeYoy_highPct}%.' }
     ] },
   { type: 'purchasePattern', title: 'דפוס רכישה של לקוח — תובנה 2',
     subrules: [
       { title: 'ירידה בכמות מוצר',
-        rule: 'ירידה של {productQty_pctThreshold}%+ בכמות שהלקוח קונה ממוצר מסוים, ב-{productQty_windowDays} הימים האחרונים לעומת התקופה הקודמת.',
-        detail: 'נדרשת כמות בסיס של {productQty_minPriorQty}+ יחידות בתקופה הקודמת. מוצר עם תחליף מוגדר נספר יחד עם התחליף שלו כיחידה אחת. חומרה גבוהה מעל {productQty_highPct}%.' },
+        rule: 'ירידה של {productQty_pctThreshold}%+ בכמות שהלקוח קונה ממוצר מסוים, ב-{productQty_windowMonths} החודשים האחרונים לעומת התקופה הקודמת.',
+        detail: 'נדרשת כמות בסיס של {productQty_minPriorQty}+ יחידות בתקופה הקודמת. מוצר עם תחליף מוגדר נספר יחד עם התחליף שלו כיחידה אחת. ירידה שמוסברת ע"י חג/עונה קרובים אינה מופקת כתובנה (ראו הגדרה כללית 8). חומרה גבוהה מעל {productQty_highPct}%.' },
       { title: 'ירידה בתדירות מוצר',
         rule: 'ירידה של {productFreqYoy_pctThreshold}%+ במספר החודשים שבהם הלקוח קונה מוצר מסוים, השנה לעומת אשתקד.',
         detail: 'נדרשים {productFreqYoy_minPriorMonths}+ חודשים עם רכישה אשתקד להשוואה. מוצר עם תחליף מוגדר נספר יחד עם התחליף שלו. חומרה גבוהה מעל {productFreqYoy_highPct}%.' },
@@ -60,11 +54,12 @@ async function initRuleEnginePage() {
   function render() {
     const container = document.getElementById('rulesContainer');
     let html = '';
-    INSIGHT_RULES.forEach((r) => {
-      html += '<div class="rule-card"><div class="rule-title">' + Layout.escapeHtml(r.title) + '</div>';
+    INSIGHT_RULES.forEach((r, idx) => {
+      html += '<div class="rule-type-heading"' + (idx === 0 ? ' style="margin-top:0;"' : '') + '>' + Layout.escapeHtml(r.title) + '</div>';
+      html += '<div class="rule-grid">';
       r.subrules.forEach((sub) => {
-        html += '<div class="rule-subblock" style="margin-top:10px;">' +
-          '<div class="rule-subtitle" style="font-weight:600;">' + Layout.escapeHtml(sub.title) + '</div>' +
+        html += '<div class="rule-subcard">' +
+          '<div class="rule-subtitle">' + Layout.escapeHtml(sub.title) + '</div>' +
           '<div class="rule-text">' + renderRuleTemplate(sub.rule) + '</div>' +
           (sub.detail ? '<div class="rule-detail">' + renderRuleTemplate(sub.detail) + '</div>' : '') +
           '</div>';

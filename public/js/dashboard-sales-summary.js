@@ -44,16 +44,6 @@ function onChartClick(getUrl) {
   };
 }
 
-// Appends a "(+12% לעומת <label>)" note when a comparison value is available and
-// non-zero; otherwise returns an empty string.
-function deltaNote(current, compareVal, compareLabel) {
-  if (compareVal == null || !compareLabel) return '';
-  if (!compareVal) return '';
-  const delta = ((current - compareVal) / compareVal) * 100;
-  const sign = delta >= 0 ? '+' : '';
-  return ' (' + sign + Math.round(delta) + '% לעומת ' + compareLabel + ')';
-}
-
 // Year-over-year indicator for the trend bar charts: one combined arrow + % + ₪
 // label drawn above each month's bar (or pair of bars), comparing that month's value
 // to the exact same calendar month one year earlier — not month-to-month within a
@@ -77,8 +67,10 @@ function buildYoyEntries(n, getCurrent, getPrior) {
 }
 
 // Draws a small triangular arrow with a gradient fill and a soft drop shadow (a
-// simple stand-in for a "3D" look in a 2D canvas) plus the % and ₪ figures, centered
-// above whichever bar(s) `dsIndices` point to for that month.
+// simple stand-in for a "3D" look in a 2D canvas) beside the % figure, with the ₪
+// figure on its own line above — centered above whichever bar(s) `dsIndices` point
+// to for that month. The arrow sits to the side of the percentage rather than
+// stacked on top of it, so the two never overlap regardless of font size.
 function yoyDrawPlugin(entries, dsIndices) {
   return {
     id: 'yoyIndicator',
@@ -95,40 +87,56 @@ function yoyDrawPlugin(entries, dsIndices) {
         const topY = Math.min.apply(null, props.map((p) => p.y));
         const color = e.up ? '#1E9E5C' : '#DE4B4B';
         const lightColor = e.up ? '#9FE8BE' : '#F7B9B3';
-        const arrowY = topY - 15;
-        const size = 4.5;
+        const size = 6;
+
+        // Row 2 (closer to the bars): the arrow + percentage, side by side.
+        const pctBaselineY = topY - 6;
+        const pctText = (e.up ? '+' : '') + e.pct + '%';
+        ctx.font = '800 12px Assistant, Arial, sans-serif';
+        const pctWidth = ctx.measureText(pctText).width;
+        const gap = 4;
+        const rowWidth = size * 2 + gap + pctWidth;
+        const arrowCenterX = midX - rowWidth / 2 + size;
+        const textStartX = arrowCenterX + size + gap;
+        const arrowCenterY = pctBaselineY - 4;
 
         ctx.save();
         ctx.shadowColor = 'rgba(15,23,42,0.32)';
         ctx.shadowBlur = 2.5;
         ctx.shadowOffsetY = 1.2;
-        const grad = ctx.createLinearGradient(midX, arrowY - size, midX, arrowY + size);
+        const grad = ctx.createLinearGradient(arrowCenterX, arrowCenterY - size, arrowCenterX, arrowCenterY + size);
         if (e.up) { grad.addColorStop(0, lightColor); grad.addColorStop(1, color); }
         else { grad.addColorStop(0, color); grad.addColorStop(1, lightColor); }
         ctx.fillStyle = grad;
         ctx.beginPath();
         if (e.up) {
-          ctx.moveTo(midX, arrowY - size);
-          ctx.lineTo(midX + size, arrowY + size * 0.6);
-          ctx.lineTo(midX - size, arrowY + size * 0.6);
+          ctx.moveTo(arrowCenterX, arrowCenterY - size * 0.6);
+          ctx.lineTo(arrowCenterX + size * 0.6, arrowCenterY + size * 0.5);
+          ctx.lineTo(arrowCenterX - size * 0.6, arrowCenterY + size * 0.5);
         } else {
-          ctx.moveTo(midX, arrowY + size);
-          ctx.lineTo(midX + size, arrowY - size * 0.6);
-          ctx.lineTo(midX - size, arrowY - size * 0.6);
+          ctx.moveTo(arrowCenterX, arrowCenterY + size * 0.6);
+          ctx.lineTo(arrowCenterX + size * 0.6, arrowCenterY - size * 0.5);
+          ctx.lineTo(arrowCenterX - size * 0.6, arrowCenterY - size * 0.5);
         }
         ctx.closePath();
         ctx.fill();
         ctx.restore();
 
         ctx.save();
-        ctx.textAlign = 'center';
-        ctx.font = '700 9.5px Assistant, Arial, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.font = '800 12px Assistant, Arial, sans-serif';
         ctx.fillStyle = color;
+        ctx.fillText(pctText, textStartX, pctBaselineY);
+        ctx.restore();
+
+        // Row 1 (above row 2): the ₪ delta, smaller and muted.
+        ctx.save();
+        ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillText((e.up ? '+' : '') + e.pct + '%', midX, topY - 4);
-        ctx.font = '600 8px Assistant, Arial, sans-serif';
+        ctx.font = '700 9.5px Assistant, Arial, sans-serif';
         ctx.fillStyle = '#6A7093';
-        ctx.fillText((e.moneyDiff >= 0 ? '+' : '') + e.moneyDiff.toLocaleString('he-IL') + '₪', midX, arrowY - size - 1);
+        ctx.fillText((e.moneyDiff >= 0 ? '+' : '') + e.moneyDiff.toLocaleString('he-IL') + '₪', midX, pctBaselineY - 15);
         ctx.restore();
       });
     }
@@ -185,21 +193,38 @@ async function loadDashboardSalesSummary(filters) {
   document.getElementById('salesSummaryFullReportLink').href = reportUrl(baseReportParams);
   document.getElementById('superTypeTitle').textContent = 'מחזור לפי טיפוס על' + suffix;
   document.getElementById('departmentTitle').textContent = 'מחזור לפי מחלקת מוצר' + suffix;
-  document.getElementById('topProductsTitle').textContent = s.customerNumber ? 'המוצרים המובילים אצל הלקוח' : '5 המוצרים המובילים במחזור';
+  document.getElementById('topProductsTitle').textContent = s.customerNumber ? '10 המוצרים המובילים אצל הלקוח' : '5 המוצרים המובילים במחזור';
   document.getElementById('topCustomersTitle').textContent = s.customerNumber ? 'מחזור הלקוח הנבחר' : '5 הלקוחות המובילים במחזור';
 
-  document.getElementById('salesSummaryKpiGrid').innerHTML = [
-    ['blue', 'v-blue', fmtMoneyShort(s.totalRevenue), (s.customerNumber ? 'מחזור הלקוח' : 'מחזור כולל') + deltaNote(s.totalRevenue, ct && ct.totalRevenue, s.comparePeriod && s.comparePeriod.label)],
-    ['blue', 'v-blue', Math.round(s.totalQuantity || 0).toLocaleString('he-IL'), 'כמות שנמכרה בסך הכול' + deltaNote(s.totalQuantity, ct && ct.totalQuantity, s.comparePeriod && s.comparePeriod.label)],
-    ['green', 'v-green', s.activeCustomerCount.toLocaleString('he-IL'), s.customerNumber ? 'לקוח מוצג' : 'לקוחות עם רכישות'],
-    ['green', 'v-green', s.activeProductCount.toLocaleString('he-IL'), 'מוצרים שנמכרו']
-  ].map(([dot, cls, value, desc]) => (
-    '<div class="kpi-card">' +
+  // A single selected month can be expressed as the full report's own year/month
+  // filter; a multi-month period has no equivalent there, so the tile link degrades
+  // gracefully to customer-only filtering in that case.
+  function singleMonthParams(periodInfo) {
+    if (!periodInfo || periodInfo.months.length !== 1) return {};
+    const [y, m] = periodInfo.months[0].split('-');
+    return { year: y, month: String(Number(m)) };
+  }
+  const curReportParams = Object.assign({}, baseReportParams, singleMonthParams(s.period));
+  const compareReportParams = Object.assign({}, baseReportParams, singleMonthParams(s.comparePeriod));
+
+  const kpiTiles = [
+    ['blue', 'v-blue', fmtMoneyShort(s.totalRevenue), 'מכירות תקופה נוכחית (ש"ח)', reportUrl(curReportParams)],
+    ['green', 'v-green', s.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו בתקופה נוכחית', reportUrl(curReportParams)]
+  ];
+  if (ct) {
+    kpiTiles.push(
+      ['blue', 'v-blue', fmtMoneyShort(ct.totalRevenue), 'מכירות תקופת השוואה (ש"ח)', reportUrl(compareReportParams)],
+      ['green', 'v-green', ct.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו בתקופת השוואה', reportUrl(compareReportParams)]
+    );
+  }
+
+  document.getElementById('salesSummaryKpiGrid').innerHTML = kpiTiles.map(([dot, cls, value, desc, href]) => (
+    '<a class="kpi-card" href="' + href + '">' +
     '<div class="kpi-blob" style="background:var(--' + dot + '-dot);"></div>' +
     '<div class="kpi-blob b2" style="background:var(--' + dot + ');"></div>' +
     '<div class="kpi-value ' + cls + '">' + Layout.escapeHtml(String(value)) + '</div>' +
     '<div class="kpi-desc">' + Layout.escapeHtml(desc) + '</div>' +
-    '</div>'
+    '</a>'
   )).join('');
 
   if (s.periodTrend) {
@@ -223,7 +248,7 @@ async function loadDashboardSalesSummary(filters) {
       plugins: [yoyDrawPlugin(ptYoyEntries, [0])],
       options: {
         responsive: true, maintainAspectRatio: false,
-        layout: { padding: { top: 26 } },
+        layout: { padding: { top: 38 } },
         plugins: {
           legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(ptYoyEntries, 0) } }
@@ -266,7 +291,7 @@ async function loadDashboardSalesSummary(filters) {
       plugins: [yoyDrawPlugin(yearlyYoyEntries, yearlyYoyDsIndices)],
       options: {
         responsive: true, maintainAspectRatio: false,
-        layout: { padding: { top: 26 } },
+        layout: { padding: { top: 38 } },
         plugins: {
           legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(yearlyYoyEntries, latestIdx) } }

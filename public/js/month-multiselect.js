@@ -14,8 +14,8 @@ function createMonthMultiSelect(containerId, opts) {
   const container = document.getElementById(containerId);
   if (!container) return null;
   const now = new Date();
-  const yearsAhead = opts.yearsAhead || 0;
-  const yearsBack = opts.yearsBack || 3;
+  const yearsAhead = opts.yearsAhead != null ? opts.yearsAhead : 0;
+  const yearsBack = opts.yearsBack != null ? opts.yearsBack : 3;
   const years = [];
   for (let y = now.getFullYear() + yearsAhead; y >= now.getFullYear() - yearsBack; y--) years.push(y);
   const placeholder = opts.placeholder || 'בחרו חודשים...';

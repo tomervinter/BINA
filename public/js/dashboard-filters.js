@@ -78,6 +78,7 @@ async function initDashboardFilters() {
   createMonthMultiSelect('dashPeriodPicker', {
     placeholder: 'בחרו חודשים...',
     initial: state.periodMonths,
+    yearsAhead: 0, yearsBack: 0, // current period is always within the current year
     onChange: (months) => { state.periodMonths = months; apply(); }
   });
   createMonthMultiSelect('dashComparePicker', {
@@ -90,7 +91,7 @@ async function initDashboardFilters() {
   periodClearBtn.addEventListener('click', () => {
     state.periodMonths = []; state.compareMonths = [];
     document.dispatchEvent(new Event('click')); // closes any open picker panel
-    createMonthMultiSelect('dashPeriodPicker', { placeholder: 'בחרו חודשים...', initial: [], onChange: (m) => { state.periodMonths = m; apply(); } });
+    createMonthMultiSelect('dashPeriodPicker', { placeholder: 'בחרו חודשים...', initial: [], yearsAhead: 0, yearsBack: 0, onChange: (m) => { state.periodMonths = m; apply(); } });
     createMonthMultiSelect('dashComparePicker', { placeholder: 'בחרו חודשים...', initial: [], yearsAhead: -1, yearsBack: 1, onChange: (m) => { state.compareMonths = m; apply(); } });
     apply();
   });

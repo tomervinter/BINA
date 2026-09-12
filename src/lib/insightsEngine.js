@@ -9,7 +9,6 @@ const MONTH_NAMES_HE = ['ינואר', 'פברואר', 'מרץ', 'אפריל', '�
 // actual revenue/quantity/day-count was, so the number can be traced back by hand.
 function fmtMonthYear(t) { const d = new Date(t); return MONTH_NAMES_HE[d.getMonth()] + ' ' + d.getFullYear(); }
 function fmtMonthYearKey(mk) { const [y, m] = mk.split('-'); return MONTH_NAMES_HE[+m - 1] + ' ' + y; }
-function fmtDateHe(t) { const d = new Date(t); const p = (n) => String(n).padStart(2, '0'); return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear(); }
 function fmtMoneyHe(n) { return Math.round(n || 0).toLocaleString('he-IL') + '₪'; }
 function quarterLabel(t) { const d = new Date(t); return 'רבעון ' + (Math.floor(d.getMonth() / 3) + 1) + ' ' + d.getFullYear(); }
 
@@ -57,19 +56,6 @@ function monthRangeMs(mk) {
   const [y, m] = mk.split('-');
   return [new Date(+y, +m - 1, 1).getTime(), new Date(+y, +m, 1).getTime()];
 }
-function overlappingMonths(start, end) {
-  const months = [];
-  let cursor = new Date(new Date(start).getFullYear(), new Date(start).getMonth(), 1);
-  const endDate = new Date(end);
-  while (cursor.getTime() < end && (cursor.getFullYear() < endDate.getFullYear() || (cursor.getFullYear() === endDate.getFullYear() && cursor.getMonth() <= endDate.getMonth()))) {
-    const mk = monthKey(cursor.getTime());
-    const [ms, me] = monthRangeMs(mk);
-    if (ms < end && me > start) months.push(mk);
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-    if (months.length > 36) break; // safety valve against malformed date ranges
-  }
-  return months;
-}
 
 // General policy 5: a product with a defined substitute is treated as one combined
 // entity for insight purposes (in either direction — a substitute relationship means
@@ -87,11 +73,10 @@ function buildProductFamilies(substitutes) {
 // Only covers the currently-active rules (Rule 1: customer sales pattern, Rule 2:
 // customer purchase pattern) — every other previously-explored rule type was removed.
 const DEFAULT_PARAMS = {
-  monthly_pctThreshold: 30, monthly_highPct: 50, monthly_minBaseRevenue: 100, monthly_topN: 3,
-  seasonal_pctThreshold: 40, seasonal_highPct: 70, seasonal_minBaseRevenue: 100,
+  monthly_pctThreshold: 30, monthly_highPct: 50, monthly_minBaseRevenue: 100,
   cumulativeYoy_pctThreshold: 5, cumulativeYoy_highPct: 15, cumulativeYoy_minBaseRevenue: 100,
   quarterlyDecline_pctThreshold: 20, quarterlyDecline_highPct: 35, quarterlyDecline_minBaseRevenue: 100,
-  productQty_windowDays: 90, productQty_pctThreshold: 40, productQty_highPct: 60, productQty_minPriorQty: 5,
+  productQty_windowMonths: 3, productQty_pctThreshold: 40, productQty_highPct: 60, productQty_minPriorQty: 5,
   productFreqYoy_pctThreshold: 40, productFreqYoy_highPct: 60, productFreqYoy_minPriorMonths: 2,
   irregularity_minPurchases: 4, irregularity_cvThreshold: 70, irregularity_minRevenueShare: 5,
   concentration_topN: 2, concentration_pctThreshold: 70, concentration_minRevenue: 500
@@ -107,10 +92,15 @@ async function loadParams(organizationId) {
 // General policy 7: an insight only fires when it reflects negative information
 // about the customer — a decline, a drop-off, an irregular ordering pattern, a
 // concentration risk. Growth on its own isn't surfaced: every rule that could swing
-// either direction (monthly/quarterly/cumulative-YoY revenue, seasonal/holiday-
-// momentum shifts, product quantity/frequency shifts) only ever reports the decline
-// side, and the one rule with no negative variant at all (new-product adoption) was
-// removed outright rather than filtered, since it had nothing left to report.
+// either direction (monthly/quarterly/cumulative-YoY revenue, product quantity/
+// frequency shifts) only ever reports the decline side, and the one rule with no
+// negative variant at all (new-product adoption) was removed outright rather than
+// filtered, since it had nothing left to report.
+
+// General policy 8: a holiday or season is never the SUBJECT of an insight (there is
+// no "seasonal decline" or "holiday momentum" rule) — they're only used, behind the
+// scenes, to decide whether an apparent decline is meaningful or just an expected
+// seasonal/holiday-driven dip not worth flagging. See isExplainedBySeasonality below.
 
 // Computes insights fresh from the current database state every call — there is
 // no cached/stored insight list, so a resolved issue (e.g. a customer who just
@@ -159,6 +149,27 @@ async function computeInsights(organizationId) {
   }
   const byCustomerFamily = groupBy(s, (x) => x.cid + '|' + famKey(x.pid));
 
+  // See general policy 8: true if the given window overlaps a holiday/season window
+  // (with the holiday's own before/after padding) that is marked relevant for at
+  // least one of the given products — meaning a dip in that window is expected
+  // seasonal behavior, not a meaningful decline worth surfacing.
+  function isExplainedBySeasonality(startMs, endMs, pids) {
+    if (!pids.length) return false;
+    function overlaps(rows, source) {
+      return rows.some((r) => {
+        const name = String(r.name || '').trim();
+        if (!name) return false;
+        const before = source === 'holiday' ? (r.daysBefore || 0) : 0;
+        const after = source === 'holiday' ? (r.daysAfter || 0) : 0;
+        const wStart = new Date(r.fromDate).getTime() - before * DAY_MS;
+        const wEnd = new Date(r.toDate).getTime() + after * DAY_MS;
+        if (wEnd <= startMs || wStart >= endMs) return false;
+        return pids.some((pid) => { const rel = relevanceEngine.isRelevant(relCtx, pid, source, name); return rel.known && rel.value; });
+      });
+    }
+    return overlaps(relCtx.holidays, 'holiday') || overlaps(relCtx.seasons, 'season');
+  }
+
   // Rule 1a — monthly revenue shift (bidirectional: flags a meaningful jump in
   // either direction, not just a decline), with the specific products driving it.
   const monthlyPct = params.monthly_pctThreshold / 100;
@@ -177,6 +188,8 @@ async function computeInsights(organizationId) {
     if (prevRev < params.monthly_minBaseRevenue) return;
     const delta = (curRev - prevRev) / prevRev;
     if (delta > -monthlyPct) return; // only a decline counts — see general policy 7
+    const [curMStart, curMEnd] = monthRangeMs(curMK);
+    if (isExplainedBySeasonality(curMStart, curMEnd, Array.from(new Set(events.map((e) => e.pid))))) return;
 
     const curByPid = {}, prevByPid = {};
     curEvents.forEach((e) => { curByPid[e.pid] = (curByPid[e.pid] || 0) + e.rev; });
@@ -187,140 +200,18 @@ async function computeInsights(organizationId) {
     const diffs = Object.keys(allPids).map((pid) => ({ pid, diff: (curByPid[pid] || 0) - (prevByPid[pid] || 0) }))
       .filter((d) => d.diff < 0 && isProductEligible(prodIndex[d.pid]))
       .sort((a, b) => a.diff - b.diff);
-    const top = diffs.slice(0, params.monthly_topN).map((d) => `${prodLabel(d.pid)} (${fmtMoneyHe(d.diff)})`);
+    const topDriver = diffs.length ? prodLabel(diffs[0].pid) : null;
 
     insights.push({
       type: 'salesPattern',
       severity: Math.abs(delta) >= monthlyHighPct ? 'high' : 'medium',
       customerId: cid,
       customerName: custLabel(cid),
-      message: `הכנסת הלקוח ירדה ב-${Math.round(Math.abs(delta) * 100)}%: ${fmtMonthYearKey(curMK)} (${fmtMoneyHe(curRev)}) לעומת ${fmtMonthYearKey(prevMK)} (${fmtMoneyHe(prevRev)})${top.length ? ', בעיקר בשל ירידה במוצרים: ' + top.join(', ') : ''}.`,
+      message: `הכנסת הלקוח ירדה ב-${Math.round(Math.abs(delta) * 100)}% מול החודש הקודם${topDriver ? ', בעיקר עקב ' + topDriver : ''}.`,
       metric: Math.round(delta * 100),
       breakdown: [{ label: fmtMonthYearKey(curMK), value: Math.round(curRev) }, { label: fmtMonthYearKey(prevMK), value: Math.round(prevRev) }]
     });
   });
-
-  // Rule 1d — seasonal/holiday year-over-year pattern shift (per customer, per relevant product)
-  const seasonalPct = params.seasonal_pctThreshold / 100;
-  const seasonalHighPct = params.seasonal_highPct / 100;
-  const seasonalMinBase = params.seasonal_minBaseRevenue;
-  function buildEventWindows(rows, source) {
-    const byName = {};
-    rows.forEach((r) => {
-      const name = String(r.name || '').trim();
-      if (!name) return;
-      const before = source === 'holiday' ? (r.daysBefore || 0) : 0;
-      const after = source === 'holiday' ? (r.daysAfter || 0) : 0;
-      const start = new Date(r.fromDate).getTime() - before * DAY_MS;
-      const end = new Date(r.toDate).getTime() + after * DAY_MS;
-      (byName[name] = byName[name] || []).push({ start, end, year: new Date(r.fromDate).getFullYear() });
-    });
-    return byName;
-  }
-  function processSeasonalSource(rows, source) {
-    const byName = buildEventWindows(rows, source);
-    Object.keys(byName).forEach((name) => {
-      const windows = byName[name].slice().sort((a, b) => b.start - a.start);
-      if (windows.length < 2) return;
-      const latest = windows[0], previous = windows[1];
-      const latestMonths = overlappingMonths(latest.start, latest.end);
-      const previousMonths = overlappingMonths(previous.start, previous.end);
-      const latestLabel = latestMonths.length === 1 ? fmtMonthYearKey(latestMonths[0]) : fmtMonthYearKey(latestMonths[0]) + '–' + fmtMonthYearKey(latestMonths[latestMonths.length - 1]);
-      const previousLabel = previousMonths.length === 1 ? fmtMonthYearKey(previousMonths[0]) : fmtMonthYearKey(previousMonths[0]) + '–' + fmtMonthYearKey(previousMonths[previousMonths.length - 1]);
-      Object.keys(byCustomer).forEach((cid) => {
-        const cust = custIndex[cid];
-        if (isInactive(cust)) return;
-        const pairEvents = {};
-        byCustomer[cid].forEach((e) => { (pairEvents[e.pid] = pairEvents[e.pid] || []).push(e); });
-        Object.keys(pairEvents).forEach((pid) => {
-          if (!isProductEligible(prodIndex[pid])) return;
-          const rel = relevanceEngine.isRelevant(relCtx, pid, source, name);
-          if (!rel.known || !rel.value) return;
-          let latestRev = 0, prevRev = 0;
-          pairEvents[pid].forEach((e) => {
-            const mk = monthKey(e.t);
-            if (latestMonths.includes(mk)) latestRev += e.rev;
-            else if (previousMonths.includes(mk)) prevRev += e.rev;
-          });
-          if (prevRev < seasonalMinBase) return;
-          const delta = (latestRev - prevRev) / prevRev;
-          if (delta > -seasonalPct) return; // only a decline counts — see general policy 7
-
-          const eventKind = source === 'holiday' ? 'חג' : 'עונת';
-          insights.push({
-            type: 'salesPattern',
-            severity: Math.abs(delta) >= seasonalHighPct ? 'high' : 'medium',
-            customerId: cid,
-            customerName: custLabel(cid),
-            productCode: pid,
-            message: `ירידה של ${Math.round(Math.abs(delta) * 100)}% ברכישת ${prodLabel(pid)} בחודשים החופפים ל${eventKind} ${name} ${latest.year} (${latestLabel}, ${fmtMoneyHe(latestRev)}) לעומת החודשים החופפים לאותו אירוע אשתקד ${previous.year} (${previousLabel}, ${fmtMoneyHe(prevRev)}) — מוצר זה מסומן כרלוונטי אליו במסך שיוך חג ועונה למוצר. (המכירות ידועות ברמת חודש בלבד, ולכן ההשוואה היא לפי חודשים מלאים החופפים לתאריכי האירוע, לא לפי הימים המדויקים.)`,
-            metric: Math.round(delta * 100),
-            breakdown: [{ label: name + ' ' + latest.year, value: Math.round(latestRev) }, { label: name + ' ' + previous.year, value: Math.round(prevRev) }]
-          });
-        });
-      });
-    });
-  }
-  processSeasonalSource(relCtx.holidays, 'holiday');
-  processSeasonalSource(relCtx.seasons, 'season');
-
-  // Rule 1d cont. — holiday/season "momentum": compares a product's sales during the
-  // latest occurrence of one event against its sales during whichever OTHER holiday/
-  // season most recently preceded it — a same-year, event-to-event signal alongside
-  // the year-over-year comparison above (e.g. does Passover follow through on the
-  // momentum Purim showed, not just "vs last Passover").
-  {
-    function latestWindowPerName(rows, source) {
-      const byName = buildEventWindows(rows, source);
-      return Object.keys(byName).map((name) => {
-        const w = byName[name].slice().sort((a, b) => b.start - a.start)[0];
-        return { source, name, start: w.start, end: w.end, year: w.year };
-      });
-    }
-    const allLatest = latestWindowPerName(relCtx.holidays, 'holiday').concat(latestWindowPerName(relCtx.seasons, 'season'))
-      .filter((w) => w.start <= now)
-      .sort((a, b) => b.start - a.start);
-
-    allLatest.forEach((E, i) => {
-      const P = allLatest.slice(i + 1).find((w) => w.name !== E.name);
-      if (!P) return;
-      const EMonths = overlappingMonths(E.start, E.end);
-      const PMonths = overlappingMonths(P.start, P.end);
-      const EKind = E.source === 'holiday' ? 'חג' : 'עונת';
-      const PKind = P.source === 'holiday' ? 'חג' : 'עונת';
-      Object.keys(byCustomer).forEach((cid) => {
-        const cust = custIndex[cid];
-        if (isInactive(cust)) return;
-        const pairEvents = {};
-        byCustomer[cid].forEach((e) => { (pairEvents[e.pid] = pairEvents[e.pid] || []).push(e); });
-        Object.keys(pairEvents).forEach((pid) => {
-          if (!isProductEligible(prodIndex[pid])) return;
-          const relE = relevanceEngine.isRelevant(relCtx, pid, E.source, E.name);
-          const relP = relevanceEngine.isRelevant(relCtx, pid, P.source, P.name);
-          if (!relE.known || !relE.value || !relP.known || !relP.value) return;
-          let eRev = 0, pRev = 0;
-          pairEvents[pid].forEach((e) => {
-            const mk = monthKey(e.t);
-            if (EMonths.includes(mk)) eRev += e.rev;
-            else if (PMonths.includes(mk)) pRev += e.rev;
-          });
-          if (pRev < seasonalMinBase) return;
-          const delta = (eRev - pRev) / pRev;
-          if (delta > -seasonalPct) return; // only a drop-off counts — see general policy 7
-          insights.push({
-            type: 'salesPattern',
-            severity: Math.abs(delta) >= seasonalHighPct ? 'high' : 'medium',
-            customerId: cid,
-            customerName: custLabel(cid),
-            productCode: pid,
-            message: `רכישת ${prodLabel(pid)} ב${EKind} ${E.name} ${E.year} (${fmtMoneyHe(eRev)}) לא ממשיכה את המומנטום מ${PKind} ${P.name} ${P.year} שקדם לו (${fmtMoneyHe(pRev)}) — ירידה של ${Math.round(Math.abs(delta) * 100)}%. שני האירועים מסומנים כרלוונטיים למוצר זה במסך שיוך חג ועונה למוצר.`,
-            metric: Math.round(delta * 100),
-            breakdown: [{ label: E.name + ' ' + E.year, value: Math.round(eRev) }, { label: P.name + ' ' + P.year, value: Math.round(pRev) }]
-          });
-        });
-      });
-    });
-  }
 
   // Rule 1c — cumulative revenue this year (Jan through the last fully completed
   // month) vs the same period last year, per customer — bidirectional, and a more
@@ -347,7 +238,7 @@ async function computeInsights(organizationId) {
           severity: Math.abs(delta) >= params.cumulativeYoy_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
-          message: `מחזור הלקוח ב-${rangeLabel} ${year} עמד על ${fmtMoneyHe(thisRev)} — ירידה של ${Math.round(Math.abs(delta) * 100)}% לעומת אותה תקופה ב-${year - 1} (${rangeLabel} ${year - 1}, ${fmtMoneyHe(lastRev)}).`,
+          message: `מחזור הלקוח מתחילת השנה ירד ב-${Math.round(Math.abs(delta) * 100)}% לעומת אותה תקופה אשתקד.`,
           metric: Math.round(delta * 100),
           breakdown: [{ label: rangeLabel + ' ' + year, value: Math.round(thisRev) }, { label: rangeLabel + ' ' + (year - 1), value: Math.round(lastRev) }]
         });
@@ -376,8 +267,8 @@ async function computeInsights(organizationId) {
       const priorQ = sum(priorQStart, priorQEnd);
       const yoyQ = sum(yoyQStart, yoyQEnd);
       let basis, baseRev, baseLabel;
-      if (yoyQ >= params.quarterlyDecline_minBaseRevenue) { basis = `לרבעון המקביל אשתקד (${quarterLabel(yoyQStart)})`; baseRev = yoyQ; baseLabel = quarterLabel(yoyQStart); }
-      else if (priorQ >= params.quarterlyDecline_minBaseRevenue) { basis = `לרבעון הקודם (${quarterLabel(priorQStart)})`; baseRev = priorQ; baseLabel = quarterLabel(priorQStart); }
+      if (yoyQ >= params.quarterlyDecline_minBaseRevenue) { basis = 'לרבעון המקביל אשתקד'; baseRev = yoyQ; baseLabel = quarterLabel(yoyQStart); }
+      else if (priorQ >= params.quarterlyDecline_minBaseRevenue) { basis = 'לרבעון הקודם'; baseRev = priorQ; baseLabel = quarterLabel(priorQStart); }
       else return;
       const delta = (curQ - baseRev) / baseRev;
       if (delta <= -params.quarterlyDecline_pctThreshold / 100) { // only a decline counts — see general policy 7
@@ -386,7 +277,7 @@ async function computeInsights(organizationId) {
           severity: Math.abs(delta) >= params.quarterlyDecline_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
-          message: `מחזור הלקוח ב${quarterLabel(lastCompletedQStart)} עמד על ${fmtMoneyHe(curQ)} — ירידה של ${Math.round(Math.abs(delta) * 100)}% ביחס ${basis} (${fmtMoneyHe(baseRev)}).`,
+          message: `מחזור הלקוח ברבעון האחרון ירד ב-${Math.round(Math.abs(delta) * 100)}% ${basis}.`,
           metric: Math.round(delta * 100),
           breakdown: [{ label: quarterLabel(lastCompletedQStart), value: Math.round(curQ) }, { label: baseLabel, value: Math.round(baseRev) }]
         });
@@ -397,8 +288,19 @@ async function computeInsights(organizationId) {
   // Rule 2a — per-product(-family) quantity shift: is the customer buying
   // meaningfully more or less of a specific product than before, even without
   // stopping entirely (general policy 5: substitute purchases count together).
+  // Windowed by whole calendar months, not a fixed day count — sales only carry
+  // month-level precision (every row sits on the 1st of its month), so slicing by
+  // an exact day count would arbitrarily include/exclude a month depending on where
+  // its day-1 anchor happens to fall relative to the cutoff (the same class of bug
+  // the holiday-window comparison had before it was fixed to work in whole months).
   {
-    const winMs = params.productQty_windowDays * DAY_MS;
+    const winMonths = params.productQty_windowMonths;
+    const curMonthKeys = [];
+    for (let m = 0; m < winMonths; m++) curMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
+    const prevMonthKeys = [];
+    for (let m = winMonths; m < 2 * winMonths; m++) prevMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
+    const curWindowStart = monthRangeMs(curMonthKeys[curMonthKeys.length - 1])[0];
+    const curWindowEnd = monthRangeMs(curMonthKeys[0])[1];
     Object.keys(byCustomerFamily).forEach((key) => {
       const idx = key.indexOf('|');
       const cid = key.slice(0, idx);
@@ -407,13 +309,12 @@ async function computeInsights(organizationId) {
       const events = byCustomerFamily[key];
       const pid = events[events.length - 1].pid;
       if (!isFamilyEligible(pid)) return;
-      const curFrom = now - winMs;
-      const prevFrom = now - 2 * winMs;
-      const curQty = events.filter((e) => e.t > curFrom && e.t <= now).reduce((a, e) => a + e.qty, 0);
-      const prevQty = events.filter((e) => e.t > prevFrom && e.t <= curFrom).reduce((a, e) => a + e.qty, 0);
+      const curQty = events.filter((e) => curMonthKeys.includes(monthKey(e.t))).reduce((a, e) => a + e.qty, 0);
+      const prevQty = events.filter((e) => prevMonthKeys.includes(monthKey(e.t))).reduce((a, e) => a + e.qty, 0);
       if (prevQty < params.productQty_minPriorQty) return;
       const delta = (curQty - prevQty) / prevQty;
       if (delta > -params.productQty_pctThreshold / 100) return; // only a decline counts — see general policy 7
+      if (isExplainedBySeasonality(curWindowStart, curWindowEnd, Array.from(familyMembers[famKey(pid)] || [pid]))) return;
       const label = familyLabel(pid);
       insights.push({
         type: 'purchasePattern',
@@ -421,7 +322,7 @@ async function computeInsights(organizationId) {
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הכמות שהלקוח קונה מ${label} ירדה ב-${Math.round(Math.abs(delta) * 100)}%: ${Math.round(curQty)} יח' ב-${params.productQty_windowDays} הימים האחרונים (${fmtDateHe(curFrom)}–${fmtDateHe(now)}) לעומת ${Math.round(prevQty)} יח' בתקופה הקודמת (${fmtDateHe(prevFrom)}–${fmtDateHe(curFrom)}).${label.includes('/') ? ' (נספר כיחידה אחת עם המוצר התחליפי שלו.)' : ''}`,
+        message: `הכמות שהלקוח קונה מ${label} ירדה ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${winMonths} החודשים הקודמים.`,
         metric: Math.round(delta * 100),
         breakdown: [{ label: 'כמות אחרונה', value: Math.round(curQty) }, { label: 'כמות קודמת', value: Math.round(prevQty) }]
       });
@@ -458,7 +359,7 @@ async function computeInsights(organizationId) {
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `תדירות הרכישה של ${label} ירדה: נרכש ב-${thisMonths.size} חודשים שונים ב-${rangeLabel2} ${year}, לעומת ${lastMonths.size} חודשים באותה תקופה אשתקד.${label.includes('/') ? ' (נספר כיחידה אחת עם המוצר התחליפי שלו.)' : ''}`,
+        message: `תדירות הרכישה של ${label} ירדה לעומת אשתקד.`,
         metric: Math.round(delta * 100),
         breakdown: [{ label: rangeLabel2 + ' ' + year, value: thisMonths.size }, { label: rangeLabel2 + ' ' + (year - 1), value: lastMonths.size }]
       });
@@ -494,7 +395,7 @@ async function computeInsights(organizationId) {
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הלקוח קונה את ${label} באופן לא סדיר — המרווחים בין ${events.length} הרכישות האחרונות נעים סביב ${Math.round(meanGap)} ימים בממוצע, בפיזור גבוה (מקדם שונות ${Math.round(cv * 100)}%). מוצר זה מהווה ${Math.round((famRev / totalRev) * 100)}% ממחזור הלקוח — הזדמנות לייצב את קצב ההזמנה.${label.includes('/') ? ' (נספר כיחידה אחת עם המוצר התחליפי שלו.)' : ''}`,
+        message: `הלקוח קונה את ${label} בקצב לא סדיר, למרות שהוא מהווה נתח משמעותי ממחזורו.`,
         metric: Math.round(cv * 100),
         breakdown: [{ label: 'מקדם שונות', value: Math.round(cv * 100) }, { label: 'סף', value: params.irregularity_cvThreshold }]
       });
@@ -525,7 +426,7 @@ async function computeInsights(organizationId) {
         severity: pct >= 85 ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
-        message: `${Math.round(pct)}% ממחזור הלקוח (${fmtMoneyHe(topRev)} מתוך ${fmtMoneyHe(totalRev)}) מגיע מ-${top.length} מוצרים בלבד: ${labels.join(', ')} — סיכון ריכוזיות; פגיעה באחד מהם עלולה לפגוע משמעותית בקשר עם הלקוח.`,
+        message: `${Math.round(pct)}% ממחזור הלקוח מגיע מ-${top.length} מוצרים בלבד — סיכון ריכוזיות.`,
         metric: Math.round(pct),
         breakdown: top.map((x, i) => ({ label: labels[i], value: Math.round(x.rev) }))
       });

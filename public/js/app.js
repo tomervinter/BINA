@@ -8,6 +8,12 @@ async function init() {
   const crumb = document.querySelector('.crumb');
   if (crumb) crumb.remove();
 
+  // Move the company-name pill out of the topbar and onto the greeting row, pushed
+  // to the far end (left, in RTL) via the slot's margin-inline-start:auto.
+  const sourcePill = document.querySelector('.source-pill');
+  const pillSlot = document.getElementById('dashCompanyPillSlot');
+  if (sourcePill && pillSlot) pillSlot.appendChild(sourcePill);
+
   document.getElementById('greeting').textContent = 'שלום, ' + (data.user.name || data.user.email);
   const today = new Date();
   const p = (n) => String(n).padStart(2, '0');
