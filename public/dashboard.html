@@ -20,15 +20,27 @@
       <div class="card" style="margin-top:16px;">
         <div class="table-head-row">
           <div class="table-head-right">
-            <div class="card-title" style="margin-bottom:2px;">חיפוש לקוח מהיר</div>
-            <div class="page-subtitle" id="dashFilterSubtitle" style="margin-bottom:0;">כברירת מחדל, כל הנתונים בדשבורד מציגים את כלל הלקוחות. הקלידו שם לקוח כדי להציג כאן רק את הנתונים שלו.</div>
+            <div class="card-title" style="margin-bottom:2px;">סינון הדשבורד</div>
+            <div class="page-subtitle" id="dashFilterSubtitle" style="margin-bottom:0;">כברירת מחדל, כל הנתונים בדשבורד מציגים את כלל הלקוחות וכל התקופות. הקלידו שם לקוח ו/או בחרו תקופה כדי לסנן.</div>
           </div>
           <div class="table-head-left">
             <button class="btn btn-ghost btn-sm" id="dashClearCustomerFilter" type="button" style="display:none;">הצג את כל הלקוחות</button>
+            <button class="btn btn-ghost btn-sm" id="dashClearPeriodFilter" type="button" style="display:none;">הצג את כל התקופות</button>
           </div>
         </div>
         <datalist id="dashCustomerList"></datalist>
         <input type="text" id="dashCustomerSearch" list="dashCustomerList" placeholder="הקלידו שם לקוח לסינון הדשבורד...">
+
+        <div class="cp-period-form" style="margin-top:14px;">
+          <div class="cp-period-group">
+            <span class="cp-period-label">תקופה:</span>
+            <input type="month" id="dashPeriodFrom"> — <input type="month" id="dashPeriodTo">
+          </div>
+          <div class="cp-period-group">
+            <span class="cp-period-label">תקופת השוואה:</span>
+            <input type="month" id="dashCompareFrom"> — <input type="month" id="dashCompareTo">
+          </div>
+        </div>
       </div>
 
       <div class="table-head-row" style="margin-top:6px;">
@@ -79,6 +91,6 @@
   <script src="js/layout.js"></script>
   <script src="js/app.js"></script>
   <script src="js/dashboard-sales-summary.js"></script>
-  <script src="js/dashboard-customer-search.js"></script>
+  <script src="js/dashboard-filters.js"></script>
 </body>
 </html>

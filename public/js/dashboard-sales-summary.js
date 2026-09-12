@@ -1,12 +1,13 @@
 // Dashboard infographics built from the sales-full-report consolidation: KPI tiles,
-// a year-over-year monthly revenue trend, and breakdown charts by customer/product
+// a monthly revenue trend (year-over-year by default, or period-vs-comparison-period
+// when a period filter is active), and breakdown charts by customer/product
 // classification. Every chart is clickable — it deep-links to the full sales report,
 // pre-filtered to whatever bar/slice was clicked.
 //
-// The whole dashboard can be scoped to one customer (see dashboard-customer-search.js,
-// which drives this via loadDashboardSalesSummary(customerNumber)) — everything here is
-// re-fetched and every chart destroyed and rebuilt on each call, since Chart.js refuses
-// to reuse a canvas that already has a live chart on it.
+// The whole dashboard can be scoped to one customer and/or a date period (see
+// dashboard-filters.js, which drives this via loadDashboardSalesSummary(filters)) —
+// everything here is re-fetched and every chart destroyed and rebuilt on each call,
+// since Chart.js refuses to reuse a canvas that already has a live chart on it.
 //
 // A single restrained blue/navy/slate palette throughout — no per-category rainbow —
 // to keep the look formal and consistent with the rest of the app's brand color.
@@ -14,8 +15,8 @@ const DASH_CHART_COLORS = ['#3D5CF5', '#2C48D8', '#1B2144', '#64748B', '#93A4C3'
 const DASH_BLUE = '#3D5CF5';
 const DASH_NAVY = '#1B2144';
 const DASH_SLATE = '#64748B';
-// Year-over-year trend bars, ordered so the most recent year is always the most
-// prominent brand blue and older years fade to muted navy/slate/gray.
+// Year-over-year / period-vs-comparison trend bars: the primary series is always the
+// most prominent brand blue, older/comparison series fade to muted navy/slate/gray.
 const YEAR_SERIES_COLORS = ['#3D5CF5', '#1B2144', '#64748B', '#93A4C3', '#2C48D8', '#B9C1E4', '#0F172A'];
 
 const dashCharts = {};
@@ -43,23 +44,50 @@ function onChartClick(getUrl) {
   };
 }
 
-async function loadDashboardSalesSummary(customerNumber) {
-  const qs = customerNumber ? ('?customerNumber=' + encodeURIComponent(customerNumber)) : '';
-  const res = await fetch('/api/dashboard-sales-summary' + qs, { credentials: 'include' });
+// Appends a "(+12% לעומת <label>)" note when a comparison value is available and
+// non-zero; otherwise returns an empty string.
+function deltaNote(current, compareVal, compareLabel) {
+  if (compareVal == null || !compareLabel) return '';
+  if (!compareVal) return '';
+  const delta = ((current - compareVal) / compareVal) * 100;
+  const sign = delta >= 0 ? '+' : '';
+  return ' (' + sign + Math.round(delta) + '% לעומת ' + compareLabel + ')';
+}
+
+async function loadDashboardSalesSummary(filters) {
+  filters = filters || {};
+  const qs = new URLSearchParams();
+  if (filters.customer) qs.set('customerNumber', filters.customer);
+  if (filters.periodFrom) qs.set('periodFrom', filters.periodFrom);
+  if (filters.periodTo) qs.set('periodTo', filters.periodTo);
+  if (filters.compareFrom) qs.set('compareFrom', filters.compareFrom);
+  if (filters.compareTo) qs.set('compareTo', filters.compareTo);
+  const q = qs.toString();
+  const res = await fetch('/api/dashboard-sales-summary' + (q ? '?' + q : ''), { credentials: 'include' });
   if (!res.ok) return;
   const s = await res.json();
   const suffix = s.customerName ? (' — ' + s.customerName) : '';
   const baseReportParams = s.customerNumber ? { customerNumber: s.customerNumber } : {};
+  const ct = s.compareTotals;
 
-  const years = s.yearlyTrend.map((y) => y.year);
-  document.getElementById('monthlyTrendTitle').textContent = (years.length > 1 ? 'השוואת מחזור חודשי בין השנים' : 'מחזור מכירות לפי חודשים') + suffix;
-  document.getElementById('monthlyTrendSubtitle').textContent =
-    (years.length > 1 ? 'השוואה חודשית בין ' + years.join(', ') : 'נתוני שנת ' + years[0]) +
-    '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא.';
-  document.getElementById('salesSummaryTitle').textContent = (s.customerNumber ? 'תמונת מכירות — הלקוח הנבחר' : 'תמונת מכירות כוללת');
-  document.getElementById('salesSummarySubtitle').textContent = s.customerNumber
-    ? ('מבוסס על שורות המכירה של ' + s.customerName + ' בלבד. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.')
-    : 'מבוסס על דוח המכירות המלא — כל שורות המכירות בצירוף נתוני הלקוחות והמוצרים. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.';
+  if (s.period) {
+    document.getElementById('monthlyTrendTitle').textContent = 'השוואת תקופות' + suffix;
+    document.getElementById('monthlyTrendSubtitle').textContent =
+      'התקופה ' + s.period.label + (s.comparePeriod ? ' לעומת ' + s.comparePeriod.label : '') +
+      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא.';
+    document.getElementById('salesSummaryTitle').textContent = 'תמונת מכירות — ' + s.period.label + suffix;
+    document.getElementById('salesSummarySubtitle').textContent = 'מבוסס על שורות המכירה בתקופה ' + s.period.label + (s.customerNumber ? (' של ' + s.customerName) : '') + '. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.';
+  } else {
+    const years = s.yearlyTrend.map((y) => y.year);
+    document.getElementById('monthlyTrendTitle').textContent = (years.length > 1 ? 'השוואת מחזור חודשי בין השנים' : 'מחזור מכירות לפי חודשים') + suffix;
+    document.getElementById('monthlyTrendSubtitle').textContent =
+      (years.length > 1 ? 'השוואה חודשית בין ' + years.join(', ') : 'נתוני שנת ' + years[0]) +
+      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא.';
+    document.getElementById('salesSummaryTitle').textContent = (s.customerNumber ? 'תמונת מכירות — הלקוח הנבחר' : 'תמונת מכירות כוללת');
+    document.getElementById('salesSummarySubtitle').textContent = s.customerNumber
+      ? ('מבוסס על שורות המכירה של ' + s.customerName + ' בלבד. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.')
+      : 'מבוסס על דוח המכירות המלא — כל שורות המכירות בצירוף נתוני הלקוחות והמוצרים. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.';
+  }
   document.getElementById('salesSummaryFullReportLink').href = reportUrl(baseReportParams);
   document.getElementById('superTypeTitle').textContent = 'מחזור לפי טיפוס על' + suffix;
   document.getElementById('departmentTitle').textContent = 'מחזור לפי מחלקת מוצר' + suffix;
@@ -67,8 +95,8 @@ async function loadDashboardSalesSummary(customerNumber) {
   document.getElementById('topCustomersTitle').textContent = s.customerNumber ? 'מחזור הלקוח הנבחר' : '5 הלקוחות המובילים במחזור';
 
   document.getElementById('salesSummaryKpiGrid').innerHTML = [
-    ['blue', 'v-blue', fmtMoneyShort(s.totalRevenue), s.customerNumber ? 'מחזור הלקוח' : 'מחזור כולל'],
-    ['blue', 'v-blue', Math.round(s.totalQuantity || 0).toLocaleString('he-IL'), 'כמות שנמכרה בסך הכול'],
+    ['blue', 'v-blue', fmtMoneyShort(s.totalRevenue), (s.customerNumber ? 'מחזור הלקוח' : 'מחזור כולל') + deltaNote(s.totalRevenue, ct && ct.totalRevenue, s.comparePeriod && s.comparePeriod.label)],
+    ['blue', 'v-blue', Math.round(s.totalQuantity || 0).toLocaleString('he-IL'), 'כמות שנמכרה בסך הכול' + deltaNote(s.totalQuantity, ct && ct.totalQuantity, s.comparePeriod && s.comparePeriod.label)],
     ['green', 'v-green', s.activeCustomerCount.toLocaleString('he-IL'), s.customerNumber ? 'לקוח מוצג' : 'לקוחות עם רכישות'],
     ['green', 'v-green', s.activeProductCount.toLocaleString('he-IL'), 'מוצרים שנמכרו']
   ].map(([dot, cls, value, desc]) => (
@@ -80,35 +108,63 @@ async function loadDashboardSalesSummary(customerNumber) {
     '</div>'
   )).join('');
 
-  const legendOpts = { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } };
-
-  // Year-over-year monthly revenue trend, one bar series per calendar year that has
-  // data — click a bar to see that year+month's rows in the full report.
-  upsertChart('monthlyTrendChart', {
-    type: 'bar',
-    data: {
-      labels: s.monthNames,
-      datasets: s.yearlyTrend.map((yr, i) => ({
-        label: String(yr.year),
-        data: yr.data,
-        backgroundColor: YEAR_SERIES_COLORS[(s.yearlyTrend.length - 1 - i) % YEAR_SERIES_COLORS.length],
-        borderRadius: 4
-      }))
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } },
-      scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
-      onClick: function (evt, elements) {
-        if (!elements.length) return;
-        const el = elements[0];
-        const yr = s.yearlyTrend[el.datasetIndex];
-        window.location.href = reportUrl(Object.assign({}, baseReportParams, { year: yr.year, month: el.index + 1 }));
+  if (s.periodTrend) {
+    // Period vs comparison-period: aligned by relative month position (month 1 of
+    // period vs month 1 of comparison, etc.), since the two ranges are usually offset
+    // on purpose (e.g. this quarter vs the same quarter last year).
+    const pt = s.periodTrend;
+    const n = Math.max(pt.periodMonths.length, pt.compareMonths ? pt.compareMonths.length : 0);
+    const labels = Array.from({ length: n }, (_, i) => 'חודש ' + (i + 1));
+    const datasets = [{ label: pt.periodLabel, data: pt.periodData, backgroundColor: DASH_BLUE, borderRadius: 4 }];
+    if (pt.compareData) datasets.push({ label: pt.compareLabel, data: pt.compareData, backgroundColor: DASH_NAVY, borderRadius: 4 });
+    upsertChart('monthlyTrendChart', {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } },
+        scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+        onClick: function (evt, elements) {
+          if (!elements.length) return;
+          const el = elements[0];
+          const months = el.datasetIndex === 0 ? pt.periodMonths : pt.compareMonths;
+          const m = months && months[el.index];
+          if (!m) return;
+          window.location.href = reportUrl(Object.assign({}, baseReportParams, { year: m.year, month: m.month }));
+        },
+        onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
+      }
+    });
+  } else {
+    // Year-over-year monthly revenue trend, one bar series per calendar year that has
+    // data — click a bar to see that year+month's rows in the full report.
+    upsertChart('monthlyTrendChart', {
+      type: 'bar',
+      data: {
+        labels: s.monthNames,
+        datasets: s.yearlyTrend.map((yr, i) => ({
+          label: String(yr.year),
+          data: yr.data,
+          backgroundColor: YEAR_SERIES_COLORS[(s.yearlyTrend.length - 1 - i) % YEAR_SERIES_COLORS.length],
+          borderRadius: 4
+        }))
       },
-      onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
-    }
-  });
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } },
+        scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+        onClick: function (evt, elements) {
+          if (!elements.length) return;
+          const el = elements[0];
+          const yr = s.yearlyTrend[el.datasetIndex];
+          window.location.href = reportUrl(Object.assign({}, baseReportParams, { year: yr.year, month: el.index + 1 }));
+        },
+        onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
+      }
+    });
+  }
 
+  const legendOpts = { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } };
   function breakdownChart(canvasId, rows, filterKey, type, color) {
     const cfg = {
       type,
@@ -168,4 +224,13 @@ async function loadDashboardSalesSummary(customerNumber) {
   });
 }
 
-loadDashboardSalesSummary(new URLSearchParams(window.location.search).get('customer') || undefined);
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  loadDashboardSalesSummary({
+    customer: params.get('customer') || null,
+    periodFrom: params.get('periodFrom') || '',
+    periodTo: params.get('periodTo') || '',
+    compareFrom: params.get('compareFrom') || '',
+    compareTo: params.get('compareTo') || ''
+  });
+})();
