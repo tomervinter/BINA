@@ -190,6 +190,15 @@ footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--border);font-
 .dash-insight-msg{font-size:12px;color:var(--text-muted);}
 .dash-insight-empty{padding:16px;text-align:center;color:var(--text-faint);font-size:12.5px;}
 
+/* ---------- Insight visual breakdown (the numbers behind an insight) ---------- */
+.insight-breakdown{display:flex;flex-direction:column;gap:4px;min-width:170px;padding:2px 0;}
+.ib-row{display:flex;align-items:center;gap:6px;font-size:11px;}
+.ib-label{flex:0 0 auto;color:var(--text-faint);white-space:nowrap;min-width:64px;max-width:100px;overflow:hidden;text-overflow:ellipsis;}
+.ib-track{flex:1;background:var(--surface-2);border-radius:4px;height:10px;position:relative;overflow:hidden;min-width:40px;}
+.ib-fill{height:100%;border-radius:4px;background:var(--accent);}
+.ib-fill.ib-muted{background:var(--text-faint);opacity:.55;}
+.ib-value{flex:0 0 auto;font-weight:700;white-space:nowrap;min-width:46px;text-align:end;font-variant-numeric:tabular-nums;}
+
 /* ---------- Rule engine ---------- */
 .rules-general-list{margin:0;padding-inline-start:20px;font-size:13px;color:var(--text-muted);line-height:1.9;}
 .rules-general-list li{margin-bottom:10px;}

@@ -81,7 +81,8 @@ async function initCustomerProfilePage() {
         '<div class="rule-title" style="display:flex;align-items:center;gap:8px;">' +
         '<span class="pill ' + (SEV_CLASS[i.severity] || 'pill-gray') + '">' + (SEV_LABEL[i.severity] || i.severity) + '</span>' +
         Layout.escapeHtml((TYPE_META[i.type] || {}).label || i.type) +
-        '</div><div class="rule-text">' + Layout.escapeHtml(i.message) + '</div></div>'
+        '</div><div class="rule-text">' + Layout.escapeHtml(i.message) + '</div>' +
+        (i.breakdown ? renderInsightBreakdown(i.breakdown) : '') + '</div>'
       )).join('')
       : '<p style="color:var(--text-faint);font-size:13px;">אין תובנות פתוחות ללקוח זה כרגע.</p>';
 

@@ -3,7 +3,7 @@
 function createDataTable(container, columns, rows, opts) {
   opts = opts || {};
   const originalColumns = columns.slice();
-  const state = { filters: {}, sortCol: opts.defaultSortCol || null, sortDir: opts.defaultSortDir || 'asc', focusedCol: null };
+  const state = { filters: Object.assign({}, opts.initialFilters || {}), sortCol: opts.defaultSortCol || null, sortDir: opts.defaultSortDir || 'asc', focusedCol: null };
 
   function cellValue(col, row) {
     return col.render ? col.render(row) : row[col.key];

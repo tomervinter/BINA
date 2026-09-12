@@ -6,12 +6,16 @@ const TYPE_META = {
   frequencyDecline: { label: 'ירידת תדירות', category: 'התראה' },
   anomaly: { label: 'חריגה לא צפויה', category: 'התראה' },
   monthlyProductBreak: { label: 'שבירת דפוס חודשי', category: 'התראה' },
-  monthlyDeclineDetail: { label: 'ירידה חודשית מפורטת', category: 'התראה' },
+  monthlyRevenueShift: { label: 'מגמת מחזור חודשית', category: 'התראה' },
   seasonalDecline: { label: 'ירידה עונתית/חג', category: 'התראה' },
-  cumulativeYoyDecline: { label: 'ירידה מצטברת שנתית', category: 'התראה' },
+  cumulativeYoyShift: { label: 'מגמת מחזור מצטברת שנתית', category: 'התראה' },
   varietyNarrowing: { label: 'צמצום מגוון רכישות', category: 'התראה' },
   decliningTrend: { label: 'מגמת קיטון', category: 'התראה' },
-  quarterlyDecline: { label: 'ירידה רבעונית', category: 'התראה' },
+  quarterlyRevenueShift: { label: 'מגמת מחזור רבעונית', category: 'התראה' },
+  holidayMomentumShift: { label: 'מומנטום בין חגים', category: 'התראה' },
+  productQuantityShift: { label: 'שינוי בכמות מוצר', category: 'התראה' },
+  productFrequencyYoyShift: { label: 'שינוי בתדירות מוצר', category: 'התראה' },
+  productConcentrationRisk: { label: 'סיכון ריכוזיות מוצרים', category: 'התראה' },
   lookalike: { label: 'פוטנציאל צמיחה', category: 'הזדמנות' },
   upsell: { label: 'הזדמנות Upsell', category: 'הזדמנות' },
   productVarietyGap: { label: 'פער מגוון מוצרים', category: 'הזדמנות' },
@@ -21,7 +25,9 @@ const TYPE_META = {
   standingOrderOpportunity: { label: 'הצעת הזמנה שוטפת', category: 'הזדמנות' },
   centralCustomerCrossSell: { label: 'הזדמנות בין-סניפית', category: 'הזדמנות' },
   marketingUnderperformance: { label: 'מוצר משווק שלא נמכר', category: 'הזדמנות' },
-  upcomingEventReminder: { label: 'תזכורת לקראת אירוע', category: 'הזדמנות' }
+  upcomingEventReminder: { label: 'תזכורת לקראת אירוע', category: 'הזדמנות' },
+  purchaseIrregularity: { label: 'קצב רכישה לא סדיר', category: 'הזדמנות' },
+  newProductAdopted: { label: 'אימוץ מוצר חדש', category: 'הזדמנות' }
 };
 const SEV_LABEL = { high: 'גבוהה', medium: 'בינונית', low: 'נמוכה' };
 const SEV_CLASS = { high: 'pill-red', medium: 'pill-orange', low: 'pill-gray' };

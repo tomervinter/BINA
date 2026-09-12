@@ -18,14 +18,20 @@ async function initInsightsPage() {
     { key: 'customerName', label: 'לקוח', render: (r) => r.customerName || '' },
     { key: 'entity', label: 'מוצר', render: (r) => r.productCode ? (prodName[r.productCode] || r.productCode) : '' },
     { key: 'message', label: 'פירוט' },
+    { key: 'breakdown', label: 'הנתונים מאחורי התובנה', html: true, sortable: false, filterable: false, render: (r) => renderInsightBreakdown(r.breakdown) },
     { key: 'severity', label: 'חומרה', html: true, render: (r) => '<span class="pill ' + (SEV_CLASS[r.severity] || 'pill-gray') + '">' + (SEV_LABEL[r.severity] || r.severity) + '</span>', filterValue: (r) => SEV_LABEL[r.severity] || r.severity, sortValue: (r) => ({ high: 0, medium: 1, low: 2 }[r.severity] ?? 3) },
     { key: 'metric', label: 'מדד' }
   ];
 
+  // Dashboard charts deep-link here as insights.html?type=<label> so a click lands
+  // already filtered to that rule's insights.
+  const urlType = new URLSearchParams(window.location.search).get('type');
+
   const table = createDataTable(document.getElementById('tableContainer'), columns, insights, {
     exportUrl: '/api/insights/export',
     onRowClick: (r) => { if (r.customerId) window.location.href = 'customer-profile.html?customer=' + encodeURIComponent(r.customerId); },
-    tableKey: 'insights'
+    tableKey: 'insights',
+    initialFilters: urlType ? { type: urlType } : undefined
   });
 
   const statusLine = document.getElementById('insightsGenStatus');

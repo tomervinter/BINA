@@ -75,6 +75,18 @@ function monthOverlapsWindow(mk, start, end) {
   return ms < end && me > start;
 }
 
+// General policy 5: a product with a defined substitute is treated as one combined
+// entity for insight purposes (in either direction — a substitute relationship means
+// the two fill the same need, whichever way the suggestion points). Union-find groups
+// every product into a family; a family with no substitute relation is just itself.
+function buildProductFamilies(substitutes) {
+  const parent = {};
+  function find(x) { parent[x] = parent[x] || x; while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+  function union(a, b) { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+  substitutes.forEach((s) => union(s.productCode, s.substituteCode));
+  return { famKey: (pid) => find(pid) };
+}
+
 // Mirrors the artifact's editable RULE_PARAM_DEFS — same names, same defaults.
 const DEFAULT_PARAMS = {
   churn_minPurchases: 3, churn_dayFloor: 35, churn_gapMultiplier: 1.3, churn_highMultiplier: 1.6,
@@ -97,7 +109,12 @@ const DEFAULT_PARAMS = {
   quarterlyDecline_pctThreshold: 20, quarterlyDecline_highPct: 35, quarterlyDecline_minBaseRevenue: 100,
   centralCross_minGroupSize: 2, centralCross_popularityPct: 50,
   marketingUnderperf_lookbackMonths: 3, marketingUnderperf_maxUnits: 0,
-  upcomingEvent_daysAhead: 21
+  upcomingEvent_daysAhead: 21,
+  productQty_windowDays: 90, productQty_pctThreshold: 40, productQty_highPct: 60, productQty_minPriorQty: 5,
+  productFreqYoy_pctThreshold: 40, productFreqYoy_highPct: 60, productFreqYoy_minPriorMonths: 2,
+  irregularity_minPurchases: 4, irregularity_cvThreshold: 70, irregularity_minRevenueShare: 5,
+  newProduct_lookbackDays: 90, newProduct_minRevenue: 150,
+  concentration_topN: 2, concentration_pctThreshold: 70, concentration_minRevenue: 500
 };
 
 async function loadParams(organizationId) {
@@ -146,6 +163,27 @@ async function computeInsights(organizationId) {
   const insights = [];
   const custLabel = (cid) => (custIndex[cid] && custIndex[cid].name) || cid;
   const prodLabel = (pid) => (prodIndex[pid] && prodIndex[pid].name) || pid;
+
+  // General policy 5: substitute-product union. `famKey(pid)` maps any product to its
+  // family's canonical key; a family with no substitute relation is just itself. Every
+  // rule that asks "did the customer buy product X" checks the whole family instead —
+  // switching to a substitute during a shortage shouldn't look like abandoning X.
+  const { famKey } = buildProductFamilies(substitutes);
+  const familyMembers = {};
+  Object.keys(prodIndex).forEach((pid) => { (familyMembers[famKey(pid)] = familyMembers[famKey(pid)] || new Set()).add(pid); });
+  function familyLabel(pid) {
+    const members = Array.from(familyMembers[famKey(pid)] || [pid]);
+    return members.map(prodLabel).join(' / ');
+  }
+  function isFamilyOutOfStock(pid) {
+    const members = Array.from(familyMembers[famKey(pid)] || [pid]);
+    return members.every((m) => isOutOfStock(m));
+  }
+  function isFamilyInactive(pid) {
+    const members = Array.from(familyMembers[famKey(pid)] || [pid]);
+    return members.every((m) => isProductInactive(prodIndex[m]));
+  }
+  const byCustomerFamily = groupBy(s, (x) => x.cid + '|' + famKey(x.pid));
 
   // 1. churn
   Object.keys(byCustomer).forEach((cid) => {
@@ -210,18 +248,21 @@ async function computeInsights(organizationId) {
     }
   });
 
-  // 3. product dropoff (suppressed if the product is currently out of stock — the
-  // customer isn't ignoring it, there's nothing to sell them)
-  Object.keys(byPair).forEach((key) => {
+  // 3. product-family dropoff (general policy 5: a substitute purchase counts as still
+  // buying the family, so this only fires if the customer stopped buying EVERY member).
+  // Suppressed if every member is currently out of stock (general policy 3, applied to
+  // the current moment — see the note on historical inventory at the top of this file).
+  Object.keys(byCustomerFamily).forEach((key) => {
     const idx = key.indexOf('|');
-    const cid = key.slice(0, idx), pid = key.slice(idx + 1);
+    const cid = key.slice(0, idx), fam = key.slice(idx + 1);
     const cust = custIndex[cid];
     if (isInactive(cust)) return;
-    if (isProductInactive(prodIndex[pid])) return;
-    if (isOutOfStock(pid)) return;
+    const events = byCustomerFamily[key].slice().sort((a, b) => a.t - b.t);
+    const pid = events[events.length - 1].pid; // most recently purchased family member, for labeling/stock-checks
+    if (isFamilyInactive(pid)) return;
+    if (isFamilyOutOfStock(pid)) return;
     const recentAny = (byCustomer[cid] || []).some((e) => e.t > now - params.dropoff_recentActivityDays * DAY_MS);
     if (!recentAny) return;
-    const events = byPair[key].slice().sort((a, b) => a.t - b.t);
     if (events.length < params.dropoff_minPurchases) return;
     const gaps = [];
     for (let i = 1; i < events.length; i++) gaps.push((events[i].t - events[i - 1].t) / DAY_MS);
@@ -229,14 +270,16 @@ async function computeInsights(organizationId) {
     const lastT = events[events.length - 1].t;
     const daysSince = (now - lastT) / DAY_MS;
     if (daysSince > Math.max(params.dropoff_dayFloor, typicalGap * params.dropoff_gapMultiplier)) {
+      const label = familyLabel(pid);
       insights.push({
         type: 'dropoff',
         severity: daysSince > typicalGap * params.dropoff_highGapMultiplier ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הלקוח פעיל, אך לא רכש את ${prodLabel(pid)} מאז ${fmtMonthYear(lastT)} (${fmtDateHe(lastT)}) — ${Math.round(daysSince)} ימים ללא רכישה. קצב הרכישה הרגיל שלו למוצר זה, מתוך ${events.length} רכישות עבר, הוא כ-${Math.round(typicalGap)} ימים.`,
-        metric: Math.round(daysSince)
+        message: `הלקוח פעיל, אך לא רכש את ${label} מאז ${fmtMonthYear(lastT)} (${fmtDateHe(lastT)}) — ${Math.round(daysSince)} ימים ללא רכישה. קצב הרכישה הרגיל שלו למוצר זה, מתוך ${events.length} רכישות עבר, הוא כ-${Math.round(typicalGap)} ימים.${label.includes('/') ? ' (נספר כיחידה אחת עם המוצר התחליפי שלו.)' : ''}`,
+        metric: Math.round(daysSince),
+        breakdown: [{ label: 'ימים ללא רכישה', value: Math.round(daysSince) }, { label: 'קצב רגיל (ימים)', value: Math.round(typicalGap) }]
       });
     }
   });
@@ -253,6 +296,16 @@ async function computeInsights(organizationId) {
     (custProducts[cid] = custProducts[cid] || {})[pid] = true;
   });
 
+  // custFamilyProducts[cid][famKey] is true if the customer bought ANY member of that
+  // substitute family — used by every "does this customer own product X" opportunity
+  // rule below, so buying the substitute counts as already owning it (policy 5).
+  const custFamilyProducts = {};
+  Object.keys(custProducts).forEach((cid) => {
+    const fams = {};
+    Object.keys(custProducts[cid]).forEach((pid) => { fams[famKey(pid)] = true; });
+    custFamilyProducts[cid] = fams;
+  });
+
   const lookalikeMinGroup = params.lookalike_minGroupSize;
   const lookalikePct = params.lookalike_pctOfAvg / 100;
   const lookalikeHighPct = params.lookalike_highPctOfAvg / 100;
@@ -263,9 +316,9 @@ async function computeInsights(organizationId) {
     const ids = members.map((c) => c.customerNumber).filter(Boolean);
     const revs = ids.map((id) => custRevenue[id] || 0);
     const avgRev = revs.reduce((a, b) => a + b, 0) / (revs.length || 1);
-    const productCounts = {};
-    ids.forEach((id) => { Object.keys(custProducts[id] || {}).forEach((pid) => { productCounts[pid] = (productCounts[pid] || 0) + 1; }); });
-    const popularPids = Object.keys(productCounts).filter((pid) => productCounts[pid] >= Math.ceil(ids.length * upsellPopPct) && !isProductInactive(prodIndex[pid]) && !isOutOfStock(pid));
+    const famCounts = {}, famRepPid = {};
+    ids.forEach((id) => { Object.keys(custProducts[id] || {}).forEach((pid) => { const f = famKey(pid); famCounts[f] = (famCounts[f] || 0) + 1; famRepPid[f] = pid; }); });
+    const popularFams = Object.keys(famCounts).filter((f) => famCounts[f] >= Math.ceil(ids.length * upsellPopPct) && !isFamilyInactive(famRepPid[f]) && !isFamilyOutOfStock(famRepPid[f]));
 
     ids.forEach((id) => {
       const rev = custRevenue[id] || 0;
@@ -276,20 +329,24 @@ async function computeInsights(organizationId) {
           customerId: id,
           customerName: custLabel(id),
           message: `מחזור הלקוח בסך הכול (${fmtMoneyHe(rev)}) נמוך משמעותית מהממוצע בקבוצת "${seg}" — ${fmtMoneyHe(avgRev)}, מחושב לפי ${ids.length} לקוחות פעילים באותה קבוצת סיווג ראשי — פוטנציאל צמיחה לא ממומש.`,
-          metric: Math.round((rev / avgRev) * 100)
+          metric: Math.round((rev / avgRev) * 100),
+          breakdown: [{ label: 'מחזור הלקוח', value: Math.round(rev) }, { label: 'ממוצע הקבוצה', value: Math.round(avgRev) }]
         });
       }
-      const owned = custProducts[id] || {};
-      popularPids.forEach((pid) => {
-        if (owned[pid]) return;
+      const owned = custFamilyProducts[id] || {};
+      popularFams.forEach((fam) => {
+        if (owned[fam]) return;
+        const pid = famRepPid[fam];
+        const label = familyLabel(pid);
         insights.push({
           type: 'upsell',
           severity: 'low',
           customerId: id,
           customerName: custLabel(id),
           productCode: pid,
-          message: `${productCounts[pid]} מתוך ${ids.length} הלקוחות בקבוצת הסיווג הראשי "${seg}" רכשו אי-פעם את ${prodLabel(pid)}, אך לקוח זה לא רכש אותו כלל — הזדמנות ל-Upsell.`,
-          metric: productCounts[pid]
+          message: `${famCounts[fam]} מתוך ${ids.length} הלקוחות בקבוצת הסיווג הראשי "${seg}" רכשו אי-פעם את ${label}, אך לקוח זה לא רכש אותו כלל — הזדמנות ל-Upsell.`,
+          metric: famCounts[fam],
+          breakdown: [{ label: 'קונים בקבוצה', value: famCounts[fam] }, { label: 'סה"כ בקבוצה', value: ids.length }]
         });
       });
     });
@@ -335,7 +392,8 @@ async function computeInsights(organizationId) {
       severity: Math.abs(delta) >= params.anomaly_highPct / 100 ? 'high' : 'medium',
       productCode: pid,
       message: `${delta > 0 ? 'עלייה חדה' : 'ירידה חדה'} של ${Math.round(Math.abs(delta) * 100)}% בכמות המכירה של ${prodLabel(pid)} ב-${fmtMonthYearKey(lastMonth)} (${Math.round(lastQty)} יח') לעומת הממוצע ב-${priorMonths.length} החודשים שלפני כן — ${priorMonths.map(fmtMonthYearKey).join(', ')} (ממוצע ${Math.round(baseline)} יח'), ללא הסבר עונתי/חג ידוע.`,
-      metric: Math.round(delta * 100)
+      metric: Math.round(delta * 100),
+      breakdown: [{ label: fmtMonthYearKey(lastMonth), value: Math.round(lastQty) }, { label: 'ממוצע קודם', value: Math.round(baseline) }]
     });
   });
 
@@ -361,24 +419,29 @@ async function computeInsights(organizationId) {
         customerId: cid,
         customerName: custLabel(cid),
         message: `מספר ה"דרופים" (ימי רכישה נפרדים) ירד מ-${prevDrops} בין ${fmtDateHe(prevFrom)}–${fmtDateHe(curFrom)} ל-${curDrops} בין ${fmtDateHe(curFrom)}–${fmtDateHe(now)} (חלונות של ${params.freq_windowDays} ימים כל אחד).`,
-        metric: Math.round(delta * 100)
+        metric: Math.round(delta * 100),
+        breakdown: [{ label: 'דרופים אחרונים', value: curDrops }, { label: 'דרופים קודמים', value: prevDrops }]
       });
     }
   });
 
-  // 8. monthly product purchase break (inventory-aware — suppressed when out of stock)
-  Object.keys(byPair).forEach((key) => {
+  // 8. monthly product-family purchase break (general policy 5: buying a substitute
+  // keeps the pattern intact; general policy 3: suppressed if every family member is
+  // currently out of stock).
+  Object.keys(byCustomerFamily).forEach((key) => {
     const idx = key.indexOf('|');
-    const cid = key.slice(0, idx), pid = key.slice(idx + 1);
+    const cid = key.slice(0, idx), fam = key.slice(idx + 1);
     const cust = custIndex[cid];
     if (isInactive(cust)) return;
-    if (isProductInactive(prodIndex[pid])) return;
-    if (isOutOfStock(pid)) return;
+    const famEvents = byCustomerFamily[key];
+    const pid = famEvents[famEvents.length - 1].pid;
+    if (isFamilyInactive(pid)) return;
+    if (isFamilyOutOfStock(pid)) return;
     const recentAny = (byCustomer[cid] || []).some((e) => e.t > now - params.monthlyBreak_recentActivityDays * DAY_MS);
     if (!recentAny) return;
 
     const monthsSet = {};
-    byPair[key].forEach((e) => { monthsSet[monthKey(e.t)] = true; });
+    famEvents.forEach((e) => { monthsSet[monthKey(e.t)] = true; });
     const recentMonthKeys = [];
     for (let m = 0; m <= params.monthlyBreak_totalMonthsChecked; m++) {
       recentMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1)));
@@ -389,14 +452,16 @@ async function computeInsights(organizationId) {
     const establishedCount = boughtMonths.length;
 
     if (establishedCount >= params.monthlyBreak_establishedMonthsNeeded && !monthsSet[currentMonth]) {
+      const label = familyLabel(pid);
       insights.push({
         type: 'monthlyProductBreak',
         severity: establishedCount >= params.monthlyBreak_highMonthsNeeded ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הלקוח רכש את ${prodLabel(pid)} ב-${establishedCount} מתוך ${params.monthlyBreak_totalMonthsChecked} החודשים האחרונים (${boughtMonths.map(fmtMonthYearKey).join(', ')}), אך לא רכש אותו ב-${fmtMonthYearKey(currentMonth)} — דפוס רכישה חודשי שנקטע.`,
-        metric: establishedCount
+        message: `הלקוח רכש את ${label} ב-${establishedCount} מתוך ${params.monthlyBreak_totalMonthsChecked} החודשים האחרונים (${boughtMonths.map(fmtMonthYearKey).join(', ')}), אך לא רכש אותו ב-${fmtMonthYearKey(currentMonth)} — דפוס רכישה חודשי שנקטע.${label.includes('/') ? ' (נספר כיחידה אחת עם המוצר התחליפי שלו.)' : ''}`,
+        metric: establishedCount,
+        breakdown: [{ label: 'חודשים עם רכישה', value: establishedCount }, { label: 'מתוך סך הכול', value: params.monthlyBreak_totalMonthsChecked }]
       });
     }
   });
@@ -410,27 +475,31 @@ async function computeInsights(organizationId) {
     const members = typeGroups[typeName];
     if (members.length < varietyMinGroup) return;
     const ids2 = members.map((c) => c.customerNumber).filter(Boolean);
-    const productCounts2 = {};
-    ids2.forEach((id) => { Object.keys(custProducts[id] || {}).forEach((pid) => { productCounts2[pid] = (productCounts2[pid] || 0) + 1; }); });
-    const popularPids2 = Object.keys(productCounts2).filter((pid) => productCounts2[pid] >= Math.ceil(ids2.length * varietyPct) && !isProductInactive(prodIndex[pid]) && !isOutOfStock(pid));
+    const famCounts2 = {}, famRepPid2 = {};
+    ids2.forEach((id) => { Object.keys(custProducts[id] || {}).forEach((pid) => { const f = famKey(pid); famCounts2[f] = (famCounts2[f] || 0) + 1; famRepPid2[f] = pid; }); });
+    const popularFams2 = Object.keys(famCounts2).filter((f) => famCounts2[f] >= Math.ceil(ids2.length * varietyPct) && !isFamilyInactive(famRepPid2[f]) && !isFamilyOutOfStock(famRepPid2[f]));
     ids2.forEach((id) => {
-      const owned = custProducts[id] || {};
-      popularPids2.forEach((pid) => {
-        if (owned[pid]) return;
+      const owned = custFamilyProducts[id] || {};
+      popularFams2.forEach((fam) => {
+        if (owned[fam]) return;
+        const pid = famRepPid2[fam];
+        const label = familyLabel(pid);
         insights.push({
           type: 'productVarietyGap',
           severity: 'low',
           customerId: id,
           customerName: custLabel(id),
           productCode: pid,
-          message: `${productCounts2[pid]} מתוך ${ids2.length} הלקוחות מסוג "${typeName}" רכשו את ${prodLabel(pid)}, אך לקוח זה לא — פער במגוון המוצרים.`,
-          metric: productCounts2[pid]
+          message: `${famCounts2[fam]} מתוך ${ids2.length} הלקוחות מסוג "${typeName}" רכשו את ${label}, אך לקוח זה לא — פער במגוון המוצרים.`,
+          metric: famCounts2[fam],
+          breakdown: [{ label: 'קונים בקבוצה', value: famCounts2[fam] }, { label: 'סה"כ בקבוצה', value: ids2.length }]
         });
       });
     });
   });
 
-  // 10. monthly decline with product-level breakdown
+  // 10. Rule 1a — monthly revenue shift (bidirectional: flags a meaningful jump in
+  // either direction, not just a decline), with the specific products driving it.
   const monthlyPct = params.monthly_pctThreshold / 100;
   const monthlyHighPct = params.monthly_highPct / 100;
   Object.keys(byCustomer).forEach((cid) => {
@@ -446,7 +515,8 @@ async function computeInsights(organizationId) {
     const prevRev = prevEvents.reduce((a, e) => a + e.rev, 0);
     if (prevRev < params.monthly_minBaseRevenue) return;
     const delta = (curRev - prevRev) / prevRev;
-    if (delta > -monthlyPct) return;
+    if (Math.abs(delta) < monthlyPct) return;
+    const isDecline = delta < 0;
 
     const curByPid = {}, prevByPid = {};
     curEvents.forEach((e) => { curByPid[e.pid] = (curByPid[e.pid] || 0) + e.rev; });
@@ -455,17 +525,20 @@ async function computeInsights(organizationId) {
     Object.keys(curByPid).forEach((p) => { allPids[p] = true; });
     Object.keys(prevByPid).forEach((p) => { allPids[p] = true; });
     const diffs = Object.keys(allPids).map((pid) => ({ pid, diff: (curByPid[pid] || 0) - (prevByPid[pid] || 0) }))
-      .filter((d) => d.diff < 0 && !isProductInactive(prodIndex[d.pid]))
-      .sort((a, b) => a.diff - b.diff);
+      .filter((d) => (isDecline ? d.diff < 0 : d.diff > 0) && !isProductInactive(prodIndex[d.pid]))
+      .sort((a, b) => isDecline ? a.diff - b.diff : b.diff - a.diff);
     const top = diffs.slice(0, params.monthly_topN).map((d) => `${prodLabel(d.pid)} (${fmtMoneyHe(d.diff)})`);
+    const dirWord = isDecline ? 'ירדה' : 'עלתה';
+    const driverWord = isDecline ? 'בעיקר בשל ירידה במוצרים' : 'בעיקר בזכות עלייה במוצרים';
 
     insights.push({
-      type: 'monthlyDeclineDetail',
-      severity: delta <= -monthlyHighPct ? 'high' : 'medium',
+      type: 'monthlyRevenueShift',
+      severity: Math.abs(delta) >= monthlyHighPct ? 'high' : 'medium',
       customerId: cid,
       customerName: custLabel(cid),
-      message: `מחזור הלקוח ב-${fmtMonthYearKey(curMK)} (${fmtMoneyHe(curRev)}) ירד ב-${Math.round(-delta * 100)}% לעומת ${fmtMonthYearKey(prevMK)} (${fmtMoneyHe(prevRev)})${top.length ? ', בעיקר במוצרים: ' + top.join(', ') : ''}.`,
-      metric: Math.round(delta * 100)
+      message: `הכנסת הלקוח ${dirWord} ב-${Math.round(Math.abs(delta) * 100)}%: ${fmtMonthYearKey(curMK)} (${fmtMoneyHe(curRev)}) לעומת ${fmtMonthYearKey(prevMK)} (${fmtMoneyHe(prevRev)})${top.length ? ', ' + driverWord + ': ' + top.join(', ') : ''}.`,
+      metric: Math.round(delta * 100),
+      breakdown: [{ label: fmtMonthYearKey(curMK), value: Math.round(curRev) }, { label: fmtMonthYearKey(prevMK), value: Math.round(prevRev) }]
     });
   });
 
@@ -525,7 +598,8 @@ async function computeInsights(organizationId) {
             customerName: custLabel(cid),
             productCode: pid,
             message: `${dirWord} של ${Math.round(Math.abs(delta) * 100)}% ברכישת ${prodLabel(pid)} בחודשים החופפים ל${eventKind} ${name} ${latest.year} (${latestLabel}, ${fmtMoneyHe(latestRev)}) לעומת החודשים החופפים לאותו אירוע אשתקד ${previous.year} (${previousLabel}, ${fmtMoneyHe(prevRev)}) — מוצר זה מסומן כרלוונטי אליו במסך שיוך חג ועונה למוצר. (המכירות ידועות ברמת חודש בלבד, ולכן ההשוואה היא לפי חודשים מלאים החופפים לתאריכי האירוע, לא לפי הימים המדויקים.)`,
-            metric: Math.round(delta * 100)
+            metric: Math.round(delta * 100),
+            breakdown: [{ label: name + ' ' + latest.year, value: Math.round(latestRev) }, { label: name + ' ' + previous.year, value: Math.round(prevRev) }]
           });
         });
       });
@@ -533,6 +607,65 @@ async function computeInsights(organizationId) {
   }
   processSeasonalSource(relCtx.holidays, 'holiday');
   processSeasonalSource(relCtx.seasons, 'season');
+
+  // 11c. Rule 1d — holiday/season "momentum": compares a product's sales during the
+  // latest occurrence of one event against its sales during whichever OTHER holiday/
+  // season most recently preceded it — a same-year, event-to-event signal alongside
+  // the year-over-year comparison above (e.g. does Passover follow through on the
+  // momentum Purim showed, not just "vs last Passover").
+  {
+    function latestWindowPerName(rows, source) {
+      const byName = buildEventWindows(rows, source);
+      return Object.keys(byName).map((name) => {
+        const w = byName[name].slice().sort((a, b) => b.start - a.start)[0];
+        return { source, name, start: w.start, end: w.end, year: w.year };
+      });
+    }
+    const allLatest = latestWindowPerName(relCtx.holidays, 'holiday').concat(latestWindowPerName(relCtx.seasons, 'season'))
+      .filter((w) => w.start <= now)
+      .sort((a, b) => b.start - a.start);
+
+    allLatest.forEach((E, i) => {
+      const P = allLatest.slice(i + 1).find((w) => w.name !== E.name);
+      if (!P) return;
+      const EMonths = overlappingMonths(E.start, E.end);
+      const PMonths = overlappingMonths(P.start, P.end);
+      const EKind = E.source === 'holiday' ? 'חג' : 'עונת';
+      const PKind = P.source === 'holiday' ? 'חג' : 'עונת';
+      Object.keys(byCustomer).forEach((cid) => {
+        const cust = custIndex[cid];
+        if (isInactive(cust)) return;
+        const pairEvents = {};
+        byCustomer[cid].forEach((e) => { (pairEvents[e.pid] = pairEvents[e.pid] || []).push(e); });
+        Object.keys(pairEvents).forEach((pid) => {
+          if (isProductInactive(prodIndex[pid])) return;
+          const relE = relevanceEngine.isRelevant(relCtx, pid, E.source, E.name);
+          const relP = relevanceEngine.isRelevant(relCtx, pid, P.source, P.name);
+          if (!relE.known || !relE.value || !relP.known || !relP.value) return;
+          let eRev = 0, pRev = 0;
+          pairEvents[pid].forEach((e) => {
+            const mk = monthKey(e.t);
+            if (EMonths.includes(mk)) eRev += e.rev;
+            else if (PMonths.includes(mk)) pRev += e.rev;
+          });
+          if (pRev < seasonalMinBase) return;
+          const delta = (eRev - pRev) / pRev;
+          if (Math.abs(delta) < seasonalPct) return;
+          const dirWord = delta > 0 ? 'ממשיכה' : 'לא ממשיכה';
+          insights.push({
+            type: 'holidayMomentumShift',
+            severity: Math.abs(delta) >= seasonalHighPct ? 'high' : 'medium',
+            customerId: cid,
+            customerName: custLabel(cid),
+            productCode: pid,
+            message: `רכישת ${prodLabel(pid)} ב${EKind} ${E.name} ${E.year} (${fmtMoneyHe(eRev)}) ${dirWord} את המומנטום מ${PKind} ${P.name} ${P.year} שקדם לו (${fmtMoneyHe(pRev)}) — שינוי של ${Math.round(Math.abs(delta) * 100)}%. שני האירועים מסומנים כרלוונטיים למוצר זה במסך שיוך חג ועונה למוצר.`,
+            metric: Math.round(delta * 100),
+            breakdown: [{ label: E.name + ' ' + E.year, value: Math.round(eRev) }, { label: P.name + ' ' + P.year, value: Math.round(pRev) }]
+          });
+        });
+      });
+    });
+  }
 
   // 13. substitute-for-shortage opportunity: product X is out of stock, a substitute
   // exists (and is itself in stock) — offer it to X's regular buyers.
@@ -579,25 +712,28 @@ async function computeInsights(organizationId) {
   Object.keys(deptGroups).forEach((dept) => {
     const ids = deptGroups[dept].filter((cid) => !isInactive(custIndex[cid]));
     if (ids.length < hierarchyMinGroup) return;
-    const deptProductCounts = {};
+    const deptFamCounts = {}, deptFamRepPid = {};
     ids.forEach((cid) => {
       Object.keys(custProducts[cid] || {}).forEach((pid) => {
-        if (prodIndex[pid] && prodIndex[pid].department === dept) deptProductCounts[pid] = (deptProductCounts[pid] || 0) + 1;
+        if (prodIndex[pid] && prodIndex[pid].department === dept) { const f = famKey(pid); deptFamCounts[f] = (deptFamCounts[f] || 0) + 1; deptFamRepPid[f] = pid; }
       });
     });
-    const popularPids = Object.keys(deptProductCounts).filter((pid) => deptProductCounts[pid] >= Math.ceil(ids.length * hierarchyPct) && !isProductInactive(prodIndex[pid]) && !isOutOfStock(pid));
+    const popularFams = Object.keys(deptFamCounts).filter((f) => deptFamCounts[f] >= Math.ceil(ids.length * hierarchyPct) && !isFamilyInactive(deptFamRepPid[f]) && !isFamilyOutOfStock(deptFamRepPid[f]));
     ids.forEach((cid) => {
-      const owned = custProducts[cid] || {};
-      popularPids.forEach((pid) => {
-        if (owned[pid]) return;
+      const owned = custFamilyProducts[cid] || {};
+      popularFams.forEach((fam) => {
+        if (owned[fam]) return;
+        const pid = deptFamRepPid[fam];
+        const label = familyLabel(pid);
         insights.push({
           type: 'hierarchyUpsell',
           severity: 'low',
           customerId: cid,
           customerName: custLabel(cid),
           productCode: pid,
-          message: `${deptProductCounts[pid]} מתוך ${ids.length} הלקוחות שרכשו אי-פעם מוצר כלשהו ממחלקת "${dept}" רוכשים גם את ${prodLabel(pid)}, אך לקוח זה לא — הזדמנות למכירה נוספת.`,
-          metric: deptProductCounts[pid]
+          message: `${deptFamCounts[fam]} מתוך ${ids.length} הלקוחות שרכשו אי-פעם מוצר כלשהו ממחלקת "${dept}" רוכשים גם את ${label}, אך לקוח זה לא — הזדמנות למכירה נוספת.`,
+          metric: deptFamCounts[fam],
+          breakdown: [{ label: 'קונים במחלקה', value: deptFamCounts[fam] }, { label: 'סה"כ במחלקה', value: ids.length }]
         });
       });
     });
@@ -632,9 +768,9 @@ async function computeInsights(organizationId) {
     });
   }
 
-  // 16. cumulative revenue this year (Jan through the last fully completed month) vs
-  // the same period last year, per customer — a more sensitive, earlier-warning
-  // companion to the rolling-90-day "ירידת מחזור" rule above.
+  // 16. Rule 1c — cumulative revenue this year (Jan through the last fully completed
+  // month) vs the same period last year, per customer — bidirectional, and a more
+  // sensitive, earlier-warning companion to the rolling-90-day "ירידת מחזור" rule above.
   {
     const year = nowDate.getFullYear();
     const lastCompletedMonth = Math.max(1, nowDate.getMonth());
@@ -651,14 +787,16 @@ async function computeInsights(organizationId) {
       const lastRev = events.filter((e) => e.t >= startLast && e.t < endLast).reduce((a, e) => a + e.rev, 0);
       if (lastRev < params.cumulativeYoy_minBaseRevenue) return;
       const delta = (thisRev - lastRev) / lastRev;
-      if (delta <= -params.cumulativeYoy_pctThreshold / 100) {
+      if (Math.abs(delta) >= params.cumulativeYoy_pctThreshold / 100) {
+        const dirWord = delta > 0 ? 'עלייה' : 'ירידה';
         insights.push({
-          type: 'cumulativeYoyDecline',
-          severity: delta <= -params.cumulativeYoy_highPct / 100 ? 'high' : 'medium',
+          type: 'cumulativeYoyShift',
+          severity: Math.abs(delta) >= params.cumulativeYoy_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
-          message: `מחזור הלקוח ב-${rangeLabel} ${year} עמד על ${fmtMoneyHe(thisRev)} — ירידה של ${Math.round(-delta * 100)}% לעומת אותה תקופה ב-${year - 1} (${rangeLabel} ${year - 1}, ${fmtMoneyHe(lastRev)}).`,
-          metric: Math.round(delta * 100)
+          message: `מחזור הלקוח ב-${rangeLabel} ${year} עמד על ${fmtMoneyHe(thisRev)} — ${dirWord} של ${Math.round(Math.abs(delta) * 100)}% לעומת אותה תקופה ב-${year - 1} (${rangeLabel} ${year - 1}, ${fmtMoneyHe(lastRev)}).`,
+          metric: Math.round(delta * 100),
+          breakdown: [{ label: rangeLabel + ' ' + year, value: Math.round(thisRev) }, { label: rangeLabel + ' ' + (year - 1), value: Math.round(lastRev) }]
         });
       }
     });
@@ -727,8 +865,9 @@ async function computeInsights(organizationId) {
     });
   }
 
-  // 19. quarter-over-quarter and quarter-over-same-quarter-last-year decline (uses the
-  // last fully completed quarter, to avoid comparing a partial in-progress quarter).
+  // 19. Rule 1b — quarter-over-quarter and quarter-over-same-quarter-last-year shift,
+  // bidirectional (uses the last fully completed quarter, to avoid comparing a partial
+  // in-progress quarter).
   {
     const curQStartMonth = quarterOf(nowDate) * 3;
     const lastCompletedQStart = new Date(nowDate.getFullYear(), curQStartMonth - 3, 1).getTime();
@@ -746,19 +885,21 @@ async function computeInsights(organizationId) {
       if (curQ <= 0) return;
       const priorQ = sum(priorQStart, priorQEnd);
       const yoyQ = sum(yoyQStart, yoyQEnd);
-      let basis, baseRev;
-      if (yoyQ >= params.quarterlyDecline_minBaseRevenue) { basis = `לרבעון המקביל אשתקד (${quarterLabel(yoyQStart)})`; baseRev = yoyQ; }
-      else if (priorQ >= params.quarterlyDecline_minBaseRevenue) { basis = `לרבעון הקודם (${quarterLabel(priorQStart)})`; baseRev = priorQ; }
+      let basis, baseRev, baseLabel;
+      if (yoyQ >= params.quarterlyDecline_minBaseRevenue) { basis = `לרבעון המקביל אשתקד (${quarterLabel(yoyQStart)})`; baseRev = yoyQ; baseLabel = quarterLabel(yoyQStart); }
+      else if (priorQ >= params.quarterlyDecline_minBaseRevenue) { basis = `לרבעון הקודם (${quarterLabel(priorQStart)})`; baseRev = priorQ; baseLabel = quarterLabel(priorQStart); }
       else return;
       const delta = (curQ - baseRev) / baseRev;
-      if (delta <= -params.quarterlyDecline_pctThreshold / 100) {
+      if (Math.abs(delta) >= params.quarterlyDecline_pctThreshold / 100) {
+        const dirWord = delta > 0 ? 'עלייה' : 'ירידה';
         insights.push({
-          type: 'quarterlyDecline',
-          severity: delta <= -params.quarterlyDecline_highPct / 100 ? 'high' : 'medium',
+          type: 'quarterlyRevenueShift',
+          severity: Math.abs(delta) >= params.quarterlyDecline_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
-          message: `מחזור הלקוח ב${quarterLabel(lastCompletedQStart)} עמד על ${fmtMoneyHe(curQ)} — ירידה של ${Math.round(-delta * 100)}% ביחס ${basis} (${fmtMoneyHe(baseRev)}).`,
-          metric: Math.round(delta * 100)
+          message: `מחזור הלקוח ב${quarterLabel(lastCompletedQStart)} עמד על ${fmtMoneyHe(curQ)} — ${dirWord} של ${Math.round(Math.abs(delta) * 100)}% ביחס ${basis} (${fmtMoneyHe(baseRev)}).`,
+          metric: Math.round(delta * 100),
+          breakdown: [{ label: quarterLabel(lastCompletedQStart), value: Math.round(curQ) }, { label: baseLabel, value: Math.round(baseRev) }]
         });
       }
     });
@@ -773,21 +914,24 @@ async function computeInsights(organizationId) {
     const members = centralGroups[centralName];
     if (members.length < centralMinGroup) return;
     const ids = members.map((c) => c.customerNumber).filter(Boolean);
-    const productCounts = {};
-    ids.forEach((id) => { Object.keys(custProducts[id] || {}).forEach((pid) => { productCounts[pid] = (productCounts[pid] || 0) + 1; }); });
-    const popularPids = Object.keys(productCounts).filter((pid) => productCounts[pid] >= Math.ceil(ids.length * centralPct) && !isProductInactive(prodIndex[pid]) && !isOutOfStock(pid));
+    const famCounts3 = {}, famRepPid3 = {};
+    ids.forEach((id) => { Object.keys(custProducts[id] || {}).forEach((pid) => { const f = famKey(pid); famCounts3[f] = (famCounts3[f] || 0) + 1; famRepPid3[f] = pid; }); });
+    const popularFams3 = Object.keys(famCounts3).filter((f) => famCounts3[f] >= Math.ceil(ids.length * centralPct) && !isFamilyInactive(famRepPid3[f]) && !isFamilyOutOfStock(famRepPid3[f]));
     ids.forEach((id) => {
-      const owned = custProducts[id] || {};
-      popularPids.forEach((pid) => {
-        if (owned[pid]) return;
+      const owned = custFamilyProducts[id] || {};
+      popularFams3.forEach((fam) => {
+        if (owned[fam]) return;
+        const pid = famRepPid3[fam];
+        const label = familyLabel(pid);
         insights.push({
           type: 'centralCustomerCrossSell',
           severity: 'low',
           customerId: id,
           customerName: custLabel(id),
           productCode: pid,
-          message: `${productCounts[pid]} מתוך ${ids.length} הסניפים תחת לקוח המרכז "${centralName}" רוכשים את ${prodLabel(pid)}, אך סניף זה לא — הזדמנות להציע גם כאן.`,
-          metric: productCounts[pid]
+          message: `${famCounts3[fam]} מתוך ${ids.length} הסניפים תחת לקוח המרכז "${centralName}" רוכשים את ${label}, אך סניף זה לא — הזדמנות להציע גם כאן.`,
+          metric: famCounts3[fam],
+          breakdown: [{ label: 'סניפים קונים', value: famCounts3[fam] }, { label: 'סה"כ סניפים', value: ids.length }]
         });
       });
     });
@@ -867,6 +1011,173 @@ async function computeInsights(organizationId) {
   }
   processUpcomingEvents(relCtx.holidays, 'holiday');
   processUpcomingEvents(relCtx.seasons, 'season');
+
+  // 23. Rule 2a — per-product(-family) quantity shift: is the customer buying
+  // meaningfully more or less of a specific product than before, even without
+  // stopping entirely (general policy 5: substitute purchases count together).
+  {
+    const winMs = params.productQty_windowDays * DAY_MS;
+    Object.keys(byCustomerFamily).forEach((key) => {
+      const idx = key.indexOf('|');
+      const cid = key.slice(0, idx);
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const events = byCustomerFamily[key];
+      const pid = events[events.length - 1].pid;
+      if (isFamilyInactive(pid)) return;
+      const curFrom = now - winMs;
+      const prevFrom = now - 2 * winMs;
+      const curQty = events.filter((e) => e.t > curFrom && e.t <= now).reduce((a, e) => a + e.qty, 0);
+      const prevQty = events.filter((e) => e.t > prevFrom && e.t <= curFrom).reduce((a, e) => a + e.qty, 0);
+      if (prevQty < params.productQty_minPriorQty) return;
+      const delta = (curQty - prevQty) / prevQty;
+      if (Math.abs(delta) < params.productQty_pctThreshold / 100) return;
+      const label = familyLabel(pid);
+      const dirWord = delta > 0 ? 'עלתה' : 'ירדה';
+      insights.push({
+        type: 'productQuantityShift',
+        severity: Math.abs(delta) >= params.productQty_highPct / 100 ? 'high' : 'medium',
+        customerId: cid,
+        customerName: custLabel(cid),
+        productCode: pid,
+        message: `הכמות שהלקוח קונה מ${label} ${dirWord} ב-${Math.round(Math.abs(delta) * 100)}%: ${Math.round(curQty)} יח' ב-${params.productQty_windowDays} הימים האחרונים (${fmtDateHe(curFrom)}–${fmtDateHe(now)}) לעומת ${Math.round(prevQty)} יח' בתקופה הקודמת (${fmtDateHe(prevFrom)}–${fmtDateHe(curFrom)}).${label.includes('/') ? ' (נספר כיחידה אחת עם המוצר התחליפי שלו.)' : ''}`,
+        metric: Math.round(delta * 100),
+        breakdown: [{ label: 'כמות אחרונה', value: Math.round(curQty) }, { label: 'כמות קודמת', value: Math.round(prevQty) }]
+      });
+    });
+  }
+
+  // 24. Rule 2e — per-product(-family) purchase frequency this year vs the same
+  // months last year (distinct months with a purchase), bidirectional.
+  {
+    const year = nowDate.getFullYear();
+    const lastCompletedMonth = Math.max(1, nowDate.getMonth());
+    const rangeLabel2 = MONTH_NAMES_HE[0] + '–' + MONTH_NAMES_HE[lastCompletedMonth - 1];
+    Object.keys(byCustomerFamily).forEach((key) => {
+      const idx = key.indexOf('|');
+      const cid = key.slice(0, idx);
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const events = byCustomerFamily[key];
+      const pid = events[events.length - 1].pid;
+      if (isFamilyInactive(pid)) return;
+      const thisMonths = new Set(), lastMonths = new Set();
+      events.forEach((e) => {
+        const d = new Date(e.t);
+        if (d.getFullYear() === year && d.getMonth() + 1 <= lastCompletedMonth) thisMonths.add(d.getMonth());
+        if (d.getFullYear() === year - 1 && d.getMonth() + 1 <= lastCompletedMonth) lastMonths.add(d.getMonth());
+      });
+      if (lastMonths.size < params.productFreqYoy_minPriorMonths) return;
+      const delta = (thisMonths.size - lastMonths.size) / lastMonths.size;
+      if (Math.abs(delta) < params.productFreqYoy_pctThreshold / 100) return;
+      const label = familyLabel(pid);
+      const dirWord = delta > 0 ? 'עלתה' : 'ירדה';
+      insights.push({
+        type: 'productFrequencyYoyShift',
+        severity: Math.abs(delta) >= params.productFreqYoy_highPct / 100 ? 'high' : 'medium',
+        customerId: cid,
+        customerName: custLabel(cid),
+        productCode: pid,
+        message: `תדירות הרכישה של ${label} ${dirWord}: נרכש ב-${thisMonths.size} חודשים שונים ב-${rangeLabel2} ${year}, לעומת ${lastMonths.size} חודשים באותה תקופה אשתקד.${label.includes('/') ? ' (נספר כיחידה אחת עם המוצר התחליפי שלו.)' : ''}`,
+        metric: Math.round(delta * 100),
+        breakdown: [{ label: rangeLabel2 + ' ' + year, value: thisMonths.size }, { label: rangeLabel2 + ' ' + (year - 1), value: lastMonths.size }]
+      });
+    });
+  }
+
+  // 25. Rule 2c — inconsistent purchase pattern for a product that's a meaningful
+  // share of the customer's revenue: an opportunity to establish a steadier order.
+  {
+    Object.keys(byCustomerFamily).forEach((key) => {
+      const idx = key.indexOf('|');
+      const cid = key.slice(0, idx);
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const events = byCustomerFamily[key].slice().sort((a, b) => a.t - b.t);
+      if (events.length < params.irregularity_minPurchases) return;
+      const pid = events[events.length - 1].pid;
+      if (isFamilyInactive(pid)) return;
+      const totalRev = (byCustomer[cid] || []).reduce((a, e) => a + e.rev, 0);
+      const famRev = events.reduce((a, e) => a + e.rev, 0);
+      if (totalRev <= 0 || (famRev / totalRev) * 100 < params.irregularity_minRevenueShare) return;
+      const gaps = [];
+      for (let i = 1; i < events.length; i++) gaps.push((events[i].t - events[i - 1].t) / DAY_MS);
+      const meanGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+      if (meanGap <= 0) return;
+      const variance = gaps.reduce((a, g) => a + Math.pow(g - meanGap, 2), 0) / gaps.length;
+      const cv = Math.sqrt(variance) / meanGap;
+      if (cv * 100 < params.irregularity_cvThreshold) return;
+      const label = familyLabel(pid);
+      insights.push({
+        type: 'purchaseIrregularity',
+        severity: cv * 100 >= params.irregularity_cvThreshold * 1.5 ? 'high' : 'low',
+        customerId: cid,
+        customerName: custLabel(cid),
+        productCode: pid,
+        message: `הלקוח קונה את ${label} באופן לא סדיר — המרווחים בין ${events.length} הרכישות האחרונות נעים סביב ${Math.round(meanGap)} ימים בממוצע, בפיזור גבוה (מקדם שונות ${Math.round(cv * 100)}%). מוצר זה מהווה ${Math.round((famRev / totalRev) * 100)}% ממחזור הלקוח — הזדמנות לייצב את קצב ההזמנה.${label.includes('/') ? ' (נספר כיחידה אחת עם המוצר התחליפי שלו.)' : ''}`,
+        metric: Math.round(cv * 100),
+        breakdown: [{ label: 'מקדם שונות', value: Math.round(cv * 100) }, { label: 'סף', value: params.irregularity_cvThreshold }]
+      });
+    });
+  }
+
+  // 26. Rule 2d (new) — recently adopted a product family it never bought before:
+  // a positive signal that a cross-sell/upsell effort worked.
+  {
+    const lookbackFrom = now - params.newProduct_lookbackDays * DAY_MS;
+    Object.keys(byCustomerFamily).forEach((key) => {
+      const idx = key.indexOf('|');
+      const cid = key.slice(0, idx);
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const events = byCustomerFamily[key];
+      const firstT = Math.min.apply(null, events.map((e) => e.t));
+      if (firstT < lookbackFrom) return;
+      const pid = events[events.length - 1].pid;
+      if (isFamilyInactive(pid)) return;
+      const recentRev = events.reduce((a, e) => a + e.rev, 0);
+      if (recentRev < params.newProduct_minRevenue) return;
+      const label = familyLabel(pid);
+      insights.push({
+        type: 'newProductAdopted',
+        severity: 'low',
+        customerId: cid,
+        customerName: custLabel(cid),
+        productCode: pid,
+        message: `הלקוח התחיל לרכוש את ${label} לראשונה ב-${params.newProduct_lookbackDays} הימים האחרונים (מאז ${fmtDateHe(firstT)}), בהיקף של ${fmtMoneyHe(recentRev)} — אימוץ מוצר חדש מוצלח.`,
+        metric: Math.round(recentRev),
+        breakdown: [{ label: 'מחזור מהמוצר החדש', value: Math.round(recentRev) }]
+      });
+    });
+  }
+
+  // 27. Rule 2d (new) — revenue concentration risk: most of the customer's business
+  // rides on very few products, a fragility worth knowing about even without a decline.
+  {
+    Object.keys(byCustomer).forEach((cid) => {
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const totalRev = byCustomer[cid].reduce((a, e) => a + e.rev, 0);
+      if (totalRev < params.concentration_minRevenue) return;
+      const famRevMap = {}, famRep = {};
+      byCustomer[cid].forEach((e) => { const f = famKey(e.pid); famRevMap[f] = (famRevMap[f] || 0) + e.rev; famRep[f] = e.pid; });
+      const sortedFams = Object.keys(famRevMap).map((f) => ({ fam: f, rev: famRevMap[f] })).sort((a, b) => b.rev - a.rev);
+      const top = sortedFams.slice(0, params.concentration_topN);
+      const topRev = top.reduce((a, x) => a + x.rev, 0);
+      const pct = (topRev / totalRev) * 100;
+      if (pct < params.concentration_pctThreshold) return;
+      const labels = top.map((x) => familyLabel(famRep[x.fam]));
+      insights.push({
+        type: 'productConcentrationRisk',
+        severity: pct >= 85 ? 'high' : 'medium',
+        customerId: cid,
+        customerName: custLabel(cid),
+        message: `${Math.round(pct)}% ממחזור הלקוח (${fmtMoneyHe(topRev)} מתוך ${fmtMoneyHe(totalRev)}) מגיע מ-${top.length} מוצרים בלבד: ${labels.join(', ')} — סיכון ריכוזיות; פגיעה באחד מהם עלולה לפגוע משמעותית בקשר עם הלקוח.`,
+        metric: Math.round(pct),
+        breakdown: top.map((x, i) => ({ label: labels[i], value: Math.round(x.rev) }))
+      });
+    });
+  }
 
   const sevRank = { high: 0, medium: 1, low: 2 };
   insights.sort((a, b) => sevRank[a.severity] - sevRank[b.severity] || Math.abs(b.metric) - Math.abs(a.metric));

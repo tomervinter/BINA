@@ -14,9 +14,14 @@ function sortInsights(rows) {
 
 // Insights are a generated snapshot, not a live computation — see the Insight model's
 // comment. GET just reads whatever the last "יצירת תובנות" run produced.
+function parseBreakdown(row) {
+  if (!row.breakdown) return { ...row, breakdown: null };
+  try { return { ...row, breakdown: JSON.parse(row.breakdown) }; } catch (err) { return { ...row, breakdown: null }; }
+}
+
 router.get('/', async (req, res) => {
   const rows = await prisma.insight.findMany({ where: { organizationId: req.user.organizationId } });
-  res.json(sortInsights(rows));
+  res.json(sortInsights(rows).map(parseBreakdown));
 });
 
 router.post('/generate', async (req, res) => {
@@ -33,7 +38,8 @@ router.post('/generate', async (req, res) => {
         customerName: i.customerName || null,
         productCode: i.productCode || null,
         message: i.message,
-        metric: i.metric
+        metric: i.metric,
+        breakdown: i.breakdown ? JSON.stringify(i.breakdown) : null
       }))
     })
   ]);

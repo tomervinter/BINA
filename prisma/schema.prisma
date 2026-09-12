@@ -160,6 +160,7 @@ model Insight {
   productCode    String?
   message        String
   metric         Float
+  breakdown      String?
   createdAt      DateTime     @default(now())
 
   @@index([organizationId])

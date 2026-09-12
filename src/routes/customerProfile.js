@@ -126,7 +126,10 @@ router.get('/:customerNumber', async (req, res) => {
     totalRevenue, totalQty, lastPurchase, typicalGapDays, curMonthActive,
     monthly, products: productRows,
     openInsightCount: insights.length,
-    insights: insights.map((i) => ({ type: i.type, severity: i.severity, message: i.message, productCode: i.productCode })),
+    insights: insights.map((i) => ({
+      type: i.type, severity: i.severity, message: i.message, productCode: i.productCode,
+      breakdown: (() => { try { return i.breakdown ? JSON.parse(i.breakdown) : null; } catch (err) { return null; } })()
+    })),
     primaryClass: { name: cust.primaryClass || '', avgRevenue: primaryClassAvg.avg, cohortSize: primaryClassAvg.size, gaps: primaryClassGaps.gaps },
     customerType: { name: cust.customerType || '', avgRevenue: customerTypeAvg.avg, cohortSize: customerTypeAvg.size, gaps: customerTypeGaps.gaps }
   });
