@@ -60,7 +60,10 @@ function createDataTable(container, columns, rows, opts) {
       (opts.tableKey ? '<button class="btn btn-ghost btn-sm js-resetColOrder" type="button">איפוס סדר עמודות</button>' : '') +
       '<span class="spacer"></span><button class="btn btn-success btn-sm js-exportBtn" type="button">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2"></rect><path d="M3.5 9.5h17M3.5 14.5h17M9.5 3.5v17"></path></svg>ייצוא לאקסל</button></div>';
-    html += '<div class="table-scroll"><table><thead><tr>';
+    const hasColWidths = columns.some((c) => c.width);
+    html += '<div class="table-scroll"><table' + (hasColWidths ? ' class="table-fixed"' : '') + '>';
+    if (hasColWidths) html += '<colgroup>' + columns.map((c) => '<col style="width:' + (c.width || 'auto') + '">').join('') + '</colgroup>';
+    html += '<thead><tr>';
     columns.forEach((col) => {
       const sortCls = state.sortCol === col.key ? (' sorted-' + state.sortDir) : '';
       html += '<th><span class="th-inner js-sortBtn' + sortCls + '" data-col="' + col.key + '"><span class="th-label">' + Layout.escapeHtml(col.label) + '</span>' +
@@ -79,7 +82,7 @@ function createDataTable(container, columns, rows, opts) {
         html += '<tr' + (opts.onRowClick ? ' class="row-clickable"' : '') + ' data-row-id="' + Layout.escapeHtml(rid) + '">';
         columns.forEach((col) => {
           const v = cellValue(col, row);
-          html += '<td>' + (col.html ? v : Layout.escapeHtml(v == null ? '' : v)) + '</td>';
+          html += '<td' + (col.wrap ? ' class="td-wrap"' : '') + '>' + (col.html ? v : Layout.escapeHtml(v == null ? '' : v)) + '</td>';
         });
         html += '</tr>';
       });

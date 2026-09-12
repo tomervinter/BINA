@@ -12,15 +12,15 @@ async function initInsightsPage() {
   products.forEach((p) => { prodName[p.itemCode] = p.name; });
 
   const columns = [
-    { key: 'category', label: 'קטגוריה', render: (r) => (TYPE_META[r.type] || {}).category || r.type },
-    { key: 'type', label: 'סוג', render: (r) => (TYPE_META[r.type] || {}).label || r.type },
-    { key: 'customerId', label: 'מספר לקוח', render: (r) => r.customerId || '' },
-    { key: 'customerName', label: 'לקוח', render: (r) => r.customerName || '' },
-    { key: 'entity', label: 'מוצר', render: (r) => r.productCode ? (prodName[r.productCode] || r.productCode) : '' },
-    { key: 'message', label: 'פירוט' },
-    { key: 'breakdown', label: 'הנתונים מאחורי התובנה', html: true, sortable: false, filterable: false, render: (r) => renderInsightBreakdown(r.breakdown) },
-    { key: 'severity', label: 'חומרה', html: true, render: (r) => '<span class="pill ' + (SEV_CLASS[r.severity] || 'pill-gray') + '">' + (SEV_LABEL[r.severity] || r.severity) + '</span>', filterValue: (r) => SEV_LABEL[r.severity] || r.severity, sortValue: (r) => ({ high: 0, medium: 1, low: 2 }[r.severity] ?? 3) },
-    { key: 'metric', label: 'מדד' }
+    { key: 'category', label: 'קטגוריה', width: '7%', render: (r) => (TYPE_META[r.type] || {}).category || r.type },
+    { key: 'type', label: 'סוג', width: '14%', wrap: true, render: (r) => (TYPE_META[r.type] || {}).label || r.type },
+    { key: 'customerId', label: 'מספר לקוח', width: '6%', render: (r) => r.customerId || '' },
+    { key: 'customerName', label: 'לקוח', width: '9%', wrap: true, render: (r) => r.customerName || '' },
+    { key: 'entity', label: 'מוצר', width: '9%', wrap: true, render: (r) => r.productCode ? (prodName[r.productCode] || r.productCode) : '' },
+    { key: 'message', label: 'פירוט', width: '24%', wrap: true },
+    { key: 'breakdown', label: 'הנתונים מאחורי התובנה', width: '15%', html: true, wrap: true, sortable: false, filterable: false, render: (r) => renderInsightBreakdown(r.breakdown) },
+    { key: 'severity', label: 'חומרה', width: '9%', html: true, render: (r) => '<span class="pill ' + (SEV_CLASS[r.severity] || 'pill-gray') + '">' + (SEV_LABEL[r.severity] || r.severity) + '</span>', filterValue: (r) => SEV_LABEL[r.severity] || r.severity, sortValue: (r) => ({ high: 0, medium: 1, low: 2 }[r.severity] ?? 3) },
+    { key: 'metric', label: 'מדד', width: '7%' }
   ];
 
   // Dashboard charts deep-link here as insights.html?type=<label> so a click lands
