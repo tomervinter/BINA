@@ -235,6 +235,24 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .cp-period-form input[type=month]{width:auto;margin-bottom:0;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--surface-2);color:var(--text);}
 .kpi-tile{background:var(--surface-2);border-radius:var(--radius-s);padding:14px 16px;}
 .kpi-tile .kpi-label{font-size:11.5px;color:var(--text-faint);margin-bottom:4px;}
+
+/* ---------- Dashboard filter row (customer search + period pickers, one row) ---------- */
+.dash-filter-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:8px;}
+.dash-filter-field{display:flex;align-items:center;gap:8px;}
+.dash-filter-customer{flex:0 1 240px;min-width:180px;}
+.dash-filter-customer input{margin-bottom:0;}
+
+/* ---------- Month multi-select dropdown ---------- */
+.mms{position:relative;display:inline-block;}
+.mms-toggle{min-width:150px;max-width:220px;text-align:start;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mms-toggle:hover{border-color:var(--accent);}
+.mms-panel{position:absolute;top:calc(100% + 4px);right:0;z-index:20;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-card);padding:10px;max-height:280px;overflow-y:auto;min-width:190px;}
+.mms-year-group{margin-bottom:8px;}
+.mms-year-group:last-child{margin-bottom:0;}
+.mms-year-label{font-weight:800;font-size:12px;color:var(--text-faint);margin-bottom:4px;padding:0 6px;}
+.mms-option{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:6px;font-size:12.5px;color:var(--text);cursor:pointer;white-space:nowrap;}
+.mms-option:hover{background:var(--surface-2);}
+.mms-option input{margin:0;}
 .kpi-tile .kpi-value{font-size:19px;font-weight:800;position:static;}
 .chip{display:inline-flex;align-items:center;padding:4px 12px;border-radius:99px;background:var(--surface-2);font-size:12px;font-weight:700;margin-left:6px;}
 .section-title{font-size:14px;font-weight:800;margin:22px 0 10px;}

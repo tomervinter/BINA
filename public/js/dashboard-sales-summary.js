@@ -54,14 +54,66 @@ function deltaNote(current, compareVal, compareLabel) {
   return ' (' + sign + Math.round(delta) + '% לעומת ' + compareLabel + ')';
 }
 
+// Month-over-month indicator for the trend bar charts: a small arrow + % above each
+// bar (₪ delta shown on hover, to keep the chart itself uncluttered), computed only
+// for months that have fully ended — a still-in-progress month's total is partial,
+// so comparing it would be misleading. `getMonthMeta(datasetIndex, dataIndex)` must
+// return the {year, month} that data point represents, or null/undefined to skip it.
+function computeMomInfo(datasets, getMonthMeta) {
+  const now = new Date();
+  return datasets.map((ds, dsIndex) => ds.data.map((val, i) => {
+    if (i === 0) return null; // no prior point in this series to compare against
+    const prev = ds.data[i - 1];
+    if (!prev) return null;
+    const mInfo = getMonthMeta(dsIndex, i);
+    if (!mInfo || new Date(mInfo.year, mInfo.month, 1) > now) return null;
+    const delta = (val - prev) / prev;
+    if (!isFinite(delta) || delta === 0) return null;
+    return { pct: Math.round(delta * 100), moneyDiff: Math.round(val - prev), up: delta > 0 };
+  }));
+}
+
+function momDrawPlugin(momInfo) {
+  return {
+    id: 'momIndicator',
+    afterDatasetsDraw(chart) {
+      const ctx = chart.ctx;
+      chart.data.datasets.forEach((ds, dsIndex) => {
+        const meta = chart.getDatasetMeta(dsIndex);
+        if (meta.hidden) return;
+        (momInfo[dsIndex] || []).forEach((info, i) => {
+          if (!info) return;
+          const bar = meta.data[i];
+          if (!bar) return;
+          const props = bar.getProps(['x', 'y'], true);
+          ctx.save();
+          ctx.font = '700 10px Assistant, Arial, sans-serif';
+          ctx.fillStyle = info.up ? '#1E9E5C' : '#DE4B4B';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText((info.up ? '▲' : '▼') + (info.up ? '+' : '') + info.pct + '%', props.x, props.y - 4);
+          ctx.restore();
+        });
+      });
+    }
+  };
+}
+
+function momTooltipAfterLabel(momInfo) {
+  return (tooltipItem) => {
+    const info = momInfo[tooltipItem.datasetIndex] && momInfo[tooltipItem.datasetIndex][tooltipItem.dataIndex];
+    if (!info) return undefined;
+    const sign = info.up ? '+' : '';
+    return 'שינוי מהחודש הקודם: ' + sign + info.pct + '% (' + sign + info.moneyDiff.toLocaleString('he-IL') + '₪)';
+  };
+}
+
 async function loadDashboardSalesSummary(filters) {
   filters = filters || {};
   const qs = new URLSearchParams();
   if (filters.customer) qs.set('customerNumber', filters.customer);
-  if (filters.periodFrom) qs.set('periodFrom', filters.periodFrom);
-  if (filters.periodTo) qs.set('periodTo', filters.periodTo);
-  if (filters.compareFrom) qs.set('compareFrom', filters.compareFrom);
-  if (filters.compareTo) qs.set('compareTo', filters.compareTo);
+  if (filters.periodMonths && filters.periodMonths.length) qs.set('periodMonths', filters.periodMonths.join(','));
+  if (filters.compareMonths && filters.compareMonths.length) qs.set('compareMonths', filters.compareMonths.join(','));
   const q = qs.toString();
   const res = await fetch('/api/dashboard-sales-summary' + (q ? '?' + q : ''), { credentials: 'include' });
   if (!res.ok) return;
@@ -74,7 +126,7 @@ async function loadDashboardSalesSummary(filters) {
     document.getElementById('monthlyTrendTitle').textContent = 'השוואת תקופות' + suffix;
     document.getElementById('monthlyTrendSubtitle').textContent =
       'התקופה ' + s.period.label + (s.comparePeriod ? ' לעומת ' + s.comparePeriod.label : '') +
-      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא.';
+      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. ▲/▼ מציינים שינוי לעומת החודש הקודם (לחודשים שהסתיימו בלבד; פרטים בריחוף).';
     document.getElementById('salesSummaryTitle').textContent = 'תמונת מכירות — ' + s.period.label + suffix;
     document.getElementById('salesSummarySubtitle').textContent = 'מבוסס על שורות המכירה בתקופה ' + s.period.label + (s.customerNumber ? (' של ' + s.customerName) : '') + '. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.';
   } else {
@@ -82,7 +134,7 @@ async function loadDashboardSalesSummary(filters) {
     document.getElementById('monthlyTrendTitle').textContent = (years.length > 1 ? 'השוואת מחזור חודשי בין השנים' : 'מחזור מכירות לפי חודשים') + suffix;
     document.getElementById('monthlyTrendSubtitle').textContent =
       (years.length > 1 ? 'השוואה חודשית בין ' + years.join(', ') : 'נתוני שנת ' + years[0]) +
-      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא.';
+      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. ▲/▼ מציינים שינוי לעומת החודש הקודם (לחודשים שהסתיימו בלבד; פרטים בריחוף).';
     document.getElementById('salesSummaryTitle').textContent = (s.customerNumber ? 'תמונת מכירות — הלקוח הנבחר' : 'תמונת מכירות כוללת');
     document.getElementById('salesSummarySubtitle').textContent = s.customerNumber
       ? ('מבוסס על שורות המכירה של ' + s.customerName + ' בלבד. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.')
@@ -117,12 +169,21 @@ async function loadDashboardSalesSummary(filters) {
     const labels = Array.from({ length: n }, (_, i) => 'חודש ' + (i + 1));
     const datasets = [{ label: pt.periodLabel, data: pt.periodData, backgroundColor: DASH_BLUE, borderRadius: 4 }];
     if (pt.compareData) datasets.push({ label: pt.compareLabel, data: pt.compareData, backgroundColor: DASH_NAVY, borderRadius: 4 });
+    const ptMomInfo = computeMomInfo(datasets, (dsIndex, i) => {
+      const months = dsIndex === 0 ? pt.periodMonths : pt.compareMonths;
+      return months ? months[i] : null;
+    });
     upsertChart('monthlyTrendChart', {
       type: 'bar',
       data: { labels, datasets },
+      plugins: [momDrawPlugin(ptMomInfo)],
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } },
+        layout: { padding: { top: 18 } },
+        plugins: {
+          legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } },
+          tooltip: { callbacks: { afterLabel: momTooltipAfterLabel(ptMomInfo) } }
+        },
         scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
@@ -138,20 +199,24 @@ async function loadDashboardSalesSummary(filters) {
   } else {
     // Year-over-year monthly revenue trend, one bar series per calendar year that has
     // data — click a bar to see that year+month's rows in the full report.
+    const yearlyDatasets = s.yearlyTrend.map((yr, i) => ({
+      label: String(yr.year),
+      data: yr.data,
+      backgroundColor: YEAR_SERIES_COLORS[(s.yearlyTrend.length - 1 - i) % YEAR_SERIES_COLORS.length],
+      borderRadius: 4
+    }));
+    const yearlyMomInfo = computeMomInfo(yearlyDatasets, (dsIndex, i) => ({ year: s.yearlyTrend[dsIndex].year, month: i + 1 }));
     upsertChart('monthlyTrendChart', {
       type: 'bar',
-      data: {
-        labels: s.monthNames,
-        datasets: s.yearlyTrend.map((yr, i) => ({
-          label: String(yr.year),
-          data: yr.data,
-          backgroundColor: YEAR_SERIES_COLORS[(s.yearlyTrend.length - 1 - i) % YEAR_SERIES_COLORS.length],
-          borderRadius: 4
-        }))
-      },
+      data: { labels: s.monthNames, datasets: yearlyDatasets },
+      plugins: [momDrawPlugin(yearlyMomInfo)],
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } },
+        layout: { padding: { top: 18 } },
+        plugins: {
+          legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } },
+          tooltip: { callbacks: { afterLabel: momTooltipAfterLabel(yearlyMomInfo) } }
+        },
         scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
@@ -228,9 +293,7 @@ async function loadDashboardSalesSummary(filters) {
   const params = new URLSearchParams(window.location.search);
   loadDashboardSalesSummary({
     customer: params.get('customer') || null,
-    periodFrom: params.get('periodFrom') || '',
-    periodTo: params.get('periodTo') || '',
-    compareFrom: params.get('compareFrom') || '',
-    compareTo: params.get('compareTo') || ''
+    periodMonths: (params.get('periodMonths') || '').split(',').filter(Boolean),
+    compareMonths: (params.get('compareMonths') || '').split(',').filter(Boolean)
   });
 })();

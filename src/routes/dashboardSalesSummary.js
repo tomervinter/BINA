@@ -7,35 +7,38 @@ router.use(requireAuth);
 
 const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
-// Parses a "YYYY-MM" pair (from <input type="month">) into an exclusive-end date
-// range covering every day of every month from `from` through `to` inclusive.
-function parseMonthRange(from, to) {
-  if (!from || !to) return null;
-  const [fy, fm] = String(from).split('-').map(Number);
-  const [ty, tm] = String(to).split('-').map(Number);
-  if (!fy || !fm || !ty || !tm) return null;
-  const start = new Date(fy, fm - 1, 1);
-  const end = new Date(ty, tm, 1); // exclusive
-  if (!(start < end)) return null;
-  return { start, end };
-}
-
-function monthsInRange(start, end) {
-  const months = [];
-  let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
-  while (cursor < end && months.length < 120) { // safety valve against malformed ranges
-    months.push({ year: cursor.getFullYear(), month: cursor.getMonth() + 1 });
-    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-  }
+// Parses a comma-separated "YYYY-MM,YYYY-MM,..." list (from the dashboard's month
+// multi-select — see month-multiselect.js) into a sorted array of {year, month},
+// deduplicated. The set need not be contiguous — a "period" can be any hand-picked
+// set of months, not just a range.
+function parseMonthList(str) {
+  if (!str) return null;
+  const seen = new Set();
+  const months = String(str).split(',').map((s) => s.trim()).filter(Boolean)
+    .map((s) => {
+      const [y, m] = s.split('-').map(Number);
+      return (y && m >= 1 && m <= 12) ? { year: y, month: m } : null;
+    })
+    .filter((m) => m && !seen.has(m.year + '-' + m.month) && seen.add(m.year + '-' + m.month));
+  if (!months.length) return null;
+  months.sort((a, b) => a.year - b.year || a.month - b.month);
   return months;
 }
 
-function rangeLabel(months) {
+// Builds a Prisma OR-of-date-ranges condition matching exactly the given months.
+function monthsWhereClause(months) {
+  return {
+    OR: months.map(({ year, month }) => ({
+      date: { gte: new Date(year, month - 1, 1), lt: new Date(year, month, 1) }
+    }))
+  };
+}
+
+function monthsLabel(months) {
   if (!months.length) return '';
+  if (months.length <= 3) return months.map((m) => MONTH_NAMES[m.month - 1] + ' ' + m.year).join(', ');
   const f = months[0], l = months[months.length - 1];
-  const fLabel = MONTH_NAMES[f.month - 1] + ' ' + f.year;
-  if (months.length === 1) return fLabel;
-  return fLabel + '–' + MONTH_NAMES[l.month - 1] + ' ' + l.year;
+  return months.length + ' חודשים (' + MONTH_NAMES[f.month - 1] + ' ' + f.year + '–' + MONTH_NAMES[l.month - 1] + ' ' + l.year + ')';
 }
 
 // Dashboard infographic data, sourced from the same sales-full-report consolidation.
@@ -45,10 +48,10 @@ function rangeLabel(months) {
 //
 // Optional filters, all combinable:
 // - ?customerNumber= scopes every aggregation to that one customer's sales.
-// - ?periodFrom=&periodTo= (each "YYYY-MM") scopes every number on the dashboard to
-//   that month range instead of all-time.
-// - ?compareFrom=&compareTo= (only meaningful together with a period) adds a second,
-//   comparison-period set of totals and a second trend series alongside the period's.
+// - ?periodMonths= (comma-separated "YYYY-MM" values) scopes every number on the
+//   dashboard to that set of months instead of all-time.
+// - ?compareMonths= (only meaningful together with periodMonths) adds a second,
+//   comparison set of totals and a second trend series alongside the period's.
 // Every filter is folded into the same organizationId-scoped where clause used
 // everywhere else, so values from another organization simply match nothing.
 router.get('/', async (req, res) => {
@@ -56,10 +59,10 @@ router.get('/', async (req, res) => {
   const customerNumber = req.query.customerNumber ? String(req.query.customerNumber) : null;
   const baseWhere = customerNumber ? { organizationId, customerNumber } : { organizationId };
 
-  const period = parseMonthRange(req.query.periodFrom, req.query.periodTo);
-  const compare = period ? parseMonthRange(req.query.compareFrom, req.query.compareTo) : null;
-  const where = period ? Object.assign({}, baseWhere, { date: { gte: period.start, lt: period.end } }) : baseWhere;
-  const compareWhere = compare ? Object.assign({}, baseWhere, { date: { gte: compare.start, lt: compare.end } }) : null;
+  const period = parseMonthList(req.query.periodMonths);
+  const compare = period ? parseMonthList(req.query.compareMonths) : null;
+  const where = period ? { AND: [baseWhere, monthsWhereClause(period)] } : baseWhere;
+  const compareWhere = compare ? { AND: [baseWhere, monthsWhereClause(compare)] } : null;
 
   const queries = [
     prisma.sale.aggregate({ where, _sum: { revenue: true, quantity: true } }),
@@ -111,20 +114,18 @@ router.get('/', async (req, res) => {
 
   let yearlyTrend = null, periodTrend = null;
   if (period) {
-    // Period mode: one series for the chosen period, and (if given) a second for the
-    // comparison period, aligned by relative month position (month 1 of period vs
-    // month 1 of comparison, etc.) rather than by calendar month — a period can span
-    // any range, not just a full Jan–Dec year, and the two ranges are usually offset
-    // by design (e.g. this quarter vs the same quarter last year).
-    const periodMonths = monthsInRange(period.start, period.end);
-    const compareMonths = compare ? monthsInRange(compare.start, compare.end) : null;
+    // Period mode: one series for the chosen months, and (if given) a second for the
+    // comparison months, aligned by relative position (1st selected period month vs
+    // 1st selected comparison month, etc.) rather than by calendar month — the set
+    // need not be contiguous, and the two sets are usually offset by design (e.g.
+    // this quarter's months vs the same quarter last year).
     periodTrend = {
-      periodMonths,
-      periodLabel: rangeLabel(periodMonths),
-      periodData: monthlyRevenue(trendRows, periodMonths),
-      compareMonths,
-      compareLabel: compareMonths ? rangeLabel(compareMonths) : null,
-      compareData: compareMonths ? monthlyRevenue(compareTrendRows, compareMonths) : null
+      periodMonths: period,
+      periodLabel: monthsLabel(period),
+      periodData: monthlyRevenue(trendRows, period),
+      compareMonths: compare,
+      compareLabel: compare ? monthsLabel(compare) : null,
+      compareData: compare ? monthlyRevenue(compareTrendRows, compare) : null
     };
   } else {
     // Default mode: one 12-value (Jan–Dec) series per calendar year that actually has
@@ -145,8 +146,8 @@ router.get('/', async (req, res) => {
   res.json({
     customerNumber,
     customerName: customerNumber ? ((custMap[customerNumber] && custMap[customerNumber].name) || customerNumber) : null,
-    period: period ? { from: req.query.periodFrom, to: req.query.periodTo, label: rangeLabel(monthsInRange(period.start, period.end)) } : null,
-    comparePeriod: compare ? { from: req.query.compareFrom, to: req.query.compareTo, label: rangeLabel(monthsInRange(compare.start, compare.end)) } : null,
+    period: period ? { months: period.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(period) } : null,
+    comparePeriod: compare ? { months: compare.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(compare) } : null,
     totalRevenue: totalAgg._sum.revenue || 0,
     totalQuantity: totalAgg._sum.quantity || 0,
     activeCustomerCount: byCust.length,

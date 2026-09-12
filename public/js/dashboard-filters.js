@@ -1,16 +1,14 @@
 // Combined dashboard filter controls: the quick customer search plus a period and
-// comparison-period picker, all synced to the URL query string and driving one call
-// to loadDashboardSalesSummary (dashboard-sales-summary.js) whenever any of them
-// change, so a refresh or a shared link reproduces the exact same filtered view.
+// comparison-period month multi-select, all synced to the URL query string and
+// driving one call to loadDashboardSalesSummary (dashboard-sales-summary.js)
+// whenever any of them change, so a refresh or a shared link reproduces the exact
+// same filtered view. A "period" is an arbitrary set of selected months, not
+// necessarily contiguous — see month-multiselect.js.
 async function initDashboardFilters() {
   const custInput = document.getElementById('dashCustomerSearch');
   if (!custInput) return;
   const custDatalist = document.getElementById('dashCustomerList');
   const custClearBtn = document.getElementById('dashClearCustomerFilter');
-  const periodFromEl = document.getElementById('dashPeriodFrom');
-  const periodToEl = document.getElementById('dashPeriodTo');
-  const compareFromEl = document.getElementById('dashCompareFrom');
-  const compareToEl = document.getElementById('dashCompareTo');
   const periodClearBtn = document.getElementById('dashClearPeriodFilter');
   const subtitle = document.getElementById('dashFilterSubtitle');
 
@@ -27,17 +25,15 @@ async function initDashboardFilters() {
   const urlParams = new URLSearchParams(window.location.search);
   const state = {
     customer: urlParams.get('customer') || null,
-    periodFrom: urlParams.get('periodFrom') || '',
-    periodTo: urlParams.get('periodTo') || '',
-    compareFrom: urlParams.get('compareFrom') || '',
-    compareTo: urlParams.get('compareTo') || ''
+    periodMonths: (urlParams.get('periodMonths') || '').split(',').filter(Boolean),
+    compareMonths: (urlParams.get('compareMonths') || '').split(',').filter(Boolean)
   };
 
   function syncUrl() {
     const url = new URL(window.location.href);
-    ['customer', 'periodFrom', 'periodTo', 'compareFrom', 'compareTo'].forEach((key) => {
-      if (state[key]) url.searchParams.set(key, state[key]); else url.searchParams.delete(key);
-    });
+    if (state.customer) url.searchParams.set('customer', state.customer); else url.searchParams.delete('customer');
+    if (state.periodMonths.length) url.searchParams.set('periodMonths', state.periodMonths.join(',')); else url.searchParams.delete('periodMonths');
+    if (state.compareMonths.length) url.searchParams.set('compareMonths', state.compareMonths.join(',')); else url.searchParams.delete('compareMonths');
     window.history.replaceState(null, '', url.pathname + url.search);
   }
 
@@ -49,18 +45,13 @@ async function initDashboardFilters() {
       custInput.value = '';
       custClearBtn.style.display = 'none';
     }
-    periodFromEl.value = state.periodFrom;
-    periodToEl.value = state.periodTo;
-    compareFromEl.value = state.compareFrom;
-    compareToEl.value = state.compareTo;
-    const periodActive = !!(state.periodFrom && state.periodTo);
+    const periodActive = state.periodMonths.length > 0;
     periodClearBtn.style.display = periodActive ? '' : 'none';
 
     const parts = [];
     if (state.customer && nameByCode[state.customer]) parts.push('הלקוח ' + nameByCode[state.customer]);
     if (periodActive) {
-      parts.push('התקופה ' + state.periodFrom + ' עד ' + state.periodTo +
-        (state.compareFrom && state.compareTo ? ' (בהשוואה ל-' + state.compareFrom + ' עד ' + state.compareTo + ')' : ''));
+      parts.push('התקופה שנבחרה' + (state.compareMonths.length ? ' (בהשוואה לתקופה נוספת)' : ''));
     }
     subtitle.textContent = parts.length
       ? ('הדשבורד מציג כרגע רק את הנתונים של ' + parts.join(' ו') + '.')
@@ -71,6 +62,7 @@ async function initDashboardFilters() {
     syncUrl();
     updateUi();
     loadDashboardSalesSummary(state);
+    if (window.refreshDashboardTopInsights) window.refreshDashboardTopInsights(state);
   }
 
   function selectCustomerFromInput() {
@@ -83,17 +75,22 @@ async function initDashboardFilters() {
   custInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') selectCustomerFromInput(); });
   custClearBtn.addEventListener('click', () => { state.customer = null; apply(); });
 
-  [periodFromEl, periodToEl, compareFromEl, compareToEl].forEach((el) => {
-    el.addEventListener('change', () => {
-      state.periodFrom = periodFromEl.value;
-      state.periodTo = periodToEl.value;
-      state.compareFrom = compareFromEl.value;
-      state.compareTo = compareToEl.value;
-      apply();
-    });
+  createMonthMultiSelect('dashPeriodPicker', {
+    placeholder: 'בחרו חודשים...',
+    initial: state.periodMonths,
+    onChange: (months) => { state.periodMonths = months; apply(); }
   });
+  createMonthMultiSelect('dashComparePicker', {
+    placeholder: 'בחרו חודשים...',
+    initial: state.compareMonths,
+    onChange: (months) => { state.compareMonths = months; apply(); }
+  });
+
   periodClearBtn.addEventListener('click', () => {
-    state.periodFrom = ''; state.periodTo = ''; state.compareFrom = ''; state.compareTo = '';
+    state.periodMonths = []; state.compareMonths = [];
+    document.dispatchEvent(new Event('click')); // closes any open picker panel
+    createMonthMultiSelect('dashPeriodPicker', { placeholder: 'בחרו חודשים...', initial: [], onChange: (m) => { state.periodMonths = m; apply(); } });
+    createMonthMultiSelect('dashComparePicker', { placeholder: 'בחרו חודשים...', initial: [], onChange: (m) => { state.compareMonths = m; apply(); } });
     apply();
   });
 
