@@ -47,8 +47,8 @@
       columns: [
         { key: 'sku', label: 'מק"ט' },
         { key: 'productName', label: 'שם מוצר' },
-        { key: 'date', label: 'תאריך', render: (r) => fmtDate(r.date), filterable: false },
-        { key: 'stock', label: 'מלאי', filterable: false }
+        { key: 'date', label: 'תאריך', render: (r) => fmtDate(r.date) },
+        { key: 'stock', label: 'מלאי' }
       ]
     });
   </script>

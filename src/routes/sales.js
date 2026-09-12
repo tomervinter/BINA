@@ -1,84 +1,96 @@
 const express = require('express');
 const multer = require('multer');
+const { Prisma } = require('@prisma/client');
 const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer, parseNumber } = require('../lib/csv');
-const { parseListQuery } = require('../lib/listQuery');
 const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
 const { replaceAll } = require('../lib/bulkInsert');
+const { buildFilterClauses, parseRawListQuery } = require('../lib/rawFilter');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(requireAuth);
 
-const SORTABLE = ['customerNumber', 'productCode', 'date', 'quantity', 'revenue', 'weight'];
-const FILTERABLE = ['customerNumber', 'productCode'];
 const MAX_EXPORT_ROWS = 100000;
-const EXPORT_COLUMNS = [
-  { key: 'customerNumber', label: 'מספר לקוח' },
-  { key: 'customerName', label: 'שם לקוח' },
-  { key: 'productCode', label: 'קוד פריט' },
-  { key: 'productName', label: 'שם פריט' },
-  { key: 'year', label: 'שנה', value: (r) => new Date(r.date).getFullYear() },
-  { key: 'month', label: 'חודש', value: (r) => new Date(r.date).getMonth() + 1 },
-  { key: 'revenue', label: 'מכר כספי' },
-  { key: 'quantity', label: 'מכר כמותי' },
-  { key: 'weight', label: 'משקל' }
-];
 
-// Sale rows only store the customer/product code (the master tables are the single
-// source of truth for names, wholesale-replaced on every master upload) — join in
-// the display name for the current page/export rather than denormalizing it onto Sale.
-async function attachNames(rows, organizationId) {
-  const customerNumbers = Array.from(new Set(rows.map((r) => r.customerNumber)));
-  const productCodes = Array.from(new Set(rows.map((r) => r.productCode)));
-  const [customers, products] = await Promise.all([
-    prisma.customer.findMany({ where: { organizationId, customerNumber: { in: customerNumbers } }, select: { customerNumber: true, name: true } }),
-    prisma.product.findMany({ where: { organizationId, itemCode: { in: productCodes } }, select: { itemCode: true, name: true } })
-  ]);
-  const custNameByNumber = {};
-  customers.forEach((c) => { custNameByNumber[c.customerNumber] = c.name; });
-  const prodNameByCode = {};
-  products.forEach((p) => { prodNameByCode[p.itemCode] = p.name; });
-  return rows.map((r) => ({
-    ...r,
-    customerName: custNameByNumber[r.customerNumber] || '',
-    productName: prodNameByCode[r.productCode] || ''
-  }));
+// A real SQL LEFT JOIN (not the in-JS per-page join used elsewhere) so every column —
+// including the customer/product names, and the numeric/date ones — is sortable and
+// filterable at the database level, not just customerNumber/productCode.
+const COLUMNS = {
+  customerNumber: { sql: 's."customerNumber"', type: 'text' },
+  customerName: { sql: 'c."name"', type: 'text' },
+  productCode: { sql: 's."productCode"', type: 'text' },
+  productName: { sql: 'p."name"', type: 'text' },
+  year: { sql: 's."date"', type: 'year' },
+  month: { sql: 's."date"', type: 'month' },
+  revenue: { sql: 's."revenue"', type: 'number' },
+  quantity: { sql: 's."quantity"', type: 'number' },
+  weight: { sql: 's."weight"', type: 'number' }
+};
+
+const SELECT_SQL = Prisma.raw(`
+  s."customerNumber" AS "customerNumber", c."name" AS "customerName",
+  s."productCode" AS "productCode", p."name" AS "productName",
+  s."date" AS "date", s."revenue" AS "revenue", s."quantity" AS "quantity", s."weight" AS "weight"
+`);
+
+const JOIN_SQL = Prisma.raw(`
+  FROM "Sale" s
+  LEFT JOIN "Customer" c ON c."organizationId" = s."organizationId" AND c."customerNumber" = s."customerNumber"
+  LEFT JOIN "Product" p ON p."organizationId" = s."organizationId" AND p."itemCode" = s."productCode"
+`);
+
+function buildWhere(organizationId, filters) {
+  const clauses = [Prisma.sql`s."organizationId" = ${organizationId}`, ...buildFilterClauses(COLUMNS, filters)];
+  return Prisma.join(clauses, ' AND ');
 }
 
-// Sales can run into the hundreds of thousands of rows, so filtering is limited to the
-// text columns (customerNumber/productCode) — DB-level substring search on numbers/dates
-// isn't practical at that scale, but sorting is still supported on every column.
+function orderSqlFor(sortBy, sortDir) {
+  const colSql = sortBy === 'date' ? 's."date"' : COLUMNS[sortBy].sql;
+  return Prisma.raw(`${colSql} ${sortDir}`);
+}
+
+function normalizeRow(r) {
+  return { ...r, revenue: Number(r.revenue) || 0, quantity: Number(r.quantity) || 0, weight: r.weight == null ? null : Number(r.weight) };
+}
+
 router.get('/', async (req, res) => {
-  const { page, pageSize, sortBy, sortDir, where, skip, take } = parseListQuery(req, {
-    sortableFields: SORTABLE,
-    filterableFields: FILTERABLE,
-    defaultSort: { field: 'date', dir: 'desc' }
-  });
-  const fullWhere = { organizationId: req.user.organizationId, ...where };
-  const [rawRows, total] = await Promise.all([
-    prisma.sale.findMany({ where: fullWhere, orderBy: { [sortBy]: sortDir }, skip, take }),
-    prisma.sale.count({ where: fullWhere })
+  const organizationId = req.user.organizationId;
+  const { page, pageSize, filters, sortBy, sortDir } = parseRawListQuery(req, COLUMNS, 'date');
+  const whereSql = buildWhere(organizationId, filters);
+  const orderSql = orderSqlFor(sortBy, sortDir);
+  const skip = (page - 1) * pageSize;
+
+  const [rows, countRows] = await Promise.all([
+    prisma.$queryRaw`SELECT ${SELECT_SQL} ${JOIN_SQL} WHERE ${whereSql} ORDER BY ${orderSql} LIMIT ${pageSize} OFFSET ${skip}`,
+    prisma.$queryRaw`SELECT COUNT(*) AS "count" ${JOIN_SQL} WHERE ${whereSql}`
   ]);
-  const rows = await attachNames(rawRows, req.user.organizationId);
-  res.json({ rows, total, page, pageSize });
+  res.json({ rows: rows.map(normalizeRow), total: Number(countRows[0].count), page, pageSize });
 });
 
 router.get('/export', async (req, res) => {
-  const { sortBy, sortDir, where } = parseListQuery(req, {
-    sortableFields: SORTABLE,
-    filterableFields: FILTERABLE,
-    defaultSort: { field: 'date', dir: 'desc' }
-  });
-  const rawRows = await prisma.sale.findMany({
-    where: { organizationId: req.user.organizationId, ...where },
-    orderBy: { [sortBy]: sortDir },
-    take: MAX_EXPORT_ROWS
-  });
-  const rows = await attachNames(rawRows, req.user.organizationId);
-  const buffer = rowsToXlsxBuffer(EXPORT_COLUMNS, rows);
+  const organizationId = req.user.organizationId;
+  const { filters, sortBy, sortDir } = parseRawListQuery(req, COLUMNS, 'date');
+  const whereSql = buildWhere(organizationId, filters);
+  const orderSql = orderSqlFor(sortBy, sortDir);
+
+  const rawRows = await prisma.$queryRaw`SELECT ${SELECT_SQL} ${JOIN_SQL} WHERE ${whereSql} ORDER BY ${orderSql} LIMIT ${MAX_EXPORT_ROWS}`;
+  const rows = rawRows.map(normalizeRow);
+
+  const exportColumns = [
+    { key: 'customerNumber', label: 'מספר לקוח' },
+    { key: 'customerName', label: 'שם לקוח' },
+    { key: 'productCode', label: 'קוד פריט' },
+    { key: 'productName', label: 'שם פריט' },
+    { key: 'year', label: 'שנה', value: (r) => new Date(r.date).getFullYear() },
+    { key: 'month', label: 'חודש', value: (r) => new Date(r.date).getMonth() + 1 },
+    { key: 'revenue', label: 'מכר כספי' },
+    { key: 'quantity', label: 'מכר כמותי' },
+    { key: 'weight', label: 'משקל' }
+  ];
+  const buffer = rowsToXlsxBuffer(exportColumns, rows);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="sales.xlsx"');
   res.send(buffer);

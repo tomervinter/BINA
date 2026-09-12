@@ -23,7 +23,7 @@
 
       <div class="card">
         <div class="card-title">בסיס נתוני המכירות</div>
-        <p style="color:var(--text-muted);font-size:12.5px;margin:0 0 10px;">ניתן לסנן לפי מספר לקוח וקוד פריט; מיון עובד על כל העמודות.</p>
+        <p style="color:var(--text-muted);font-size:12.5px;margin:0 0 10px;">ניתן לסנן ולמיין לפי כל עמודה בנפרד.</p>
         <div id="tableContainer"></div>
       </div>
     </main>
@@ -42,14 +42,14 @@
       defaultSort: { field: 'date', dir: 'desc' },
       columns: [
         { key: 'customerNumber', label: 'מספר לקוח' },
-        { key: 'customerName', label: 'שם לקוח', sortable: false, filterable: false },
+        { key: 'customerName', label: 'שם לקוח' },
         { key: 'productCode', label: 'קוד פריט' },
-        { key: 'productName', label: 'שם פריט', sortable: false, filterable: false },
-        { key: 'year', label: 'שנה', sortKey: 'date', render: (r) => new Date(r.date).getFullYear(), filterable: false },
-        { key: 'month', label: 'חודש', sortKey: 'date', render: (r) => new Date(r.date).getMonth() + 1, filterable: false },
-        { key: 'revenue', label: 'מכר כספי', filterable: false },
-        { key: 'quantity', label: 'מכר כמותי', filterable: false },
-        { key: 'weight', label: 'משקל', filterable: false }
+        { key: 'productName', label: 'שם פריט' },
+        { key: 'year', label: 'שנה', render: (r) => new Date(r.date).getFullYear() },
+        { key: 'month', label: 'חודש', render: (r) => new Date(r.date).getMonth() + 1 },
+        { key: 'revenue', label: 'מכר כספי' },
+        { key: 'quantity', label: 'מכר כמותי' },
+        { key: 'weight', label: 'משקל' }
       ]
     });
   </script>

@@ -6,11 +6,12 @@ async function initInlineEditTable(config) {
   if (!data) return;
 
   const container = document.getElementById('tableContainer');
+  const state = { rows: [], filters: {}, sortCol: null, sortDir: 'asc', focusedCol: null };
 
   async function load() {
     const res = await fetch(config.apiBase, { credentials: 'include' });
-    const rows = res.ok ? await res.json() : [];
-    render(rows);
+    state.rows = res.ok ? await res.json() : [];
+    render();
   }
 
   function inputHtml(field, value) {
@@ -28,7 +29,27 @@ async function initInlineEditTable(config) {
     return '<input type="' + (field.type || 'text') + '" data-field="' + field.key + '" value="' + Layout.escapeHtml(value == null ? '' : value) + '">';
   }
 
-  function render(rows) {
+  function filteredSortedRows() {
+    let out = state.rows.filter((row) => config.fields.every((f) => {
+      const term = state.filters[f.key];
+      if (!term) return true;
+      return String(row[f.key] == null ? '' : row[f.key]).toLowerCase().indexOf(term.toLowerCase()) !== -1;
+    }));
+    if (state.sortCol) {
+      out = out.slice().sort((a, b) => {
+        let va = a[state.sortCol], vb = b[state.sortCol];
+        if (va == null) va = '';
+        if (vb == null) vb = '';
+        const na = Number(va), nb = Number(vb);
+        const cmp = (va !== '' && vb !== '' && !isNaN(na) && !isNaN(nb)) ? na - nb : String(va).localeCompare(String(vb), 'he');
+        return state.sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
+    return out;
+  }
+
+  function render() {
+    const rows = filteredSortedRows();
     let html = '<div class="table-head-row"><div class="table-head-right"></div><div class="table-head-left">' +
       '<span class="count-pill">' + rows.length.toLocaleString('he-IL') + ' ' + config.countLabel + '</span></div></div>';
     html += '<div class="toolbar">' +
@@ -36,20 +57,29 @@ async function initInlineEditTable(config) {
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>' + config.addLabel + '</button>' +
       '<button class="btn btn-danger btn-sm js-deleteAllBtn" type="button">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"></path><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"></path><path d="M7 7l1 12.5A1.5 1.5 0 0 0 9.5 21h5a1.5 1.5 0 0 0 1.5-1.5L17 7"></path></svg>מחיקת כל הנתונים</button>' +
+      '<button class="btn btn-ghost btn-sm js-clearFilterBtn" type="button">נקה סינון</button>' +
       '<span class="spacer"></span>' +
       '<button class="btn btn-success btn-sm js-exportBtn" type="button">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="2"></rect><path d="M3.5 9.5h17M3.5 14.5h17M9.5 3.5v17"></path></svg>ייצוא לאקסל</button>' +
       '</div>';
 
     html += '<div class="inline-edit-table"><div class="table-scroll"><table><thead><tr>';
-    config.fields.forEach((f) => { html += '<th>' + Layout.escapeHtml(f.label) + '</th>'; });
-    html += '<th></th></tr></thead><tbody>';
+    config.fields.forEach((f) => {
+      const sortCls = state.sortCol === f.key ? (' sorted-' + state.sortDir) : '';
+      html += '<th><span class="th-inner js-sortBtn' + sortCls + '" data-col="' + f.key + '"><span class="th-label">' + Layout.escapeHtml(f.label) + '</span>' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10l5 5 5-5"/></svg></span></th>';
+    });
+    html += '<th></th></tr><tr class="filter-row">';
+    config.fields.forEach((f) => {
+      html += '<td><input class="filter-input js-filterInput" data-col="' + f.key + '" placeholder="סנן..." value="' + Layout.escapeHtml(state.filters[f.key] || '') + '"></td>';
+    });
+    html += '<td></td></tr></thead><tbody>';
     rows.forEach((row) => {
       html += '<tr data-id="' + row.id + '">';
       config.fields.forEach((f) => { html += '<td>' + inputHtml(f, row[f.key]) + '</td>'; });
       html += '<td><button class="icon-btn js-deleteRow" type="button" title="מחיקה">✕</button></td></tr>';
     });
-    if (!rows.length) html += '<tr><td colspan="' + (config.fields.length + 1) + '" class="table-empty">אין שורות עדיין</td></tr>';
+    if (!rows.length) html += '<tr><td colspan="' + (config.fields.length + 1) + '" class="table-empty">אין שורות להצגה</td></tr>';
     html += '</tbody></table></div></div>';
     container.innerHTML = html;
 
@@ -81,9 +111,33 @@ async function initInlineEditTable(config) {
         await load();
       });
     });
+    container.querySelector('.js-clearFilterBtn').addEventListener('click', () => {
+      state.filters = {};
+      render();
+    });
     container.querySelector('.js-exportBtn').addEventListener('click', () => {
       window.location.href = config.apiBase + '/export';
     });
+    container.querySelectorAll('.js-sortBtn').forEach((el) => {
+      el.addEventListener('click', () => {
+        const col = el.getAttribute('data-col');
+        if (state.sortCol === col) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+        else { state.sortCol = col; state.sortDir = 'asc'; }
+        render();
+      });
+    });
+    container.querySelectorAll('.js-filterInput').forEach((el) => {
+      el.addEventListener('click', (e) => e.stopPropagation());
+      el.addEventListener('input', () => {
+        state.filters[el.getAttribute('data-col')] = el.value;
+        state.focusedCol = el.getAttribute('data-col');
+        render();
+      });
+    });
+    if (state.focusedCol) {
+      const toFocus = container.querySelector('.js-filterInput[data-col="' + state.focusedCol + '"]');
+      if (toFocus) { toFocus.focus(); const v = toFocus.value; toFocus.setSelectionRange(v.length, v.length); }
+    }
   }
 
   await load();

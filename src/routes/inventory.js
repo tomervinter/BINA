@@ -1,20 +1,45 @@
 const express = require('express');
 const multer = require('multer');
+const { Prisma } = require('@prisma/client');
 const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer, parseDMY, parseNumber } = require('../lib/csv');
-const { parseListQuery } = require('../lib/listQuery');
 const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
 const { replaceAll } = require('../lib/bulkInsert');
+const { buildFilterClauses, parseRawListQuery } = require('../lib/rawFilter');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(requireAuth);
 
-const SORTABLE = ['sku', 'productName', 'date', 'stock'];
-const FILTERABLE = ['sku', 'productName'];
 const MAX_EXPORT_ROWS = 100000;
+
+// Raw SQL (no join needed here, but stock/date aren't plain-text columns, so Prisma's
+// simple `contains` string filter can't be used directly on them) — see src/lib/rawFilter.js.
+const COLUMNS = {
+  sku: { sql: 'i."sku"', type: 'text' },
+  productName: { sql: 'i."productName"', type: 'text' },
+  date: { sql: 'i."date"', type: 'year' },
+  stock: { sql: 'i."stock"', type: 'number' }
+};
+
+const SELECT_SQL = Prisma.raw('i."sku" AS "sku", i."productName" AS "productName", i."date" AS "date", i."stock" AS "stock"');
+const FROM_SQL = Prisma.raw('FROM "InventoryRecord" i');
+
+function buildWhere(organizationId, filters) {
+  const clauses = [Prisma.sql`i."organizationId" = ${organizationId}`, ...buildFilterClauses(COLUMNS, filters)];
+  return Prisma.join(clauses, ' AND ');
+}
+
+function orderSqlFor(sortBy, sortDir) {
+  return Prisma.raw(`${COLUMNS[sortBy].sql} ${sortDir}`);
+}
+
+function normalizeRow(r) {
+  return { ...r, stock: Number(r.stock) || 0 };
+}
+
 function fmtDate(d) {
   const dt = new Date(d);
   const p = (n) => String(n).padStart(2, '0');
@@ -28,31 +53,26 @@ const EXPORT_COLUMNS = [
 ];
 
 router.get('/', async (req, res) => {
-  const { page, pageSize, sortBy, sortDir, where, skip, take } = parseListQuery(req, {
-    sortableFields: SORTABLE,
-    filterableFields: FILTERABLE,
-    defaultSort: { field: 'date', dir: 'desc' }
-  });
-  const fullWhere = { organizationId: req.user.organizationId, ...where };
-  const [rows, total] = await Promise.all([
-    prisma.inventoryRecord.findMany({ where: fullWhere, orderBy: { [sortBy]: sortDir }, skip, take }),
-    prisma.inventoryRecord.count({ where: fullWhere })
+  const organizationId = req.user.organizationId;
+  const { page, pageSize, filters, sortBy, sortDir } = parseRawListQuery(req, COLUMNS, 'date');
+  const whereSql = buildWhere(organizationId, filters);
+  const orderSql = orderSqlFor(sortBy, sortDir);
+  const skip = (page - 1) * pageSize;
+
+  const [rows, countRows] = await Promise.all([
+    prisma.$queryRaw`SELECT ${SELECT_SQL} ${FROM_SQL} WHERE ${whereSql} ORDER BY ${orderSql} LIMIT ${pageSize} OFFSET ${skip}`,
+    prisma.$queryRaw`SELECT COUNT(*) AS "count" ${FROM_SQL} WHERE ${whereSql}`
   ]);
-  res.json({ rows, total, page, pageSize });
+  res.json({ rows: rows.map(normalizeRow), total: Number(countRows[0].count), page, pageSize });
 });
 
 router.get('/export', async (req, res) => {
-  const { sortBy, sortDir, where } = parseListQuery(req, {
-    sortableFields: SORTABLE,
-    filterableFields: FILTERABLE,
-    defaultSort: { field: 'date', dir: 'desc' }
-  });
-  const rows = await prisma.inventoryRecord.findMany({
-    where: { organizationId: req.user.organizationId, ...where },
-    orderBy: { [sortBy]: sortDir },
-    take: MAX_EXPORT_ROWS
-  });
-  const buffer = rowsToXlsxBuffer(EXPORT_COLUMNS, rows);
+  const organizationId = req.user.organizationId;
+  const { filters, sortBy, sortDir } = parseRawListQuery(req, COLUMNS, 'date');
+  const whereSql = buildWhere(organizationId, filters);
+  const orderSql = orderSqlFor(sortBy, sortDir);
+  const rawRows = await prisma.$queryRaw`SELECT ${SELECT_SQL} ${FROM_SQL} WHERE ${whereSql} ORDER BY ${orderSql} LIMIT ${MAX_EXPORT_ROWS}`;
+  const buffer = rowsToXlsxBuffer(EXPORT_COLUMNS, rawRows.map(normalizeRow));
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="inventory.xlsx"');
   res.send(buffer);
