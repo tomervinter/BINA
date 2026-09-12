@@ -4,7 +4,7 @@
 // insight list already use, no extra endpoint needed. Bars link into the insights log
 // pre-filtered to that type.
 const SALES_PATTERN_TYPES = ['monthlyRevenueShift', 'quarterlyRevenueShift', 'cumulativeYoyShift', 'seasonalGrowth', 'seasonalDecline', 'holidayMomentumShift'];
-const PURCHASE_PATTERN_TYPES = ['dropoff', 'productQuantityShift', 'productFrequencyYoyShift', 'purchaseIrregularity', 'newProductAdopted', 'productConcentrationRisk'];
+const PURCHASE_PATTERN_TYPES = ['productQuantityShift', 'productFrequencyYoyShift', 'purchaseIrregularity', 'newProductAdopted', 'productConcentrationRisk'];
 
 async function initDashboardPatternInsights() {
   const res = await fetch('/api/insights', { credentials: 'include' });
