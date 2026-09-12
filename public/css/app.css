@@ -199,6 +199,15 @@ footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--border);font-
 .dash-insight-msg{font-size:12px;color:var(--text-muted);}
 .dash-insight-empty{padding:16px;text-align:center;color:var(--text-faint);font-size:12.5px;}
 
+/* Larger type across the dashboard specifically — subtitles get the biggest bump,
+   since at the default size they read as an afterthought next to the bold titles. */
+.dashboard-page .page-subtitle{font-size:14.5px;}
+.dashboard-page .card-title{font-size:17px;}
+.dashboard-page .kpi-desc{font-size:13px;}
+.dashboard-page .dash-insight-entity{font-size:13.5px;}
+.dashboard-page .dash-insight-msg{font-size:13px;}
+.dashboard-page .greeting{font-size:27px;}
+
 /* ---------- Insight visual breakdown (the numbers behind an insight) ---------- */
 .insight-breakdown{display:flex;flex-direction:column;gap:4px;min-width:0;padding:2px 0;}
 .ib-row{display:flex;align-items:center;gap:6px;font-size:11px;}
