@@ -176,7 +176,7 @@ async function computeInsights(organizationId) {
     const driverWord = isDecline ? 'בעיקר בשל ירידה במוצרים' : 'בעיקר בזכות עלייה במוצרים';
 
     insights.push({
-      type: 'monthlyRevenueShift',
+      type: 'salesPattern',
       severity: Math.abs(delta) >= monthlyHighPct ? 'high' : 'medium',
       customerId: cid,
       customerName: custLabel(cid),
@@ -234,9 +234,8 @@ async function computeInsights(organizationId) {
 
           const eventKind = source === 'holiday' ? 'חג' : 'עונת';
           const dirWord = delta > 0 ? 'עלייה' : 'ירידה';
-          const typeKey = delta > 0 ? 'seasonalGrowth' : 'seasonalDecline';
           insights.push({
-            type: typeKey,
+            type: 'salesPattern',
             severity: Math.abs(delta) >= seasonalHighPct ? 'high' : 'medium',
             customerId: cid,
             customerName: custLabel(cid),
@@ -297,7 +296,7 @@ async function computeInsights(organizationId) {
           if (Math.abs(delta) < seasonalPct) return;
           const dirWord = delta > 0 ? 'ממשיכה' : 'לא ממשיכה';
           insights.push({
-            type: 'holidayMomentumShift',
+            type: 'salesPattern',
             severity: Math.abs(delta) >= seasonalHighPct ? 'high' : 'medium',
             customerId: cid,
             customerName: custLabel(cid),
@@ -333,7 +332,7 @@ async function computeInsights(organizationId) {
       if (Math.abs(delta) >= params.cumulativeYoy_pctThreshold / 100) {
         const dirWord = delta > 0 ? 'עלייה' : 'ירידה';
         insights.push({
-          type: 'cumulativeYoyShift',
+          type: 'salesPattern',
           severity: Math.abs(delta) >= params.cumulativeYoy_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
@@ -373,7 +372,7 @@ async function computeInsights(organizationId) {
       if (Math.abs(delta) >= params.quarterlyDecline_pctThreshold / 100) {
         const dirWord = delta > 0 ? 'עלייה' : 'ירידה';
         insights.push({
-          type: 'quarterlyRevenueShift',
+          type: 'salesPattern',
           severity: Math.abs(delta) >= params.quarterlyDecline_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
@@ -408,7 +407,7 @@ async function computeInsights(organizationId) {
       const label = familyLabel(pid);
       const dirWord = delta > 0 ? 'עלתה' : 'ירדה';
       insights.push({
-        type: 'productQuantityShift',
+        type: 'purchasePattern',
         severity: Math.abs(delta) >= params.productQty_highPct / 100 ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
@@ -446,7 +445,7 @@ async function computeInsights(organizationId) {
       const label = familyLabel(pid);
       const dirWord = delta > 0 ? 'עלתה' : 'ירדה';
       insights.push({
-        type: 'productFrequencyYoyShift',
+        type: 'purchasePattern',
         severity: Math.abs(delta) >= params.productFreqYoy_highPct / 100 ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
@@ -482,7 +481,7 @@ async function computeInsights(organizationId) {
       if (cv * 100 < params.irregularity_cvThreshold) return;
       const label = familyLabel(pid);
       insights.push({
-        type: 'purchaseIrregularity',
+        type: 'purchasePattern',
         severity: cv * 100 >= params.irregularity_cvThreshold * 1.5 ? 'high' : 'low',
         customerId: cid,
         customerName: custLabel(cid),
@@ -512,7 +511,7 @@ async function computeInsights(organizationId) {
       if (recentRev < params.newProduct_minRevenue) return;
       const label = familyLabel(pid);
       insights.push({
-        type: 'newProductAdopted',
+        type: 'purchasePattern',
         severity: 'low',
         customerId: cid,
         customerName: custLabel(cid),
@@ -541,7 +540,7 @@ async function computeInsights(organizationId) {
       if (pct < params.concentration_pctThreshold) return;
       const labels = top.map((x) => familyLabel(famRep[x.fam]));
       insights.push({
-        type: 'productConcentrationRisk',
+        type: 'purchasePattern',
         severity: pct >= 85 ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),

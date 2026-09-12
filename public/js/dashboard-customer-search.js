@@ -14,7 +14,7 @@ async function initDashboardCustomerSearch() {
   function goToCustomer() {
     const v = input.value.trim();
     const code = byDisplay[v];
-    if (code) window.location.href = 'customer-profile.html?customer=' + encodeURIComponent(code);
+    if (code) window.location.href = 'reports-full-sales.html?customerNumber=' + encodeURIComponent(code);
   }
   input.addEventListener('change', goToCustomer);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') goToCustomer(); });

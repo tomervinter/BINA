@@ -1,7 +1,7 @@
 // Dashboard infographics built from the sales-full-report consolidation: KPI tiles,
 // a 12-month revenue trend, and breakdown charts by customer/product classification.
-// Every chart is clickable — it deep-links to the full sales report (or, for the top
-// customers chart, straight to that customer's profile) pre-filtered to what was clicked.
+// Every chart is clickable — it deep-links to the full sales report, pre-filtered to
+// whatever bar/slice was clicked.
 const DASH_CHART_COLORS = ['#3D5CF5', '#8B5CF6', '#2FA88C', '#F2A93B', '#E85BA0', '#3FC4D0', '#DE4B4B'];
 
 function fmtMoneyShort(n) { return Math.round(n || 0).toLocaleString('he-IL') + ' ₪'; }
@@ -87,8 +87,6 @@ async function initDashboardSalesSummary() {
     new Chart(document.getElementById(canvasId), cfg);
   }
 
-  breakdownChart('primaryClassChart', s.byPrimaryClass, 'primaryClass', 'doughnut');
-  breakdownChart('customerTypeChart', s.byCustomerType, 'customerType', 'doughnut');
   breakdownChart('superTypeChart', s.bySuperType, 'superType', 'bar');
   breakdownChart('departmentChart', s.byDepartment, 'department', 'bar');
 
@@ -102,7 +100,7 @@ async function initDashboardSalesSummary() {
       onClick: function (evt, elements) {
         if (!elements.length) return;
         const c = s.topCustomers[elements[0].index];
-        window.location.href = 'customer-profile.html?customer=' + encodeURIComponent(c.code);
+        window.location.href = reportUrl({ customerNumber: c.code });
       },
       onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
     }

@@ -67,8 +67,6 @@ router.get('/', async (req, res) => {
     activeCustomerCount: byCust.length,
     activeProductCount: byProd.length,
     monthly,
-    byCustomerType: groupRevenue(byCust, 'customerNumber', custMap, 'customerType'),
-    byPrimaryClass: groupRevenue(byCust, 'customerNumber', custMap, 'primaryClass'),
     byDepartment: groupRevenue(byProd, 'productCode', prodMap, 'department'),
     bySuperType: groupRevenue(byProd, 'productCode', prodMap, 'superType'),
     topCustomers: topN(byCust, 'customerNumber', custMap, 5),

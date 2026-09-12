@@ -29,7 +29,7 @@ async function initInsightsPage() {
 
   const table = createDataTable(document.getElementById('tableContainer'), columns, insights, {
     exportUrl: '/api/insights/export',
-    onRowClick: (r) => { if (r.customerId) window.location.href = 'customer-profile.html?customer=' + encodeURIComponent(r.customerId); },
+    onRowClick: (r) => { if (r.customerId) window.location.href = 'reports-full-sales.html?customerNumber=' + encodeURIComponent(r.customerId); },
     tableKey: 'insights',
     initialFilters: urlType ? { type: urlType } : undefined
   });

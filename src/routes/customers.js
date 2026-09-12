@@ -92,8 +92,4 @@ router.delete('/', async (req, res) => {
   res.json({ ok: true });
 });
 
-// The full customer-profile drill-down (KPIs, trend, product breakdown, cross-sell
-// gaps, period comparisons) lives in src/routes/customerProfile.js — it's scoped to
-// one customer's own sales plus bounded peer cohorts, never the org's whole table.
-
 module.exports = router;
