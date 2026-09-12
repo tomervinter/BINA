@@ -35,7 +35,7 @@ const NAV_GROUPS = [
     { key: 'seasons', href: 'seasons.html', label: 'ניהול עונתיות', countKey: 'seasons' },
     { key: 'relevance', href: 'relevance.html', label: 'שיוך חג ועונה למוצר' },
     { key: 'product-substitutes', href: 'product-substitutes.html', label: 'מוצרים תחליפיים' },
-    { key: 'rule-engine', href: 'rule-engine.html', label: 'כללי מנוע התובנות' }
+    { key: 'rule-engine', href: 'rule-engine.html', label: 'מנוע התובנות' }
   ] },
   { title: 'דוחות', items: [
     { key: 'insights', href: 'insights.html', label: 'יומן תובנות' },
@@ -49,7 +49,7 @@ const NAV_GROUPS = [
 const PAGE_LABELS = {
   dashboard: 'בית', sales: 'טעינת קובץ מכירות', customers: 'טעינת לקוחות', products: 'טעינת מוצרים',
   inventory: 'טעינת מלאי', holidays: 'ניהול חגים', seasons: 'ניהול עונתיות', relevance: 'שיוך חג ועונה למוצר',
-  insights: 'יומן תובנות', 'rule-engine': 'כללי מנוע התובנות', users: 'משתמשים',
+  insights: 'יומן תובנות', 'rule-engine': 'מנוע התובנות', users: 'משתמשים',
   'reports-yoy': 'דוח שנה מול שנה', 'product-substitutes': 'מוצרים תחליפיים', 'reports-full-sales': 'דוח מכירות מלא'
 };
 

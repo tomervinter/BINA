@@ -24,6 +24,16 @@ function isInactive(cust) {
 function isProductInactive(prod) {
   return !!(prod && String(prod.status || '').trim().indexOf('לא') === 0);
 }
+// General policy 6: a product-specific insight only fires for a product that is
+// active AND explicitly flagged both "לשיווק" (for marketing) and "לעיתוד" (for
+// procurement) in the products table — a product not actively marketed or procured
+// isn't one the business wants insights nudging customers toward.
+function isProductEligible(prod) {
+  if (!prod || isProductInactive(prod)) return false;
+  if (String(prod.forMarketing || '').trim() !== 'כן') return false;
+  if (String(prod.forProcurement || '').trim() !== 'כן') return false;
+  return true;
+}
 function monthKey(t) {
   const d = new Date(t);
   const mm = d.getMonth() + 1;
@@ -136,9 +146,9 @@ async function computeInsights(organizationId) {
     const members = Array.from(familyMembers[famKey(pid)] || [pid]);
     return members.map(prodLabel).join(' / ');
   }
-  function isFamilyInactive(pid) {
+  function isFamilyEligible(pid) {
     const members = Array.from(familyMembers[famKey(pid)] || [pid]);
-    return members.every((m) => isProductInactive(prodIndex[m]));
+    return members.some((m) => isProductEligible(prodIndex[m]));
   }
   const byCustomerFamily = groupBy(s, (x) => x.cid + '|' + famKey(x.pid));
 
@@ -169,7 +179,7 @@ async function computeInsights(organizationId) {
     Object.keys(curByPid).forEach((p) => { allPids[p] = true; });
     Object.keys(prevByPid).forEach((p) => { allPids[p] = true; });
     const diffs = Object.keys(allPids).map((pid) => ({ pid, diff: (curByPid[pid] || 0) - (prevByPid[pid] || 0) }))
-      .filter((d) => (isDecline ? d.diff < 0 : d.diff > 0) && !isProductInactive(prodIndex[d.pid]))
+      .filter((d) => (isDecline ? d.diff < 0 : d.diff > 0) && isProductEligible(prodIndex[d.pid]))
       .sort((a, b) => isDecline ? a.diff - b.diff : b.diff - a.diff);
     const top = diffs.slice(0, params.monthly_topN).map((d) => `${prodLabel(d.pid)} (${fmtMoneyHe(d.diff)})`);
     const dirWord = isDecline ? 'ירדה' : 'עלתה';
@@ -219,7 +229,7 @@ async function computeInsights(organizationId) {
         const pairEvents = {};
         byCustomer[cid].forEach((e) => { (pairEvents[e.pid] = pairEvents[e.pid] || []).push(e); });
         Object.keys(pairEvents).forEach((pid) => {
-          if (isProductInactive(prodIndex[pid])) return;
+          if (!isProductEligible(prodIndex[pid])) return;
           const rel = relevanceEngine.isRelevant(relCtx, pid, source, name);
           if (!rel.known || !rel.value) return;
           let latestRev = 0, prevRev = 0;
@@ -281,7 +291,7 @@ async function computeInsights(organizationId) {
         const pairEvents = {};
         byCustomer[cid].forEach((e) => { (pairEvents[e.pid] = pairEvents[e.pid] || []).push(e); });
         Object.keys(pairEvents).forEach((pid) => {
-          if (isProductInactive(prodIndex[pid])) return;
+          if (!isProductEligible(prodIndex[pid])) return;
           const relE = relevanceEngine.isRelevant(relCtx, pid, E.source, E.name);
           const relP = relevanceEngine.isRelevant(relCtx, pid, P.source, P.name);
           if (!relE.known || !relE.value || !relP.known || !relP.value) return;
@@ -396,7 +406,7 @@ async function computeInsights(organizationId) {
       if (isInactive(cust)) return;
       const events = byCustomerFamily[key];
       const pid = events[events.length - 1].pid;
-      if (isFamilyInactive(pid)) return;
+      if (!isFamilyEligible(pid)) return;
       const curFrom = now - winMs;
       const prevFrom = now - 2 * winMs;
       const curQty = events.filter((e) => e.t > curFrom && e.t <= now).reduce((a, e) => a + e.qty, 0);
@@ -432,7 +442,7 @@ async function computeInsights(organizationId) {
       if (isInactive(cust)) return;
       const events = byCustomerFamily[key];
       const pid = events[events.length - 1].pid;
-      if (isFamilyInactive(pid)) return;
+      if (!isFamilyEligible(pid)) return;
       const thisMonths = new Set(), lastMonths = new Set();
       events.forEach((e) => {
         const d = new Date(e.t);
@@ -468,7 +478,7 @@ async function computeInsights(organizationId) {
       const events = byCustomerFamily[key].slice().sort((a, b) => a.t - b.t);
       if (events.length < params.irregularity_minPurchases) return;
       const pid = events[events.length - 1].pid;
-      if (isFamilyInactive(pid)) return;
+      if (!isFamilyEligible(pid)) return;
       const totalRev = (byCustomer[cid] || []).reduce((a, e) => a + e.rev, 0);
       const famRev = events.reduce((a, e) => a + e.rev, 0);
       if (totalRev <= 0 || (famRev / totalRev) * 100 < params.irregularity_minRevenueShare) return;
@@ -506,7 +516,7 @@ async function computeInsights(organizationId) {
       const firstT = Math.min.apply(null, events.map((e) => e.t));
       if (firstT < lookbackFrom) return;
       const pid = events[events.length - 1].pid;
-      if (isFamilyInactive(pid)) return;
+      if (!isFamilyEligible(pid)) return;
       const recentRev = events.reduce((a, e) => a + e.rev, 0);
       if (recentRev < params.newProduct_minRevenue) return;
       const label = familyLabel(pid);
@@ -533,7 +543,10 @@ async function computeInsights(organizationId) {
       if (totalRev < params.concentration_minRevenue) return;
       const famRevMap = {}, famRep = {};
       byCustomer[cid].forEach((e) => { const f = famKey(e.pid); famRevMap[f] = (famRevMap[f] || 0) + e.rev; famRep[f] = e.pid; });
-      const sortedFams = Object.keys(famRevMap).map((f) => ({ fam: f, rev: famRevMap[f] })).sort((a, b) => b.rev - a.rev);
+      const sortedFams = Object.keys(famRevMap)
+        .filter((f) => isFamilyEligible(famRep[f]))
+        .map((f) => ({ fam: f, rev: famRevMap[f] }))
+        .sort((a, b) => b.rev - a.rev);
       const top = sortedFams.slice(0, params.concentration_topN);
       const topRev = top.reduce((a, x) => a + x.rev, 0);
       const pct = (topRev / totalRev) * 100;

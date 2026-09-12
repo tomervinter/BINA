@@ -12,18 +12,25 @@ const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מא
 // entity count, not raw sale-row count) — never loads the raw sales table into memory,
 // except for the monthly trend, which only ever selects {date, revenue} for a bounded
 // 12-month window.
+//
+// An optional ?customerNumber= scopes every aggregation to that one customer's sales,
+// so the whole dashboard can show "all customers" or "just this one" — the filter is
+// folded into the same organizationId-scoped where clause used everywhere else, so a
+// customerNumber from another organization simply matches nothing.
 router.get('/', async (req, res) => {
   const organizationId = req.user.organizationId;
+  const customerNumber = req.query.customerNumber ? String(req.query.customerNumber) : null;
+  const where = customerNumber ? { organizationId, customerNumber } : { organizationId };
   const now = new Date();
   const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
   const [totalAgg, byCust, byProd, customers, products, monthlyRows] = await Promise.all([
-    prisma.sale.aggregate({ where: { organizationId }, _sum: { revenue: true, quantity: true } }),
-    prisma.sale.groupBy({ by: ['customerNumber'], where: { organizationId }, _sum: { revenue: true } }),
-    prisma.sale.groupBy({ by: ['productCode'], where: { organizationId }, _sum: { revenue: true } }),
+    prisma.sale.aggregate({ where, _sum: { revenue: true, quantity: true } }),
+    prisma.sale.groupBy({ by: ['customerNumber'], where, _sum: { revenue: true } }),
+    prisma.sale.groupBy({ by: ['productCode'], where, _sum: { revenue: true } }),
     prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, customerType: true, primaryClass: true } }),
     prisma.product.findMany({ where: { organizationId }, select: { itemCode: true, name: true, department: true, superType: true } }),
-    prisma.sale.findMany({ where: { organizationId, date: { gte: trendStart } }, select: { date: true, revenue: true } })
+    prisma.sale.findMany({ where: Object.assign({}, where, { date: { gte: trendStart } }), select: { date: true, revenue: true } })
   ]);
 
   const custMap = {};
@@ -62,6 +69,8 @@ router.get('/', async (req, res) => {
   });
 
   res.json({
+    customerNumber,
+    customerName: customerNumber ? ((custMap[customerNumber] && custMap[customerNumber].name) || customerNumber) : null,
     totalRevenue: totalAgg._sum.revenue || 0,
     totalQuantity: totalAgg._sum.quantity || 0,
     activeCustomerCount: byCust.length,

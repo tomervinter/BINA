@@ -18,14 +18,22 @@
       <div class="update-line" id="updateLine"></div>
 
       <div class="card" style="margin-top:16px;">
-        <div class="card-title">חיפוש לקוח מהיר</div>
+        <div class="table-head-row">
+          <div class="table-head-right">
+            <div class="card-title" style="margin-bottom:2px;">חיפוש לקוח מהיר</div>
+            <div class="page-subtitle" id="dashFilterSubtitle" style="margin-bottom:0;">כברירת מחדל, כל הנתונים בדשבורד מציגים את כלל הלקוחות. הקלידו שם לקוח כדי להציג כאן רק את הנתונים שלו.</div>
+          </div>
+          <div class="table-head-left">
+            <button class="btn btn-ghost btn-sm" id="dashClearCustomerFilter" type="button" style="display:none;">הצג את כל הלקוחות</button>
+          </div>
+        </div>
         <datalist id="dashCustomerList"></datalist>
-        <input type="text" id="dashCustomerSearch" list="dashCustomerList" placeholder="הקלידו שם לקוח כדי לעבור לדוח המכירות שלו...">
+        <input type="text" id="dashCustomerSearch" list="dashCustomerList" placeholder="הקלידו שם לקוח לסינון הדשבורד...">
       </div>
 
       <div class="table-head-row" style="margin-top:6px;">
         <div class="table-head-right">
-          <div class="card-title" style="margin-bottom:2px;">מחזור מכירות לפי חודשים</div>
+          <div class="card-title" id="monthlyTrendTitle" style="margin-bottom:2px;">מחזור מכירות לפי חודשים</div>
           <div class="page-subtitle" style="margin-bottom:0;">12 החודשים האחרונים. לחצו על חודש כדי לצפות בשורות המכירה שלו בדוח המלא.</div>
         </div>
       </div>
@@ -35,33 +43,33 @@
 
       <div class="table-head-row" style="margin-top:6px;">
         <div class="table-head-right">
-          <div class="card-title" style="margin-bottom:2px;">תמונת מכירות כוללת</div>
-          <div class="page-subtitle" style="margin-bottom:0;">מבוסס על דוח המכירות המלא — כל שורות המכירות בצירוף נתוני הלקוחות והמוצרים. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.</div>
+          <div class="card-title" id="salesSummaryTitle" style="margin-bottom:2px;">תמונת מכירות כוללת</div>
+          <div class="page-subtitle" id="salesSummarySubtitle" style="margin-bottom:0;">מבוסס על דוח המכירות המלא — כל שורות המכירות בצירוף נתוני הלקוחות והמוצרים. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.</div>
         </div>
         <div class="table-head-left">
-          <a href="reports-full-sales.html" class="btn btn-ghost btn-sm">לצפייה בדוח המלא</a>
+          <a href="reports-full-sales.html" class="btn btn-ghost btn-sm" id="salesSummaryFullReportLink">לצפייה בדוח המלא</a>
         </div>
       </div>
       <div class="kpi-grid" id="salesSummaryKpiGrid" style="margin-bottom:22px;"></div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;">
         <div class="card">
-          <div class="card-title">מחזור לפי טיפוס על</div>
+          <div class="card-title" id="superTypeTitle">מחזור לפי טיפוס על</div>
           <div style="position:relative;height:230px;"><canvas id="superTypeChart"></canvas></div>
         </div>
         <div class="card">
-          <div class="card-title">מחזור לפי מחלקת מוצר</div>
+          <div class="card-title" id="departmentTitle">מחזור לפי מחלקת מוצר</div>
           <div style="position:relative;height:230px;"><canvas id="departmentChart"></canvas></div>
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px;">
         <div class="card">
-          <div class="card-title">5 הלקוחות המובילים במחזור</div>
+          <div class="card-title" id="topCustomersTitle">5 הלקוחות המובילים במחזור</div>
           <div style="position:relative;height:220px;"><canvas id="topCustomersChart"></canvas></div>
         </div>
         <div class="card">
-          <div class="card-title">5 המוצרים המובילים במחזור</div>
+          <div class="card-title" id="topProductsTitle">5 המוצרים המובילים במחזור</div>
           <div style="position:relative;height:220px;"><canvas id="topProductsChart"></canvas></div>
         </div>
       </div>
