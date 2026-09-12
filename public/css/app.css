@@ -192,7 +192,8 @@ footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--border);font-
 
 /* ---------- Rule engine ---------- */
 .rules-general-list{margin:0;padding-inline-start:20px;font-size:13px;color:var(--text-muted);line-height:1.9;}
-.rules-general-list li{margin-bottom:4px;}
+.rules-general-list li{margin-bottom:10px;}
+.rules-general-list li:last-child{margin-bottom:0;}
 .rules-general-list b{color:var(--text);}
 .rule-card{padding:16px 18px;border-bottom:1px solid var(--border);}
 .rule-card:last-child{border-bottom:none;}
