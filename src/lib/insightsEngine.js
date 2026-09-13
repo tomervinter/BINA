@@ -200,13 +200,16 @@ async function computeInsights(organizationId) {
 
   // Rule 1a — monthly revenue shift (bidirectional: flags a meaningful jump in
   // either direction, not just a decline), with the specific products driving it.
+  // "Current" is the last FULLY completed month, not the in-progress one — a
+  // partial month always looks like a decline against a full prior month purely
+  // because fewer days have happened yet, which isn't a real signal.
   const monthlyPct = params.monthly_pctThreshold / 100;
   const monthlyHighPct = params.monthly_highPct / 100;
   Object.keys(byCustomer).forEach((cid) => {
     const cust = custIndex[cid];
     if (isInactive(cust)) return;
     const events = byCustomer[cid];
-    const curMK = monthKey(now);
+    const curMK = prevMonthKeyOf(monthKey(now));
     const prevMK = prevMonthKeyOf(curMK);
     const curEvents = events.filter((e) => monthKey(e.t) === curMK);
     const prevEvents = events.filter((e) => monthKey(e.t) === prevMK);
@@ -335,12 +338,15 @@ async function computeInsights(organizationId) {
   // an exact day count would arbitrarily include/exclude a month depending on where
   // its day-1 anchor happens to fall relative to the cutoff (the same class of bug
   // the holiday-window comparison had before it was fixed to work in whole months).
+  // Both windows start at the last FULLY completed month (m=1), skipping the
+  // in-progress current month entirely — including it would make "current" look
+  // artificially low just because the month isn't over yet.
   {
     const winMonths = params.productQty_windowMonths;
     const curMonthKeys = [];
-    for (let m = 0; m < winMonths; m++) curMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
+    for (let m = 1; m <= winMonths; m++) curMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
     const prevMonthKeys = [];
-    for (let m = winMonths; m < 2 * winMonths; m++) prevMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
+    for (let m = winMonths + 1; m <= 2 * winMonths; m++) prevMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
     const curWindowStart = monthRangeMs(curMonthKeys[curMonthKeys.length - 1])[0];
     const curWindowEnd = monthRangeMs(curMonthKeys[0])[1];
     Object.keys(byCustomerFamily).forEach((key) => {
