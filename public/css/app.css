@@ -10,7 +10,12 @@
   --green:#2FA360;--green-soft:#DFF4E7;--green-dot:#8FDBAE;--green-btn:#1E9E5C;--green-btn-hover:#188A50;
   --blue:#3D5CF5;--blue-soft:#E8ECFE;--blue-dot:#A9BBFA;
   --gray-soft:#EEF0F5;
-  --purple-seg:#8B5CF6;--purple:#8B5CF6;--purple-soft:#F1EBFE;--purple-dot:#C6B2FA;
+  /* --purple/-soft/-dot are the dashboard comparison-side palette — same values as
+     --green on purpose (comparison data reads as green, not purple, per request).
+     Kept as their own tokens rather than reusing --green directly so this slot can
+     be recolored again later without touching unrelated green usages elsewhere.
+     --purple-seg is unrelated (relevance-page "suggested" styling) — left as-is. */
+  --purple-seg:#8B5CF6;--purple:#2FA360;--purple-soft:#DFF4E7;--purple-dot:#8FDBAE;
   --shadow-card:0 1px 2px rgba(27,33,68,.04), 0 8px 20px rgba(27,33,68,.06);
   --radius-m:16px;--radius-s:10px;
 }
@@ -277,8 +282,8 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .dash-filter-table thead th{position:static;background:transparent;font-size:11.5px;color:var(--text-faint);font-weight:700;padding:0 10px 6px;text-align:center;border-bottom:none;}
 .dash-filter-table tbody th{font-weight:700;color:var(--text);font-size:12.5px;width:80px;white-space:nowrap;padding:0 10px;text-align:right;border-bottom:1px solid var(--border);}
 .dash-filter-table td.dft-field{padding:2px 8px;width:200px;}
-.dash-filter-table td.dft-primary{background:rgba(61,92,245,.05);}
-.dash-filter-table td.dft-compare{background:rgba(139,92,246,.06);}
+.dash-filter-table td.dft-primary{background:rgba(61,92,245,.07);}
+.dash-filter-table td.dft-compare{background:rgba(47,163,96,.08);}
 .dash-filter-table tbody tr:last-child td.dft-primary,.dash-filter-table tbody tr:last-child td.dft-compare{border-radius:0 0 8px 8px;}
 .dft-cell{display:flex;align-items:center;justify-content:flex-start;gap:4px;}
 .dft-cell .mms{flex:1;min-width:0;}

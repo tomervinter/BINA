@@ -15,7 +15,10 @@ const DASH_CHART_COLORS = ['#3D5CF5', '#2C48D8', '#1B2144', '#64748B', '#93A4C3'
 const DASH_BLUE = '#3D5CF5';
 const DASH_NAVY = '#1B2144';
 const DASH_SLATE = '#64748B';
-const DASH_PURPLE = '#8B5CF6';
+// Comparison-side chart color — green per request, not purple; kept the constant's
+// name (used in ~10 places below) to avoid a purely-cosmetic rename, matching
+// app.css's --purple token which points at the same green for the same reason.
+const DASH_PURPLE = '#2FA360';
 
 const dashCharts = {};
 function upsertChart(canvasId, config) {
