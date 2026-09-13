@@ -1,9 +1,9 @@
 // Ported from the artifact: each sub-check's description is a fixed sentence with the
 // tunable numbers embedded as inline <input> elements, right inside the text.
-// The engine only ever produces 2 insight types — one card per rule — so every
-// sub-check that used to be its own separate rule card is now grouped inside the
-// one card for the rule it belongs to (Rule 1: customer sales pattern, Rule 2:
-// customer purchase pattern).
+// The engine produces 3 insight types — one card per rule — so every sub-check that
+// used to be its own separate rule card is now grouped inside the one card for the
+// rule it belongs to (Rule 1: customer sales pattern, Rule 2: customer purchase
+// pattern, Rule 3: purchase gap vs. peer customers).
 const INSIGHT_RULES = [
   { type: 'salesPattern', title: 'זיהוי דפוס מכירות לקוח — תובנה 1',
     subrules: [
@@ -31,6 +31,15 @@ const INSIGHT_RULES = [
       { title: 'קצב רכישה לא סדיר',
         rule: 'מוצר שמהווה {irregularity_minRevenueShare}%+ ממחזור הלקוח, אך נרכש במרווחי זמן לא עקביים (מקדם שונות מעל {irregularity_cvThreshold}%).',
         detail: 'נדרשות {irregularity_minPurchases}+ רכישות היסטוריות למוצר כדי לחשב את סדירות הרכישה. הזדמנות להציע ללקוח לעבור להזמנה קבועה של המוצר.' }
+    ] },
+  { type: 'peerGap', title: 'פער רכישה מול לקוחות דומים — תובנה 3',
+    subrules: [
+      { title: 'לקוחות תחת אותו לקוח מרכז',
+        rule: 'הלקוח אינו קונה מוצר מסוים, בעוד {peerGap_pctThreshold}%+ מהלקוחות האחרים תחת אותו "לקוח מרכז" כן קונים אותו, ב-{peerGap_windowMonths} החודשים האחרונים.',
+        detail: 'נדרשים {peerGap_minGroupSize}+ לקוחות פעילים תחת אותו לקוח מרכז כדי שהאחוז ייחשב מבוסס. הבדיקה היא לפי קוד מוצר מדויק, לא משפחת מוצר — אך לקוח שקונה מוצר תחליפי (טבלת "מוצרים תחליפיים") למוצר הנבדק אינו נחשב כבעל פער, כי הצורך שלו כבר מכוסה. חומרה גבוהה מעל {peerGap_highPct}%.' },
+      { title: 'לקוחות מאותו סוג לקוח',
+        rule: 'הלקוח אינו קונה מוצר מסוים, בעוד {peerGap_pctThreshold}%+ מהלקוחות האחרים מאותו "סוג לקוח" כן קונים אותו, ב-{peerGap_windowMonths} החודשים האחרונים.',
+        detail: 'אותם תנאי סף וחריג תחליף כמו בבדיקה מול לקוח מרכז. אם שני המסלולים מתקיימים לאותו לקוח ומוצר, מופקת תובנה אחת משולבת שמזכירה את שני ההסברים, ולא שתי תובנות נפרדות.' }
     ] }
 ];
 

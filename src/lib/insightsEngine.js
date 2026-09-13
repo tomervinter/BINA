@@ -91,8 +91,9 @@ function buildProductFamilies(substitutes) {
 }
 
 // Mirrors the artifact's editable RULE_PARAM_DEFS — same names, same defaults.
-// Only covers the currently-active rules (Rule 1: customer sales pattern, Rule 2:
-// customer purchase pattern) — every other previously-explored rule type was removed.
+// Covers Rule 1 (customer sales pattern), Rule 2 (customer purchase pattern) and
+// Rule 3 (purchase gap vs. peer customers) — every other previously-explored rule
+// type was removed.
 const DEFAULT_PARAMS = {
   monthly_pctThreshold: 30, monthly_highPct: 50, monthly_minBaseRevenue: 100,
   cumulativeYoy_pctThreshold: 5, cumulativeYoy_highPct: 15, cumulativeYoy_minBaseRevenue: 100,
@@ -100,7 +101,8 @@ const DEFAULT_PARAMS = {
   productQty_windowMonths: 3, productQty_pctThreshold: 40, productQty_highPct: 60, productQty_minPriorQty: 5,
   productFreqYoy_pctThreshold: 40, productFreqYoy_highPct: 60, productFreqYoy_minPriorMonths: 2,
   irregularity_minPurchases: 4, irregularity_cvThreshold: 70, irregularity_minRevenueShare: 5,
-  concentration_topN: 2, concentration_pctThreshold: 70, concentration_minRevenue: 500
+  concentration_topN: 2, concentration_pctThreshold: 70, concentration_minRevenue: 500,
+  peerGap_windowMonths: 6, peerGap_pctThreshold: 50, peerGap_highPct: 80, peerGap_minGroupSize: 2
 };
 
 async function loadParams(organizationId) {
@@ -477,6 +479,97 @@ async function computeInsights(organizationId) {
         message: `${Math.round(pct)}% ממחזור הלקוח מגיע מ-${top.length} מוצרים בלבד — סיכון ריכוזיות.`,
         metric: Math.round(pct),
         breakdown: { rows: top.map((x, i) => ({ label: labels[i], value: Math.round(x.rev) })) }
+      });
+    });
+  }
+
+  // Rule 3 — purchase gap vs. peer customers: flags a customer who does NOT buy a
+  // specific product while a strong majority of its peers do, within the last
+  // peerGap_windowMonths — peers being (a) other active customers under the same
+  // "לקוח מרכז" (central-customer) group, and/or (b) other active customers of the
+  // same customer type. A customer already covered via a substitute product
+  // (general policy 5) is never flagged — the gap isn't real once they've switched
+  // to an equivalent. Unlike the family-merged rules above, the "peers buy X" count
+  // itself is by exact product code, not merged with substitutes, by design — only
+  // the target customer's own "do they already have this covered" check uses the
+  // family. When both peer groups clear the threshold for the same customer/product,
+  // one insight reports both reasons rather than two separate ones.
+  {
+    const winMonths = params.peerGap_windowMonths;
+    const windowMonthKeys = new Set();
+    for (let m = 0; m < winMonths; m++) windowMonthKeys.add(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
+
+    const boughtInWindow = {}; // cid -> Set(pid)
+    const productBuyers = {}; // pid -> Set(cid)
+    s.forEach((e) => {
+      if (!windowMonthKeys.has(monthKey(e.t))) return;
+      (boughtInWindow[e.cid] = boughtInWindow[e.cid] || new Set()).add(e.pid);
+      (productBuyers[e.pid] = productBuyers[e.pid] || new Set()).add(e.cid);
+    });
+    function coveredByFamily(cid, pid) {
+      const bought = boughtInWindow[cid];
+      if (!bought) return false;
+      const members = familyMembers[famKey(pid)] || new Set([pid]);
+      for (const m of members) { if (bought.has(m)) return true; }
+      return false;
+    }
+
+    const byCentral = {}, byType = {};
+    customers.forEach((c) => {
+      if (isInactive(c)) return;
+      const central = String(c.centralCustomer || '').trim();
+      if (central) (byCentral[central] = byCentral[central] || []).push(c.customerNumber);
+      const type = String(c.customerType || '').trim();
+      if (type) (byType[type] = byType[type] || []).push(c.customerNumber);
+    });
+
+    const hits = {}; // "cid|pid" -> { cid, pid, centralPct, centralName, typePct, typeName }
+    function scanGroups(groups, pid, buyers, key) {
+      Object.keys(groups).forEach((groupName) => {
+        const members = groups[groupName];
+        if (members.length < params.peerGap_minGroupSize) return;
+        const buyerCount = members.filter((m) => buyers.has(m)).length;
+        const pct = buyerCount / members.length;
+        if (pct < params.peerGap_pctThreshold / 100) return;
+        members.forEach((cid) => {
+          if (buyers.has(cid) || coveredByFamily(cid, pid)) return;
+          const hk = cid + '|' + pid;
+          const hit = hits[hk] = hits[hk] || { cid, pid };
+          hit[key + 'Pct'] = Math.round(pct * 100);
+          hit[key + 'Name'] = groupName;
+        });
+      });
+    }
+    Object.keys(prodIndex).forEach((pid) => {
+      if (!isProductEligible(prodIndex[pid])) return;
+      const buyers = productBuyers[pid];
+      if (!buyers || !buyers.size) return;
+      scanGroups(byCentral, pid, buyers, 'central');
+      scanGroups(byType, pid, buyers, 'type');
+    });
+
+    Object.keys(hits).forEach((hk) => {
+      const h = hits[hk];
+      const cust = custIndex[h.cid];
+      if (isInactive(cust)) return;
+      const bits = [];
+      if (h.centralPct != null) bits.push(`${h.centralPct}% מהלקוחות הנוספים תחת לקוח מרכז "${h.centralName}"`);
+      if (h.typePct != null) bits.push(`${h.typePct}% מהלקוחות מסוג "${h.typeName}"`);
+      const maxPct = Math.max(h.centralPct || 0, h.typePct || 0);
+      insights.push({
+        type: 'peerGap',
+        severity: maxPct >= params.peerGap_highPct ? 'high' : 'medium',
+        customerId: h.cid,
+        customerName: custLabel(h.cid),
+        productCode: h.pid,
+        message: `הלקוח אינו רוכש את ${prodLabel(h.pid)}, בעוד ש${bits.join(' וגם ')} רוכשים אותו.`,
+        metric: maxPct,
+        breakdown: {
+          rows: [
+            h.centralPct != null ? { label: 'אחוז קונים — לקוח מרכז ' + h.centralName, value: h.centralPct } : null,
+            h.typePct != null ? { label: 'אחוז קונים — סוג לקוח ' + h.typeName, value: h.typePct } : null
+          ].filter(Boolean)
+        }
       });
     });
   }
