@@ -201,6 +201,7 @@ async function loadDashboardSalesSummary(filters) {
   setList('primaryClass', filters.primaryClass);
   setList('customerType', filters.customerType);
   setList('superType', filters.superType);
+  setList('department', filters.department);
   setList('periodMonths', filters.periodMonths);
   setList('compareMonths', filters.compareMonths);
   setList('compareCustomerNumber', filters.compareCustomer);
@@ -208,6 +209,7 @@ async function loadDashboardSalesSummary(filters) {
   setList('comparePrimaryClass', filters.comparePrimaryClass);
   setList('compareCustomerType', filters.compareCustomerType);
   setList('compareSuperType', filters.compareSuperType);
+  setList('compareDepartment', filters.compareDepartment);
   setList('boughtProducts', filters.boughtProducts);
   setList('notBoughtProducts', filters.notBoughtProducts);
   const q = qs.toString();
@@ -219,9 +221,10 @@ async function loadDashboardSalesSummary(filters) {
   const primaryClassLabel = joinOrCount(s.primaryClasses, null, 'סיווגים ראשיים');
   const customerTypeLabel = joinOrCount(s.customerTypes, null, 'סוגי לקוח');
   const superTypeLabel = joinOrCount(s.superTypes, null, 'טיפוסי על');
+  const departmentLabel = joinOrCount(s.departments, null, 'מחלקות מוצר');
   const suffix = (customerLabel ? (' — ' + customerLabel) : '') + (productLabel ? (' — ' + productLabel) : '')
     + (primaryClassLabel ? (' — ' + primaryClassLabel) : '') + (customerTypeLabel ? (' — ' + customerTypeLabel) : '')
-    + (superTypeLabel ? (' — ' + superTypeLabel) : '');
+    + (superTypeLabel ? (' — ' + superTypeLabel) : '') + (departmentLabel ? (' — ' + departmentLabel) : '');
 
   // Per-chart-card filter description: every chart's own title stays generic (set
   // separately per row below), while this line — shown inside each individual card —
@@ -235,6 +238,7 @@ async function loadDashboardSalesSummary(filters) {
     primaryClassLabel ? ('סיווג ראשי: ' + primaryClassLabel) : null,
     customerTypeLabel ? ('סוג לקוח: ' + customerTypeLabel) : null,
     superTypeLabel ? ('טיפוס על: ' + superTypeLabel) : null,
+    departmentLabel ? ('מחלקת מוצר: ' + departmentLabel) : null,
     s.period ? ('תקופה: ' + s.period.label) : null,
     (s.boughtProductNames && s.boughtProductNames.length) ? ('קנו: ' + s.boughtProductNames.join(', ')) : null,
     (s.notBoughtProductNames && s.notBoughtProductNames.length) ? ('לא קנו: ' + s.notBoughtProductNames.join(', ')) : null
@@ -247,11 +251,13 @@ async function loadDashboardSalesSummary(filters) {
   const comparePrimaryClassLabel = joinOrCount(s.comparePrimaryClasses, null, 'סיווגים ראשיים');
   const compareCustomerTypeLabel = joinOrCount(s.compareCustomerTypes, null, 'סוגי לקוח');
   const compareSuperTypeLabel = joinOrCount(s.compareSuperTypes, null, 'טיפוסי על');
+  const compareDepartmentLabel = joinOrCount(s.compareDepartments, null, 'מחלקות מוצר');
   const compareAxisLabel = comparePrimaryClassLabel ? ('סיווג ' + comparePrimaryClassLabel)
     : compareCustomerTypeLabel ? ('סוג לקוח ' + compareCustomerTypeLabel)
     : compareCustomerLabel ? ('הלקוח ' + compareCustomerLabel)
     : compareProductLabel ? ('המוצר ' + compareProductLabel)
     : compareSuperTypeLabel ? ('טיפוס על ' + compareSuperTypeLabel)
+    : compareDepartmentLabel ? ('מחלקת מוצר ' + compareDepartmentLabel)
     : (s.comparePeriod ? s.comparePeriod.label : null);
   // Same single-axis label for the primary side's own KPI tiles, which previously
   // stated no filter at all (only the comparison tiles named what they were about).
@@ -260,6 +266,7 @@ async function loadDashboardSalesSummary(filters) {
     : customerLabel ? ('הלקוח ' + customerLabel)
     : productLabel ? ('המוצר ' + productLabel)
     : superTypeLabel ? ('טיפוס על ' + superTypeLabel)
+    : departmentLabel ? ('מחלקת מוצר ' + departmentLabel)
     : (s.period ? s.period.label : null);
   const compareFilterDesc = joinFilterParts([
     compareCustomerLabel ? ('לקוח: ' + compareCustomerLabel) : null,
@@ -267,6 +274,7 @@ async function loadDashboardSalesSummary(filters) {
     comparePrimaryClassLabel ? ('סיווג ראשי: ' + comparePrimaryClassLabel) : null,
     compareCustomerTypeLabel ? ('סוג לקוח: ' + compareCustomerTypeLabel) : null,
     compareSuperTypeLabel ? ('טיפוס על: ' + compareSuperTypeLabel) : null,
+    compareDepartmentLabel ? ('מחלקת מוצר: ' + compareDepartmentLabel) : null,
     s.comparePeriod ? ('תקופה: ' + s.comparePeriod.label) : null
   ]) || 'יורש את סינון הבדיקה הראשית';
 
@@ -521,10 +529,8 @@ async function loadDashboardSalesSummary(filters) {
   const legendOpts = { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } };
   // Clicking a bar/slice narrows the dashboard's own filters (see
   // applyDashboardFilterByDimension in dashboard-filters.js) instead of navigating to
-  // the full sales report — only for dimensions the filter table actually has a field
-  // for. "department" has no such field, so those bars stay non-interactive rather
-  // than linking anywhere.
-  const DASH_FILTERABLE_DIMENSIONS = { customer: true, product: true, superType: true };
+  // the full sales report — for every dimension the filter table has a field for.
+  const DASH_FILTERABLE_DIMENSIONS = { customer: true, product: true, superType: true, department: true };
   function oneBreakdownChart(canvasId, rows, filterKey, type, color, isCompare) {
     const clickable = DASH_FILTERABLE_DIMENSIONS[filterKey] && !!window.applyDashboardFilterByDimension;
     const cfg = {

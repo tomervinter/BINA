@@ -48,6 +48,8 @@ async function initDashboardFilters() {
     compareCustomerType: document.getElementById('dashClearCompareCustomerType'),
     superType: document.getElementById('dashClearSuperType'),
     compareSuperType: document.getElementById('dashClearCompareSuperType'),
+    department: document.getElementById('dashClearDepartment'),
+    compareDepartment: document.getElementById('dashClearCompareDepartment'),
     boughtProducts: document.getElementById('dashClearBoughtProducts'),
     notBoughtProducts: document.getElementById('dashClearNotBoughtProducts')
   };
@@ -73,6 +75,7 @@ async function initDashboardFilters() {
   const primaryClassOptions = distinctOptions(customers.map((c) => c.primaryClass));
   const customerTypeOptions = distinctOptions(customers.map((c) => c.customerType));
   const superTypeOptions = distinctOptions(products.map((p) => p.superType));
+  const departmentOptions = distinctOptions(products.map((p) => p.department));
   // Same year range for both sides — no reason a comparison must be last year
   // specifically, the user picks whichever year/month combination they want.
   const dashCurrentYear = new Date().getFullYear();
@@ -91,6 +94,7 @@ async function initDashboardFilters() {
     primaryClass: csv('primaryClass'),
     customerType: csv('customerType'),
     superType: csv('superType'),
+    department: csv('department'),
     // periodMonths/compareMonths are DERIVED (the year × month cross product) —
     // never set directly except by that computation or by an insight click's own
     // absolute month list (see dashDecomposeMonths / applyDashboardFiltersFromInsight).
@@ -108,6 +112,7 @@ async function initDashboardFilters() {
     comparePrimaryClass: csv('comparePrimaryClass'),
     compareCustomerType: csv('compareCustomerType'),
     compareSuperType: csv('compareSuperType'),
+    compareDepartment: csv('compareDepartment'),
     // Cohort filter: narrows the primary customer selection to those who bought/didn't
     // buy certain products — resolved server-side to a customer set (see
     // resolvePurchaseCohort in dashboardSalesSummary.js). Primary-side only; doesn't
@@ -126,6 +131,7 @@ async function initDashboardFilters() {
     set('primaryClass', state.primaryClass);
     set('customerType', state.customerType);
     set('superType', state.superType);
+    set('department', state.department);
     set('periodYears', state.periodYears);
     set('periodMonthsSel', state.periodMonthsSel);
     set('compareYears', state.compareYears);
@@ -135,6 +141,7 @@ async function initDashboardFilters() {
     set('comparePrimaryClass', state.comparePrimaryClass);
     set('compareCustomerType', state.compareCustomerType);
     set('compareSuperType', state.compareSuperType);
+    set('compareDepartment', state.compareDepartment);
     set('boughtProducts', state.boughtProducts);
     set('notBoughtProducts', state.notBoughtProducts);
     window.history.replaceState(null, '', url.pathname + url.search);
@@ -165,6 +172,8 @@ async function initDashboardFilters() {
     cellClearBtns.compareCustomerType.style.display = state.compareCustomerType.length ? '' : 'none';
     cellClearBtns.superType.style.display = state.superType.length ? '' : 'none';
     cellClearBtns.compareSuperType.style.display = state.compareSuperType.length ? '' : 'none';
+    cellClearBtns.department.style.display = state.department.length ? '' : 'none';
+    cellClearBtns.compareDepartment.style.display = state.compareDepartment.length ? '' : 'none';
     cellClearBtns.boughtProducts.style.display = state.boughtProducts.length ? '' : 'none';
     cellClearBtns.notBoughtProducts.style.display = state.notBoughtProducts.length ? '' : 'none';
 
@@ -178,6 +187,7 @@ async function initDashboardFilters() {
     if (state.primaryClass.length) parts.push(state.primaryClass.length === 1 ? 'סיווג ' + state.primaryClass[0] : state.primaryClass.length + ' סיווגים ראשיים');
     if (state.customerType.length) parts.push(state.customerType.length === 1 ? 'סוג לקוח ' + state.customerType[0] : state.customerType.length + ' סוגי לקוח');
     if (state.superType.length) parts.push(state.superType.length === 1 ? 'טיפוס על ' + state.superType[0] : state.superType.length + ' טיפוסי על');
+    if (state.department.length) parts.push(state.department.length === 1 ? 'מחלקת מוצר ' + state.department[0] : state.department.length + ' מחלקות מוצר');
     if (periodActive) parts.push('התקופה שנבחרה');
     if (state.boughtProducts.length) parts.push('לקוחות שקנו ' + (state.boughtProducts.length === 1 ? (prodNameByCode[state.boughtProducts[0]] || state.boughtProducts[0]) : state.boughtProducts.length + ' מוצרים נבחרים'));
     if (state.notBoughtProducts.length) parts.push('שלא קנו ' + (state.notBoughtProducts.length === 1 ? (prodNameByCode[state.notBoughtProducts[0]] || state.notBoughtProducts[0]) : state.notBoughtProducts.length + ' מוצרים נבחרים'));
@@ -202,6 +212,7 @@ async function initDashboardFilters() {
     if (state.comparePrimaryClass.length) cmpParts.push(state.comparePrimaryClass.length === 1 ? 'לסיווג ' + state.comparePrimaryClass[0] : 'ל-' + state.comparePrimaryClass.length + ' סיווגים ראשיים');
     if (state.compareCustomerType.length) cmpParts.push(state.compareCustomerType.length === 1 ? 'לסוג לקוח ' + state.compareCustomerType[0] : 'ל-' + state.compareCustomerType.length + ' סוגי לקוח');
     if (state.compareSuperType.length) cmpParts.push(state.compareSuperType.length === 1 ? 'לטיפוס על ' + state.compareSuperType[0] : 'ל-' + state.compareSuperType.length + ' טיפוסי על');
+    if (state.compareDepartment.length) cmpParts.push(state.compareDepartment.length === 1 ? 'למחלקת מוצר ' + state.compareDepartment[0] : 'ל-' + state.compareDepartment.length + ' מחלקות מוצר');
     if (state.compareMonths.length) cmpParts.push('לתקופה נוספת');
 
     if (parts.length && cmpParts.length) {
@@ -268,6 +279,8 @@ async function initDashboardFilters() {
   makePicker('dashCompareCustomerTypePicker', customerTypeOptions, state.compareCustomerType, false, (vals) => { state.compareCustomerType = vals; apply(); });
   makePicker('dashSuperTypePicker', superTypeOptions, state.superType, false, (vals) => { state.superType = vals; apply(); });
   makePicker('dashCompareSuperTypePicker', superTypeOptions, state.compareSuperType, false, (vals) => { state.compareSuperType = vals; apply(); });
+  makePicker('dashDepartmentPicker', departmentOptions, state.department, false, (vals) => { state.department = vals; apply(); });
+  makePicker('dashCompareDepartmentPicker', departmentOptions, state.compareDepartment, false, (vals) => { state.compareDepartment = vals; apply(); });
   makePicker('dashBoughtProductsPicker', prodOptions, state.boughtProducts, true, (vals) => { state.boughtProducts = vals; apply(); });
   makePicker('dashNotBoughtProductsPicker', prodOptions, state.notBoughtProducts, true, (vals) => { state.notBoughtProducts = vals; apply(); });
   makePicker('dashYearPicker', yearOptions, state.periodYears, false, (vals) => { state.periodYears = vals; state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel); apply(); });
@@ -285,6 +298,8 @@ async function initDashboardFilters() {
   cellClearBtns.compareCustomerType.addEventListener('click', () => { state.compareCustomerType = []; pickers.dashCompareCustomerTypePicker.setSelected([]); apply(); });
   cellClearBtns.superType.addEventListener('click', () => { state.superType = []; pickers.dashSuperTypePicker.setSelected([]); apply(); });
   cellClearBtns.compareSuperType.addEventListener('click', () => { state.compareSuperType = []; pickers.dashCompareSuperTypePicker.setSelected([]); apply(); });
+  cellClearBtns.department.addEventListener('click', () => { state.department = []; pickers.dashDepartmentPicker.setSelected([]); apply(); });
+  cellClearBtns.compareDepartment.addEventListener('click', () => { state.compareDepartment = []; pickers.dashCompareDepartmentPicker.setSelected([]); apply(); });
   cellClearBtns.boughtProducts.addEventListener('click', () => { state.boughtProducts = []; pickers.dashBoughtProductsPicker.setSelected([]); apply(); });
   cellClearBtns.notBoughtProducts.addEventListener('click', () => { state.notBoughtProducts = []; pickers.dashNotBoughtProductsPicker.setSelected([]); apply(); });
   cellClearBtns.year.addEventListener('click', () => { state.periodYears = []; state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel); pickers.dashYearPicker.setSelected([]); apply(); });
@@ -313,19 +328,21 @@ async function initDashboardFilters() {
     state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel);
     // An insight names a customer/product/period, never a segment or a comparison
     // axis — clear anything the user had set manually so it doesn't linger mixed in.
-    state.primaryClass = []; state.customerType = []; state.superType = [];
-    state.compareCustomer = []; state.compareProduct = []; state.comparePrimaryClass = []; state.compareCustomerType = []; state.compareSuperType = [];
+    state.primaryClass = []; state.customerType = []; state.superType = []; state.department = [];
+    state.compareCustomer = []; state.compareProduct = []; state.comparePrimaryClass = []; state.compareCustomerType = []; state.compareSuperType = []; state.compareDepartment = [];
     state.boughtProducts = []; state.notBoughtProducts = [];
     pickers.dashCustomerPicker.setSelected(state.customer);
     pickers.dashProductPicker.setSelected(state.product);
     pickers.dashPrimaryClassPicker.setSelected([]);
     pickers.dashCustomerTypePicker.setSelected([]);
     pickers.dashSuperTypePicker.setSelected([]);
+    pickers.dashDepartmentPicker.setSelected([]);
     pickers.dashCompareCustomerPicker.setSelected([]);
     pickers.dashCompareProductPicker.setSelected([]);
     pickers.dashComparePrimaryClassPicker.setSelected([]);
     pickers.dashCompareCustomerTypePicker.setSelected([]);
     pickers.dashCompareSuperTypePicker.setSelected([]);
+    pickers.dashCompareDepartmentPicker.setSelected([]);
     pickers.dashBoughtProductsPicker.setSelected([]);
     pickers.dashNotBoughtProductsPicker.setSelected([]);
     pickers.dashYearPicker.setSelected(state.periodYears);
@@ -344,7 +361,8 @@ async function initDashboardFilters() {
   const DASH_CLICK_DIMENSIONS = {
     customer: { state: 'customer', compareState: 'compareCustomer', picker: 'dashCustomerPicker', comparePicker: 'dashCompareCustomerPicker' },
     product: { state: 'product', compareState: 'compareProduct', picker: 'dashProductPicker', comparePicker: 'dashCompareProductPicker' },
-    superType: { state: 'superType', compareState: 'compareSuperType', picker: 'dashSuperTypePicker', comparePicker: 'dashCompareSuperTypePicker' }
+    superType: { state: 'superType', compareState: 'compareSuperType', picker: 'dashSuperTypePicker', comparePicker: 'dashCompareSuperTypePicker' },
+    department: { state: 'department', compareState: 'compareDepartment', picker: 'dashDepartmentPicker', comparePicker: 'dashCompareDepartmentPicker' }
   };
   window.applyDashboardFilterByDimension = function (dimension, value, isCompare) {
     const map = DASH_CLICK_DIMENSIONS[dimension];

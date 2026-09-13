@@ -60,7 +60,7 @@ function parseCsv(str) {
 // was, becomes the customer set outright) — used for the purchase-based cohort
 // filter (customers who bought/didn't buy certain products), which only ever applies
 // to the primary side.
-async function buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, superTypes, restrictToCustomers }) {
+async function buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, superTypes, departments, restrictToCustomers }) {
   const where = { organizationId };
   let resolvedCustomers = null;
   if (primaryClasses.length || customerTypes.length) {
@@ -77,13 +77,16 @@ async function buildEntityWhere(organizationId, { customerNumbers, productCodes,
     resolvedCustomers = resolvedCustomers ? resolvedCustomers.filter((c) => restrictSet.has(c)) : restrictToCustomers;
   }
   if (resolvedCustomers) where.customerNumber = { in: resolvedCustomers };
-  // superType lives on Product, not Sale — same segment-over-explicit precedence as
-  // primaryClass/customerType above: a superType selection is the coarser,
-  // intentionally-chosen filter, so it wins over an explicit productCode list when
-  // both are given.
+  // superType/department live on Product, not Sale — same segment-over-explicit
+  // precedence as primaryClass/customerType above: either one wins over an explicit
+  // productCode list when given (and if both superType and department are given,
+  // both apply together — same AND combination as primaryClass+customerType).
   let resolvedProducts = null;
-  if (superTypes && superTypes.length) {
-    const segProducts = await prisma.product.findMany({ where: { organizationId, superType: { in: superTypes } }, select: { itemCode: true } });
+  if ((superTypes && superTypes.length) || (departments && departments.length)) {
+    const segProducts = await prisma.product.findMany({
+      where: Object.assign({ organizationId }, superTypes && superTypes.length && { superType: { in: superTypes } }, departments && departments.length && { department: { in: departments } }),
+      select: { itemCode: true }
+    });
     resolvedProducts = segProducts.map((p) => p.itemCode);
   } else if (productCodes.length) {
     resolvedProducts = productCodes;
@@ -152,11 +155,13 @@ router.get('/', async (req, res) => {
   const primaryClasses = parseCsv(req.query.primaryClass);
   const customerTypes = parseCsv(req.query.customerType);
   const superTypes = parseCsv(req.query.superType);
+  const departments = parseCsv(req.query.department);
   const compareCustomerNumbers = parseCsv(req.query.compareCustomerNumber);
   const compareProductCodes = parseCsv(req.query.compareProductCode);
   const comparePrimaryClasses = parseCsv(req.query.comparePrimaryClass);
   const compareCustomerTypes = parseCsv(req.query.compareCustomerType);
   const compareSuperTypes = parseCsv(req.query.compareSuperType);
+  const compareDepartments = parseCsv(req.query.compareDepartment);
   const boughtProducts = parseCsv(req.query.boughtProducts);
   const notBoughtProducts = parseCsv(req.query.notBoughtProducts);
   const period = parseMonthList(req.query.periodMonths);
@@ -164,24 +169,25 @@ router.get('/', async (req, res) => {
   // "Bought X" / "didn't buy Y" is scoped to the selected period, same as every other
   // number on the dashboard — not "ever bought", unless no period filter is active.
   const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts, period);
-  const hasEntityFilter = !!(customerNumbers.length || productCodes.length || primaryClasses.length || customerTypes.length || superTypes.length || purchaseCohort);
+  const hasEntityFilter = !!(customerNumbers.length || productCodes.length || primaryClasses.length || customerTypes.length || superTypes.length || departments.length || purchaseCohort);
   const baseWhere = hasEntityFilter
-    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, superTypes, restrictToCustomers: purchaseCohort })
+    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, superTypes, departments, restrictToCustomers: purchaseCohort })
     : { organizationId };
 
   const compare = period ? parseMonthList(req.query.compareMonths) : null;
   const hasCompareIdentity = !!(compareCustomerNumbers.length || comparePrimaryClasses.length || compareCustomerTypes.length);
-  const hasEntityCompare = hasCompareIdentity || !!compareProductCodes.length || !!compareSuperTypes.length;
+  const hasEntityCompare = hasCompareIdentity || !!compareProductCodes.length || !!compareSuperTypes.length || !!compareDepartments.length;
   const effectiveCompareProducts = compareProductCodes.length ? compareProductCodes : productCodes;
-  // superType falls back independently too, exactly like productCode above — it's
-  // the same product dimension, just the coarser (segment) form of it.
+  // superType/department fall back independently too, exactly like productCode above
+  // — they're the same product dimension, just the coarser (segment) form of it.
   const effectiveCompareSuperTypes = compareSuperTypes.length ? compareSuperTypes : superTypes;
+  const effectiveCompareDepartments = compareDepartments.length ? compareDepartments : departments;
 
   let compareBaseWhere = null;
   if (hasEntityCompare || compare) {
     compareBaseWhere = await buildEntityWhere(organizationId, hasCompareIdentity
-      ? { customerNumbers: compareCustomerNumbers, primaryClasses: comparePrimaryClasses, customerTypes: compareCustomerTypes, productCodes: effectiveCompareProducts, superTypes: effectiveCompareSuperTypes }
-      : { customerNumbers, primaryClasses, customerTypes, productCodes: effectiveCompareProducts, superTypes: effectiveCompareSuperTypes });
+      ? { customerNumbers: compareCustomerNumbers, primaryClasses: comparePrimaryClasses, customerTypes: compareCustomerTypes, productCodes: effectiveCompareProducts, superTypes: effectiveCompareSuperTypes, departments: effectiveCompareDepartments }
+      : { customerNumbers, primaryClasses, customerTypes, productCodes: effectiveCompareProducts, superTypes: effectiveCompareSuperTypes, departments: effectiveCompareDepartments });
   }
 
   const where = period ? { AND: [baseWhere, monthsWhereClause(period)] } : baseWhere;
@@ -311,6 +317,7 @@ router.get('/', async (req, res) => {
     primaryClasses,
     customerTypes,
     superTypes,
+    departments,
     boughtProducts,
     boughtProductNames: boughtProducts.map((p) => nameOf(prodMap, p)),
     notBoughtProducts,
@@ -325,6 +332,7 @@ router.get('/', async (req, res) => {
     comparePrimaryClasses,
     compareCustomerTypes,
     compareSuperTypes: effectiveCompareSuperTypes,
+    compareDepartments: effectiveCompareDepartments,
     totalRevenue: totalAgg._sum.revenue || 0,
     totalQuantity: totalAgg._sum.quantity || 0,
     activeCustomerCount: byCust.length,
