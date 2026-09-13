@@ -8,19 +8,18 @@
   --accent:#3D5CF5;--accent-strong:#2C48D8;--accent-soft:#E8ECFE;
   --red:#DE4B4B;--red-soft:#FBE1E1;--red-dot:#F2A0A0;
   --green:#2FA360;--green-soft:#DFF4E7;--green-dot:#8FDBAE;--green-btn:#1E9E5C;--green-btn-hover:#188A50;
-  /* --blue/-soft/-dot are the dashboard primary-side palette — a sky-blue ("תכלת"),
-     kept as its own token (distinct from --accent, which drives the sidebar/buttons
-     brand color) so this slot can be recolored without touching the app-wide accent. */
-  --blue:#2E9BD6;--blue-soft:#EAF5FB;--blue-dot:#96CDEB;
+  /* --blue/-soft/-dot are the dashboard primary-side palette — reads as red per
+     request (matching --red exactly), kept as its own token (distinct from --accent,
+     which drives the sidebar/buttons brand color) so this slot can be recolored
+     independently later without touching the app-wide accent or --red's other uses. */
+  --blue:#DE4B4B;--blue-soft:#FBE1E1;--blue-dot:#F2A0A0;
   --gray-soft:#EEF0F5;
-  /* --purple/-soft/-dot are the dashboard comparison-side palette (comparison data
-     reads as turquoise-green, not purple, per request) — a deliberately muted,
-     professional teal/turquoise rather than --green's brighter "success" tone,
-     since this is a chart accent shown constantly rather than an occasional status
-     color. Kept as their own tokens rather than reusing --green directly so this
-     slot can be recolored again without touching unrelated green usages elsewhere.
-     --purple-seg is unrelated (relevance-page "suggested" styling) — left as-is. */
-  --purple-seg:#8B5CF6;--purple:#149E8C;--purple-soft:#E8F5F4;--purple-dot:#8ACFC6;
+  /* --purple/-soft/-dot are the dashboard comparison-side palette — reads as green
+     per request (matching --green exactly). Kept as their own tokens rather than
+     reusing --green directly so this slot can be recolored again without touching
+     unrelated green usages elsewhere. --purple-seg is unrelated (relevance-page
+     "suggested" styling) — left as-is. */
+  --purple-seg:#8B5CF6;--purple:#2FA360;--purple-soft:#DFF4E7;--purple-dot:#8FDBAE;
   --shadow-card:0 1px 2px rgba(27,33,68,.04), 0 8px 20px rgba(27,33,68,.06);
   --radius-m:16px;--radius-s:10px;
 }
@@ -287,8 +286,8 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .dash-filter-table thead th{position:static;background:transparent;font-size:11.5px;color:var(--text-faint);font-weight:700;padding:0 10px 6px;text-align:center;border-bottom:none;}
 .dash-filter-table tbody th{font-weight:700;color:var(--text);font-size:12.5px;width:80px;white-space:nowrap;padding:0 10px;text-align:right;border-bottom:1px solid var(--border);}
 .dash-filter-table td.dft-field{padding:2px 8px;width:200px;}
-.dash-filter-table td.dft-primary{background:rgba(46,155,214,.11);}
-.dash-filter-table td.dft-compare{background:rgba(20,158,140,.14);}
+.dash-filter-table td.dft-primary{background:rgba(222,75,75,.11);}
+.dash-filter-table td.dft-compare{background:rgba(47,163,96,.14);}
 .dash-filter-table tbody tr:last-child td.dft-primary,.dash-filter-table tbody tr:last-child td.dft-compare{border-radius:0 0 8px 8px;}
 .dft-cell{display:flex;align-items:center;justify-content:flex-start;gap:4px;}
 .dft-cell .mms{flex:1;min-width:0;}

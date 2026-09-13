@@ -9,17 +9,15 @@
 // everything here is re-fetched and every chart destroyed and rebuilt on each call,
 // since Chart.js refuses to reuse a canvas that already has a live chart on it.
 //
-// A single restrained sky-blue/navy/slate palette throughout — no per-category
-// rainbow — to keep the look formal and consistent with the rest of the app's brand color.
-const DASH_CHART_COLORS = ['#2E9BD6', '#1C7EA6', '#1B2144', '#64748B', '#93A4C3', '#B9C1E4', '#0F172A'];
-const DASH_BLUE = '#2E9BD6';
+// Primary-side reads as red, comparison-side as green (per a reference screenshot of
+// red/green KPI cards) — kept the DASH_BLUE/DASH_PURPLE constant names (used in ~10
+// places below each) to avoid a purely-cosmetic rename, matching app.css's --blue/
+// --purple tokens which point at these same shades for the same reason.
+const DASH_CHART_COLORS = ['#DE4B4B', '#B33A3A', '#1B2144', '#64748B', '#93A4C3', '#B9C1E4', '#0F172A'];
+const DASH_BLUE = '#DE4B4B';
 const DASH_NAVY = '#1B2144';
 const DASH_SLATE = '#64748B';
-// Comparison-side chart color — a muted, professional turquoise-green per request,
-// not purple and not a brighter "success" green; kept the constant's name (used in
-// ~10 places below) to avoid a purely-cosmetic rename, matching app.css's --purple
-// token which points at the same shade for the same reason.
-const DASH_PURPLE = '#149E8C';
+const DASH_PURPLE = '#2FA360';
 
 const dashCharts = {};
 function upsertChart(canvasId, config) {
