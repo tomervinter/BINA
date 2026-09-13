@@ -377,12 +377,13 @@ async function loadDashboardSalesSummary(filters) {
   }
 
   if (s.periodTrend) {
-    // Period vs comparison-period, each its own chart (aligned by relative month
-    // position — month 1 of period vs month 1 of comparison, etc. — since the two
-    // ranges are usually offset on purpose, e.g. this quarter vs the same quarter
-    // last year).
+    // Period vs comparison-period, each its own chart with its own real calendar
+    // month labels — the two ranges don't have to line up (a quarter vs some
+    // unrelated pair of months is valid), so each chart faithfully reflects only the
+    // months actually selected on that side, rather than a shared "month 1/2/3"
+    // position that would misrepresent whichever side it doesn't match.
     const pt = s.periodTrend;
-    const labels = Array.from({ length: pt.periodMonths.length }, (_, i) => 'חודש ' + (i + 1));
+    const labels = pt.periodMonths.map((m) => s.monthNames[m.month - 1] + ' ' + m.year);
     // Always vs. the exact same calendar month one year earlier (pt.yoyData), drawn
     // above the period's own bar — independent of whatever comparison series is shown.
     const ptYoyEntries = buildYoyEntries(pt.periodMonths.length,
@@ -413,7 +414,7 @@ async function loadDashboardSalesSummary(filters) {
     toggleCompareChart('monthlyTrendRow', 'monthlyTrendCompareCard', 'monthlyTrendCompareChart', !!pt.compareData);
     if (pt.compareData) {
       document.getElementById('monthlyTrendCompareChartTitle').textContent = compareFilterDesc;
-      const cmpLabels = Array.from({ length: pt.compareMonths.length }, (_, i) => 'חודש ' + (i + 1));
+      const cmpLabels = pt.compareMonths.map((m) => s.monthNames[m.month - 1] + ' ' + m.year);
       upsertChart('monthlyTrendCompareChart', {
         type: 'bar',
         data: { labels: cmpLabels, datasets: [{ label: pt.compareLabel, data: pt.compareData, backgroundColor: DASH_PURPLE, borderRadius: 4 }] },
