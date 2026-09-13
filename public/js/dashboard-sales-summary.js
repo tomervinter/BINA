@@ -15,9 +15,6 @@ const DASH_CHART_COLORS = ['#3D5CF5', '#2C48D8', '#1B2144', '#64748B', '#93A4C3'
 const DASH_BLUE = '#3D5CF5';
 const DASH_NAVY = '#1B2144';
 const DASH_SLATE = '#64748B';
-// Year-over-year / period-vs-comparison trend bars: the primary series is always the
-// most prominent brand blue, older/comparison series fade to muted navy/slate/gray.
-const YEAR_SERIES_COLORS = ['#3D5CF5', '#1B2144', '#64748B', '#93A4C3', '#2C48D8', '#B9C1E4', '#0F172A'];
 
 const dashCharts = {};
 function upsertChart(canvasId, config) {
@@ -162,14 +159,15 @@ async function loadDashboardSalesSummary(filters) {
   filters = filters || {};
   const qs = new URLSearchParams();
   if (filters.customer) qs.set('customerNumber', filters.customer);
+  if (filters.product) qs.set('productCode', filters.product);
   if (filters.periodMonths && filters.periodMonths.length) qs.set('periodMonths', filters.periodMonths.join(','));
   if (filters.compareMonths && filters.compareMonths.length) qs.set('compareMonths', filters.compareMonths.join(','));
   const q = qs.toString();
   const res = await fetch('/api/dashboard-sales-summary' + (q ? '?' + q : ''), { credentials: 'include' });
   if (!res.ok) return;
   const s = await res.json();
-  const suffix = s.customerName ? (' — ' + s.customerName) : '';
-  const baseReportParams = s.customerNumber ? { customerNumber: s.customerNumber } : {};
+  const suffix = (s.customerName ? (' — ' + s.customerName) : '') + (s.productName ? (' — ' + s.productName) : '');
+  const baseReportParams = Object.assign({}, s.customerNumber && { customerNumber: s.customerNumber }, s.productCode && { productCode: s.productCode });
   const ct = s.compareTotals;
 
   if (s.period) {
@@ -180,11 +178,12 @@ async function loadDashboardSalesSummary(filters) {
     document.getElementById('salesSummaryTitle').textContent = 'תמונת מכירות — ' + s.period.label + suffix;
     document.getElementById('salesSummarySubtitle').textContent = 'מבוסס על שורות המכירה בתקופה ' + s.period.label + (s.customerNumber ? (' של ' + s.customerName) : '') + '. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.';
   } else {
-    const years = s.yearlyTrend.map((y) => y.year);
-    document.getElementById('monthlyTrendTitle').textContent = (years.length > 1 ? 'השוואת מחזור חודשי בין השנים' : 'מחזור מכירות לפי חודשים') + suffix;
+    const mt = s.monthlyTimeline;
+    const fmtKey = (mk) => { const [y, m] = mk.split('-'); return s.monthNames[+m - 1] + ' ' + y; };
+    document.getElementById('monthlyTrendTitle').textContent = 'מחזור מכירות חודשי' + suffix;
     document.getElementById('monthlyTrendSubtitle').textContent =
-      (years.length > 1 ? 'השוואה חודשית בין ' + years.join(', ') : 'נתוני שנת ' + years[0]) +
-      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. החץ מציין שינוי לעומת אותו חודש אשתקד (לחודשים שהסתיימו בלבד).';
+      'נתוני ' + fmtKey(mt.months[0]) + (mt.months.length > 1 ? ' עד ' + fmtKey(mt.months[mt.months.length - 1]) : '') +
+      ', ברצף. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. החץ מציין את שיעור השינוי של התקופה הנוכחית בלבד, לעומת אותו חודש אשתקד.';
     document.getElementById('salesSummaryTitle').textContent = (s.customerNumber ? 'תמונת מכירות — הלקוח הנבחר' : 'תמונת מכירות כוללת');
     document.getElementById('salesSummarySubtitle').textContent = s.customerNumber
       ? ('מבוסס על שורות המכירה של ' + s.customerName + ' בלבד. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.')
@@ -266,42 +265,37 @@ async function loadDashboardSalesSummary(filters) {
       }
     });
   } else {
-    // Year-over-year monthly revenue trend, one bar series per calendar year that has
-    // data — click a bar to see that year+month's rows in the full report.
-    const yearlyDatasets = s.yearlyTrend.map((yr, i) => ({
-      label: String(yr.year),
-      data: yr.data,
-      backgroundColor: YEAR_SERIES_COLORS[(s.yearlyTrend.length - 1 - i) % YEAR_SERIES_COLORS.length],
-      borderRadius: 4
-    }));
-    // Year-over-year indicator compares the most recent year to the one immediately
-    // before it (if present among the displayed years), drawn centered above that
-    // pair of bars for each month — not month-to-month within either series.
-    const latestIdx = s.yearlyTrend.length - 1;
-    const latestYear = s.yearlyTrend[latestIdx].year;
-    const priorIdx = s.yearlyTrend.findIndex((yr) => yr.year === latestYear - 1);
-    const yearlyYoyEntries = buildYoyEntries(12,
-      (i) => ({ value: s.yearlyTrend[latestIdx].data[i], meta: { year: latestYear, month: i + 1 } }),
-      (i) => priorIdx >= 0 ? s.yearlyTrend[priorIdx].data[i] : undefined
+    // Continuous monthly revenue trend across the whole sales history — one bar per
+    // month in sequence, not grouped by calendar month across years. A year-over-year
+    // indicator is drawn only above the single most recent fully-completed month (the
+    // "current period" when no period filter is active), not above every historical
+    // month, so a long multi-year timeline doesn't end up cluttered with arrows.
+    const mt = s.monthlyTimeline;
+    const n = mt.months.length;
+    const labels = mt.months.map((mk) => { const [y, m] = mk.split('-'); return s.monthNames[+m - 1] + ' ' + y; });
+    const monthMeta = mt.months.map((mk) => { const [y, m] = mk.split('-'); return { year: +y, month: +m }; });
+    const timelineYoyEntries = buildYoyEntries(n,
+      (i) => ({ value: mt.data[i], meta: monthMeta[i] }),
+      (i) => mt.yoyData[i]
     );
-    const yearlyYoyDsIndices = priorIdx >= 0 ? [latestIdx, priorIdx] : [latestIdx];
+    const currentEntry = timelineYoyEntries.length ? [timelineYoyEntries[timelineYoyEntries.length - 1]] : [];
     upsertChart('monthlyTrendChart', {
       type: 'bar',
-      data: { labels: s.monthNames, datasets: yearlyDatasets },
-      plugins: [yoyDrawPlugin(yearlyYoyEntries, yearlyYoyDsIndices)],
+      data: { labels, datasets: [{ label: 'מחזור', data: mt.data, backgroundColor: DASH_BLUE, borderRadius: 4 }] },
+      plugins: [yoyDrawPlugin(currentEntry, [0])],
       options: {
         responsive: true, maintainAspectRatio: false,
         layout: { padding: { top: 38 } },
         plugins: {
-          legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } },
-          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(yearlyYoyEntries, latestIdx) } }
+          legend: { display: false },
+          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(currentEntry, 0) } }
         },
         scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
           const el = elements[0];
-          const yr = s.yearlyTrend[el.datasetIndex];
-          window.location.href = reportUrl(Object.assign({}, baseReportParams, { year: yr.year, month: el.index + 1 }));
+          const m = monthMeta[el.index];
+          window.location.href = reportUrl(Object.assign({}, baseReportParams, { year: m.year, month: m.month }));
         },
         onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
       }
@@ -366,6 +360,8 @@ async function loadDashboardSalesSummary(filters) {
       onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
     }
   });
+
+  return s;
 }
 
 (function () {

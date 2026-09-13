@@ -58,9 +58,12 @@ const JOIN_SQL = Prisma.raw(`
 `);
 
 function monthSqlExpr() {
+  // Prisma stores SQLite DateTime columns as a millisecond Unix-epoch integer, not
+  // an ISO-8601 string — strftime() only recognizes a bare integer as a valid time
+  // value with the 'unixepoch' modifier, and that modifier expects seconds, hence /1000.
   return isPostgres()
     ? Prisma.raw('EXTRACT(MONTH FROM s."date")::int')
-    : Prisma.raw('CAST(strftime(\'%m\', s."date") AS INTEGER)');
+    : Prisma.raw('CAST(strftime(\'%m\', s."date" / 1000, \'unixepoch\') AS INTEGER)');
 }
 
 function buildWhere(organizationId, filters) {

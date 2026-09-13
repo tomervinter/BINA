@@ -45,6 +45,21 @@ function prevMonthKeyOf(mk) {
   return y + '-' + (m < 10 ? '0' + m : m);
 }
 function quarterOf(d) { return Math.floor(d.getMonth() / 3); }
+// "YYYY-MM" keys for months `fromMonth`..`toMonth` (1-indexed, inclusive) of one year —
+// matches the dashboard's own periodMonths/compareMonths format exactly, so an insight
+// can drive the dashboard's filters directly when the user clicks it.
+function yearMonthRange(year, fromMonth, toMonth) {
+  const out = [];
+  for (let m = fromMonth; m <= toMonth; m++) out.push(monthKey(new Date(year, m - 1, 1).getTime()));
+  return out;
+}
+// The 3 consecutive month keys of the quarter starting at `startMs`.
+function quarterMonthKeys(startMs) {
+  const d = new Date(startMs);
+  const out = [];
+  for (let i = 0; i < 3; i++) out.push(monthKey(new Date(d.getFullYear(), d.getMonth() + i, 1).getTime()));
+  return out;
+}
 
 // Sales only carry month-level precision (every row is stored on the 1st of its
 // month), but holiday/season windows are real dates that rarely start or end on the
@@ -209,7 +224,10 @@ async function computeInsights(organizationId) {
       customerName: custLabel(cid),
       message: `הכנסת הלקוח ירדה ב-${Math.round(Math.abs(delta) * 100)}% מול החודש הקודם${topDriver ? ', בעיקר עקב ' + topDriver : ''}.`,
       metric: Math.round(delta * 100),
-      breakdown: [{ label: fmtMonthYearKey(curMK), value: Math.round(curRev) }, { label: fmtMonthYearKey(prevMK), value: Math.round(prevRev) }]
+      breakdown: {
+        rows: [{ label: fmtMonthYearKey(curMK), value: Math.round(curRev) }, { label: fmtMonthYearKey(prevMK), value: Math.round(prevRev) }],
+        dashFilter: { periodMonths: [curMK], compareMonths: [prevMK] }
+      }
     });
   });
 
@@ -240,7 +258,10 @@ async function computeInsights(organizationId) {
           customerName: custLabel(cid),
           message: `מחזור הלקוח מתחילת השנה ירד ב-${Math.round(Math.abs(delta) * 100)}% לעומת אותה תקופה אשתקד.`,
           metric: Math.round(delta * 100),
-          breakdown: [{ label: rangeLabel + ' ' + year, value: Math.round(thisRev) }, { label: rangeLabel + ' ' + (year - 1), value: Math.round(lastRev) }]
+          breakdown: {
+            rows: [{ label: rangeLabel + ' ' + year, value: Math.round(thisRev) }, { label: rangeLabel + ' ' + (year - 1), value: Math.round(lastRev) }],
+            dashFilter: { periodMonths: yearMonthRange(year, 1, lastCompletedMonth), compareMonths: yearMonthRange(year - 1, 1, lastCompletedMonth) }
+          }
         });
       }
     });
@@ -279,7 +300,13 @@ async function computeInsights(organizationId) {
           customerName: custLabel(cid),
           message: `מחזור הלקוח ברבעון האחרון ירד ב-${Math.round(Math.abs(delta) * 100)}% ${basis}.`,
           metric: Math.round(delta * 100),
-          breakdown: [{ label: quarterLabel(lastCompletedQStart), value: Math.round(curQ) }, { label: baseLabel, value: Math.round(baseRev) }]
+          breakdown: {
+            rows: [{ label: quarterLabel(lastCompletedQStart), value: Math.round(curQ) }, { label: baseLabel, value: Math.round(baseRev) }],
+            dashFilter: {
+              periodMonths: quarterMonthKeys(lastCompletedQStart),
+              compareMonths: quarterMonthKeys(basis === 'לרבעון המקביל אשתקד' ? yoyQStart : priorQStart)
+            }
+          }
         });
       }
     });
@@ -324,7 +351,10 @@ async function computeInsights(organizationId) {
         productCode: pid,
         message: `הכמות שהלקוח קונה מ${label} ירדה ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${winMonths} החודשים הקודמים.`,
         metric: Math.round(delta * 100),
-        breakdown: [{ label: 'כמות אחרונה', value: Math.round(curQty) }, { label: 'כמות קודמת', value: Math.round(prevQty) }]
+        breakdown: {
+          rows: [{ label: 'כמות אחרונה', value: Math.round(curQty) }, { label: 'כמות קודמת', value: Math.round(prevQty) }],
+          dashFilter: { periodMonths: curMonthKeys, compareMonths: prevMonthKeys }
+        }
       });
     });
   }
@@ -361,7 +391,10 @@ async function computeInsights(organizationId) {
         productCode: pid,
         message: `תדירות הרכישה של ${label} ירדה לעומת אשתקד.`,
         metric: Math.round(delta * 100),
-        breakdown: [{ label: rangeLabel2 + ' ' + year, value: thisMonths.size }, { label: rangeLabel2 + ' ' + (year - 1), value: lastMonths.size }]
+        breakdown: {
+          rows: [{ label: rangeLabel2 + ' ' + year, value: thisMonths.size }, { label: rangeLabel2 + ' ' + (year - 1), value: lastMonths.size }],
+          dashFilter: { periodMonths: yearMonthRange(year, 1, lastCompletedMonth), compareMonths: yearMonthRange(year - 1, 1, lastCompletedMonth) }
+        }
       });
     });
   }
@@ -397,7 +430,7 @@ async function computeInsights(organizationId) {
         productCode: pid,
         message: `הלקוח קונה את ${label} בקצב לא סדיר, למרות שהוא מהווה נתח משמעותי ממחזורו.`,
         metric: Math.round(cv * 100),
-        breakdown: [{ label: 'מקדם שונות', value: Math.round(cv * 100) }, { label: 'סף', value: params.irregularity_cvThreshold }]
+        breakdown: { rows: [{ label: 'מקדם שונות', value: Math.round(cv * 100) }, { label: 'סף', value: params.irregularity_cvThreshold }] }
       });
     });
   }
@@ -428,7 +461,7 @@ async function computeInsights(organizationId) {
         customerName: custLabel(cid),
         message: `${Math.round(pct)}% ממחזור הלקוח מגיע מ-${top.length} מוצרים בלבד — סיכון ריכוזיות.`,
         metric: Math.round(pct),
-        breakdown: top.map((x, i) => ({ label: labels[i], value: Math.round(x.rev) }))
+        breakdown: { rows: top.map((x, i) => ({ label: labels[i], value: Math.round(x.rev) })) }
       });
     });
   }

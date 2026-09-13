@@ -9,6 +9,14 @@
 // window.refreshDashboardTopInsights on every filter change): when a customer is
 // selected, only that customer's insights are shown. Insights aren't computed
 // per-period, so the period/comparison-period filters don't apply here.
+//
+// Clicking an insight applies its own customer/product/period/comparison-period
+// (breakdown.dashFilter, set by insightsEngine.js — see periodMonths/compareMonths
+// there) directly onto the dashboard's own filters, via
+// window.applyDashboardFiltersFromInsight (dashboard-filters.js), rather than
+// navigating away — so the whole dashboard re-renders scoped exactly to what the
+// insight is about. An insight with no period concept (e.g. purchase irregularity,
+// concentration risk) still filters by customer/product, just not by period.
 let dashAllInsights = null;
 
 function renderDashboardTopInsights(filters) {
@@ -18,8 +26,8 @@ function renderDashboardTopInsights(filters) {
   const filtered = filters.customer ? dashAllInsights.filter((i) => i.customerId === filters.customer) : dashAllInsights;
   const top = filtered.slice(0, 5);
 
-  list.innerHTML = top.length ? top.map((i) => (
-    '<div class="dash-insight-row' + (i.customerId ? ' row-clickable' : '') + '" data-customer="' + Layout.escapeHtml(i.customerId || '') + '">' +
+  list.innerHTML = top.length ? top.map((i, idx) => (
+    '<div class="dash-insight-row' + (i.customerId ? ' row-clickable' : '') + '" data-idx="' + idx + '">' +
     '<span class="pill ' + (SEV_CLASS[i.severity] || 'pill-gray') + '">' + (SEV_LABEL[i.severity] || i.severity) + '</span>' +
     '<div><div class="dash-insight-entity">' + Layout.escapeHtml((TYPE_META[i.type] || {}).label || i.type) + (i.customerName ? ' — ' + Layout.escapeHtml(i.customerName) : '') + '</div>' +
     '<div class="dash-insight-msg">' + Layout.escapeHtml(i.message) + '</div></div>' +
@@ -30,8 +38,15 @@ function renderDashboardTopInsights(filters) {
 
   list.querySelectorAll('.dash-insight-row.row-clickable').forEach((row) => {
     row.addEventListener('click', () => {
-      const customerId = row.getAttribute('data-customer');
-      if (customerId) window.location.href = 'reports-full-sales.html?customerNumber=' + encodeURIComponent(customerId);
+      const insight = top[+row.getAttribute('data-idx')];
+      if (!insight || !insight.customerId || !window.applyDashboardFiltersFromInsight) return;
+      const dashFilter = (insight.breakdown && insight.breakdown.dashFilter) || {};
+      window.applyDashboardFiltersFromInsight({
+        customerId: insight.customerId,
+        productCode: insight.productCode || null,
+        periodMonths: dashFilter.periodMonths || [],
+        compareMonths: dashFilter.compareMonths || []
+      });
     });
   });
 }

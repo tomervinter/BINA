@@ -57,7 +57,8 @@ function monthsLabel(months) {
 router.get('/', async (req, res) => {
   const organizationId = req.user.organizationId;
   const customerNumber = req.query.customerNumber ? String(req.query.customerNumber) : null;
-  const baseWhere = customerNumber ? { organizationId, customerNumber } : { organizationId };
+  const productCode = req.query.productCode ? String(req.query.productCode) : null;
+  const baseWhere = Object.assign({ organizationId }, customerNumber && { customerNumber }, productCode && { productCode });
 
   const period = parseMonthList(req.query.periodMonths);
   const compare = period ? parseMonthList(req.query.compareMonths) : null;
@@ -114,7 +115,7 @@ router.get('/', async (req, res) => {
       .reduce((a, r) => a + r.revenue, 0));
   }
 
-  let yearlyTrend = null, periodTrend = null;
+  let monthlyTimeline = null, periodTrend = null;
   if (period) {
     // Period mode: one series for the chosen months, and (if given) a second for the
     // comparison months, aligned by relative position (1st selected period month vs
@@ -134,24 +135,34 @@ router.get('/', async (req, res) => {
       yoyData: monthlyRevenue(trendRows, yoyMonths)
     };
   } else {
-    // Default mode: one 12-value (Jan–Dec) series per calendar year that actually has
-    // sales data, so the chart compares full years side by side.
-    const yearsWithData = new Set();
-    trendRows.forEach((r) => yearsWithData.add(new Date(r.date).getFullYear()));
-    const years = yearsWithData.size ? Array.from(yearsWithData).sort((a, b) => a - b) : [new Date().getFullYear()];
-    yearlyTrend = years.map((year) => {
-      const data = new Array(12).fill(0);
-      trendRows.forEach((r) => {
-        const d = new Date(r.date);
-        if (d.getFullYear() === year) data[d.getMonth()] += r.revenue;
-      });
-      return { year, data };
-    });
+    // Default mode: one continuous month-by-month series spanning the entire sales
+    // history that has data (earliest to latest month with a sale), rather than
+    // separate per-year series side by side — the whole timeline reads as one
+    // continuous trend. `yoyData` is each timeline month's exact same calendar month
+    // one year earlier, for the on-chart year-over-year indicator.
+    let timelineMonths;
+    if (trendRows.length) {
+      const monthIndices = trendRows.map((r) => { const d = new Date(r.date); return d.getFullYear() * 12 + d.getMonth(); });
+      const minIdx = Math.min.apply(null, monthIndices), maxIdx = Math.max.apply(null, monthIndices);
+      timelineMonths = [];
+      for (let idx = minIdx; idx <= maxIdx; idx++) timelineMonths.push({ year: Math.floor(idx / 12), month: (idx % 12) + 1 });
+    } else {
+      const now = new Date();
+      timelineMonths = [{ year: now.getFullYear(), month: now.getMonth() + 1 }];
+    }
+    const timelineYoyMonths = timelineMonths.map(({ year, month }) => ({ year: year - 1, month }));
+    monthlyTimeline = {
+      months: timelineMonths.map((m) => m.year + '-' + String(m.month).padStart(2, '0')),
+      data: monthlyRevenue(trendRows, timelineMonths),
+      yoyData: monthlyRevenue(trendRows, timelineYoyMonths)
+    };
   }
 
   res.json({
     customerNumber,
     customerName: customerNumber ? ((custMap[customerNumber] && custMap[customerNumber].name) || customerNumber) : null,
+    productCode,
+    productName: productCode ? ((prodMap[productCode] && prodMap[productCode].name) || productCode) : null,
     period: period ? { months: period.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(period) } : null,
     comparePeriod: compare ? { months: compare.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(compare) } : null,
     totalRevenue: totalAgg._sum.revenue || 0,
@@ -165,7 +176,7 @@ router.get('/', async (req, res) => {
       activeProductCount: compareByProd.length
     } : null,
     monthNames: MONTH_NAMES,
-    yearlyTrend,
+    monthlyTimeline,
     periodTrend,
     byDepartment: groupRevenue(byProd, 'productCode', prodMap, 'department'),
     bySuperType: groupRevenue(byProd, 'productCode', prodMap, 'superType'),

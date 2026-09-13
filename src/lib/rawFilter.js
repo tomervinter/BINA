@@ -7,9 +7,12 @@ const { isPostgres } = require('./dbProvider');
 // Prisma.raw; every user-supplied filter value is passed as a normal template
 // value, which Prisma.sql parameterizes safely.
 function monthExprFor(colSql) {
+  // Prisma stores SQLite DateTime columns as a millisecond Unix-epoch integer, not
+  // an ISO-8601 string — strftime() only recognizes a bare integer as a valid time
+  // value with the 'unixepoch' modifier, and that modifier expects seconds, hence /1000.
   return isPostgres()
     ? Prisma.raw(`EXTRACT(MONTH FROM ${colSql})::int`)
-    : Prisma.raw(`CAST(strftime('%m', ${colSql}) AS INTEGER)`);
+    : Prisma.raw(`CAST(strftime('%m', ${colSql} / 1000, 'unixepoch') AS INTEGER)`);
 }
 
 // columns: { key: { sql: '<alias>."<field>"', type: 'text' | 'number' | 'year' | 'month' } }
