@@ -104,6 +104,10 @@ input[type=text],input[type=email],input[type=password],input[type=number]{
 .card-title{font-size:16px;font-weight:800;margin-bottom:10px;}
 .card-text{font-size:13px;color:var(--text-muted);line-height:1.75;margin-bottom:18px;max-width:1100px;}
 .chart-filter-desc{font-size:13.5px;color:var(--text-faint);font-weight:600;margin-bottom:8px;min-height:16px;}
+.chart-legend-row{display:flex;gap:16px;margin-bottom:8px;font-size:12px;color:var(--text-muted);}
+.chart-legend-row span{display:flex;align-items:center;gap:4px;}
+.chart-legend-swatch{width:10px;height:10px;border-radius:2px;display:inline-block;}
+.chart-legend-swatch.chart-legend-line{width:16px;height:2px;border-radius:0;}
 
 /* Floats over the seam between a primary/comparison chart pair (see
    #monthlyTrendCompareBadge) to make the headline change between the two — the

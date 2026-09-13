@@ -16,6 +16,7 @@ const DASH_BLUE = '#3D5CF5';
 const DASH_NAVY = '#1B2144';
 const DASH_SLATE = '#64748B';
 const DASH_PURPLE = '#8B5CF6';
+const DASH_WEIGHT_LINE = '#7FD9B0';
 
 const dashCharts = {};
 function upsertChart(canvasId, config) {
@@ -191,6 +192,33 @@ function barValueLabelPlugin(formatFn) {
   };
 }
 
+// Labels each point of one specific line dataset with its value, just above the
+// point — used for the weight-overlay line on the monthly trend chart, where the
+// line's own scale (kg) has no other on-chart readout the way the bars already get
+// via barValueLabelPlugin.
+function lineValueLabelPlugin(datasetIndex, formatFn, color) {
+  return {
+    id: 'lineValueLabel',
+    afterDatasetsDraw(chart) {
+      const meta = chart.getDatasetMeta(datasetIndex);
+      if (!meta || meta.hidden) return;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.font = '700 11px Assistant, Arial, sans-serif';
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      meta.data.forEach((point, i) => {
+        const value = chart.data.datasets[datasetIndex].data[i];
+        if (value == null) return;
+        const props = point.getProps(['x', 'y'], true);
+        ctx.fillText(formatFn(value), props.x, props.y - 8);
+      });
+      ctx.restore();
+    }
+  };
+}
+
 // A field can hold several values now (multi-select) — a report link can only ever
 // filter by one exact value per column, so it degrades gracefully to "no filter on
 // this dimension" once more than one is picked; join(...) instead gives the display
@@ -210,12 +238,14 @@ async function loadDashboardSalesSummary(filters) {
   setList('productCode', filters.product);
   setList('primaryClass', filters.primaryClass);
   setList('customerType', filters.customerType);
+  setList('superType', filters.superType);
   setList('periodMonths', filters.periodMonths);
   setList('compareMonths', filters.compareMonths);
   setList('compareCustomerNumber', filters.compareCustomer);
   setList('compareProductCode', filters.compareProduct);
   setList('comparePrimaryClass', filters.comparePrimaryClass);
   setList('compareCustomerType', filters.compareCustomerType);
+  setList('compareSuperType', filters.compareSuperType);
   setList('boughtProducts', filters.boughtProducts);
   setList('notBoughtProducts', filters.notBoughtProducts);
   const q = qs.toString();
@@ -226,8 +256,10 @@ async function loadDashboardSalesSummary(filters) {
   const productLabel = joinOrCount(s.productCodes, s.productNames, 'מוצרים');
   const primaryClassLabel = joinOrCount(s.primaryClasses, null, 'סיווגים ראשיים');
   const customerTypeLabel = joinOrCount(s.customerTypes, null, 'סוגי לקוח');
+  const superTypeLabel = joinOrCount(s.superTypes, null, 'טיפוסי על');
   const suffix = (customerLabel ? (' — ' + customerLabel) : '') + (productLabel ? (' — ' + productLabel) : '')
-    + (primaryClassLabel ? (' — ' + primaryClassLabel) : '') + (customerTypeLabel ? (' — ' + customerTypeLabel) : '');
+    + (primaryClassLabel ? (' — ' + primaryClassLabel) : '') + (customerTypeLabel ? (' — ' + customerTypeLabel) : '')
+    + (superTypeLabel ? (' — ' + superTypeLabel) : '');
 
   // Per-chart-card filter description: every chart's own title stays generic (set
   // separately per row below), while this line — shown inside each individual card —
@@ -240,6 +272,7 @@ async function loadDashboardSalesSummary(filters) {
     productLabel ? ('מוצר: ' + productLabel) : null,
     primaryClassLabel ? ('סיווג ראשי: ' + primaryClassLabel) : null,
     customerTypeLabel ? ('סוג לקוח: ' + customerTypeLabel) : null,
+    superTypeLabel ? ('טיפוס על: ' + superTypeLabel) : null,
     s.period ? ('תקופה: ' + s.period.label) : null,
     (s.boughtProductNames && s.boughtProductNames.length) ? ('קנו: ' + s.boughtProductNames.join(', ')) : null,
     (s.notBoughtProductNames && s.notBoughtProductNames.length) ? ('לא קנו: ' + s.notBoughtProductNames.join(', ')) : null
@@ -251,16 +284,19 @@ async function loadDashboardSalesSummary(filters) {
   const compareProductLabel = joinOrCount(s.compareProductCodes, s.compareProductNames, 'מוצרים');
   const comparePrimaryClassLabel = joinOrCount(s.comparePrimaryClasses, null, 'סיווגים ראשיים');
   const compareCustomerTypeLabel = joinOrCount(s.compareCustomerTypes, null, 'סוגי לקוח');
+  const compareSuperTypeLabel = joinOrCount(s.compareSuperTypes, null, 'טיפוסי על');
   const compareAxisLabel = comparePrimaryClassLabel ? ('סיווג ' + comparePrimaryClassLabel)
     : compareCustomerTypeLabel ? ('סוג לקוח ' + compareCustomerTypeLabel)
     : compareCustomerLabel ? ('הלקוח ' + compareCustomerLabel)
     : compareProductLabel ? ('המוצר ' + compareProductLabel)
+    : compareSuperTypeLabel ? ('טיפוס על ' + compareSuperTypeLabel)
     : (s.comparePeriod ? s.comparePeriod.label : null);
   const compareFilterDesc = joinFilterParts([
     compareCustomerLabel ? ('לקוח: ' + compareCustomerLabel) : null,
     compareProductLabel ? ('מוצר: ' + compareProductLabel) : null,
     comparePrimaryClassLabel ? ('סיווג ראשי: ' + comparePrimaryClassLabel) : null,
     compareCustomerTypeLabel ? ('סוג לקוח: ' + compareCustomerTypeLabel) : null,
+    compareSuperTypeLabel ? ('טיפוס על: ' + compareSuperTypeLabel) : null,
     s.comparePeriod ? ('תקופה: ' + s.comparePeriod.label) : null
   ]) || 'יורש את סינון הבדיקה הראשית';
 
@@ -380,6 +416,9 @@ async function loadDashboardSalesSummary(filters) {
   // period-vs-comparison-period case (right below) ever populates it.
   const trendCompareBadge = document.getElementById('monthlyTrendCompareBadge');
   trendCompareBadge.style.display = 'none';
+  // Same idea for the weight-overlay legend — weight is only computed for the
+  // continuous timeline (the "else" branch below), not the period-trend view.
+  document.getElementById('monthlyTrendWeightLegend').style.display = 'none';
 
   if (s.periodTrend) {
     // Period vs comparison-period, each its own chart with its own real calendar
@@ -470,10 +509,16 @@ async function loadDashboardSalesSummary(filters) {
     // displayed alongside it, that side-by-side split is already the comparison, and
     // a dozen extra per-bar arrows on the primary chart would just add noise.
     const activeYoyEntries = mt.compareData ? [] : timelineYoyEntries;
+    document.getElementById('monthlyTrendWeightLegend').style.display = '';
     upsertChart('monthlyTrendChart', {
-      type: 'bar',
-      data: { labels, datasets: [{ label: 'מחזור', data: mt.data, backgroundColor: DASH_BLUE, borderRadius: 4 }] },
-      plugins: [yoyDrawPlugin(activeYoyEntries, [0])],
+      data: {
+        labels,
+        datasets: [
+          { type: 'bar', label: 'מחזור', data: mt.data, backgroundColor: DASH_BLUE, borderRadius: 4, yAxisID: 'y', order: 1 },
+          { type: 'line', label: 'מכר במשקל', data: mt.weight, borderColor: DASH_WEIGHT_LINE, backgroundColor: DASH_WEIGHT_LINE, borderWidth: 2.5, pointRadius: 3.5, pointBackgroundColor: DASH_WEIGHT_LINE, pointBorderColor: '#fff', pointBorderWidth: 1.5, tension: 0.3, yAxisID: 'y1', order: 0 }
+        ]
+      },
+      plugins: [yoyDrawPlugin(activeYoyEntries, [0]), lineValueLabelPlugin(1, (v) => Math.round(v).toLocaleString('he-IL'), DASH_WEIGHT_LINE)],
       options: {
         responsive: true, maintainAspectRatio: false,
         layout: { padding: { top: 38 } },
@@ -481,7 +526,10 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(activeYoyEntries, 0) } }
         },
-        scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+        scales: {
+          y: { position: 'left', ticks: { callback: (v) => v.toLocaleString('he-IL') } },
+          y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => v.toLocaleString('he-IL') } }
+        },
         onClick: function (evt, elements) {
           if (!elements.length) return;
           const m = monthMeta[elements[0].index];

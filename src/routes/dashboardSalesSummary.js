@@ -60,7 +60,7 @@ function parseCsv(str) {
 // was, becomes the customer set outright) — used for the purchase-based cohort
 // filter (customers who bought/didn't buy certain products), which only ever applies
 // to the primary side.
-async function buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, restrictToCustomers }) {
+async function buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, superTypes, restrictToCustomers }) {
   const where = { organizationId };
   let resolvedCustomers = null;
   if (primaryClasses.length || customerTypes.length) {
@@ -77,7 +77,18 @@ async function buildEntityWhere(organizationId, { customerNumbers, productCodes,
     resolvedCustomers = resolvedCustomers ? resolvedCustomers.filter((c) => restrictSet.has(c)) : restrictToCustomers;
   }
   if (resolvedCustomers) where.customerNumber = { in: resolvedCustomers };
-  if (productCodes.length) where.productCode = { in: productCodes };
+  // superType lives on Product, not Sale — same segment-over-explicit precedence as
+  // primaryClass/customerType above: a superType selection is the coarser,
+  // intentionally-chosen filter, so it wins over an explicit productCode list when
+  // both are given.
+  let resolvedProducts = null;
+  if (superTypes && superTypes.length) {
+    const segProducts = await prisma.product.findMany({ where: { organizationId, superType: { in: superTypes } }, select: { itemCode: true } });
+    resolvedProducts = segProducts.map((p) => p.itemCode);
+  } else if (productCodes.length) {
+    resolvedProducts = productCodes;
+  }
+  if (resolvedProducts) where.productCode = { in: resolvedProducts };
   return where;
 }
 
@@ -140,10 +151,12 @@ router.get('/', async (req, res) => {
   const productCodes = parseCsv(req.query.productCode);
   const primaryClasses = parseCsv(req.query.primaryClass);
   const customerTypes = parseCsv(req.query.customerType);
+  const superTypes = parseCsv(req.query.superType);
   const compareCustomerNumbers = parseCsv(req.query.compareCustomerNumber);
   const compareProductCodes = parseCsv(req.query.compareProductCode);
   const comparePrimaryClasses = parseCsv(req.query.comparePrimaryClass);
   const compareCustomerTypes = parseCsv(req.query.compareCustomerType);
+  const compareSuperTypes = parseCsv(req.query.compareSuperType);
   const boughtProducts = parseCsv(req.query.boughtProducts);
   const notBoughtProducts = parseCsv(req.query.notBoughtProducts);
   const period = parseMonthList(req.query.periodMonths);
@@ -151,21 +164,24 @@ router.get('/', async (req, res) => {
   // "Bought X" / "didn't buy Y" is scoped to the selected period, same as every other
   // number on the dashboard — not "ever bought", unless no period filter is active.
   const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts, period);
-  const hasEntityFilter = !!(customerNumbers.length || productCodes.length || primaryClasses.length || customerTypes.length || purchaseCohort);
+  const hasEntityFilter = !!(customerNumbers.length || productCodes.length || primaryClasses.length || customerTypes.length || superTypes.length || purchaseCohort);
   const baseWhere = hasEntityFilter
-    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, restrictToCustomers: purchaseCohort })
+    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, superTypes, restrictToCustomers: purchaseCohort })
     : { organizationId };
 
   const compare = period ? parseMonthList(req.query.compareMonths) : null;
   const hasCompareIdentity = !!(compareCustomerNumbers.length || comparePrimaryClasses.length || compareCustomerTypes.length);
-  const hasEntityCompare = hasCompareIdentity || !!compareProductCodes.length;
+  const hasEntityCompare = hasCompareIdentity || !!compareProductCodes.length || !!compareSuperTypes.length;
   const effectiveCompareProducts = compareProductCodes.length ? compareProductCodes : productCodes;
+  // superType falls back independently too, exactly like productCode above — it's
+  // the same product dimension, just the coarser (segment) form of it.
+  const effectiveCompareSuperTypes = compareSuperTypes.length ? compareSuperTypes : superTypes;
 
   let compareBaseWhere = null;
   if (hasEntityCompare || compare) {
     compareBaseWhere = await buildEntityWhere(organizationId, hasCompareIdentity
-      ? { customerNumbers: compareCustomerNumbers, primaryClasses: comparePrimaryClasses, customerTypes: compareCustomerTypes, productCodes: effectiveCompareProducts }
-      : { customerNumbers, primaryClasses, customerTypes, productCodes: effectiveCompareProducts });
+      ? { customerNumbers: compareCustomerNumbers, primaryClasses: comparePrimaryClasses, customerTypes: compareCustomerTypes, productCodes: effectiveCompareProducts, superTypes: effectiveCompareSuperTypes }
+      : { customerNumbers, primaryClasses, customerTypes, productCodes: effectiveCompareProducts, superTypes: effectiveCompareSuperTypes });
   }
 
   const where = period ? { AND: [baseWhere, monthsWhereClause(period)] } : baseWhere;
@@ -180,7 +196,7 @@ router.get('/', async (req, res) => {
     // Unrestricted by the period/compare date filters (customer filter still applies)
     // so the trend chart can always look up a given month's year-earlier counterpart
     // for the year-over-year indicator, regardless of which months were selected.
-    prisma.sale.findMany({ where: baseWhere, select: { date: true, revenue: true } })
+    prisma.sale.findMany({ where: baseWhere, select: { date: true, revenue: true, weight: true } })
   ];
   if (compareWhere) {
     queries.push(
@@ -238,6 +254,16 @@ router.get('/', async (req, res) => {
       .reduce((a, r) => a + r.revenue, 0));
   }
 
+  // Sale.weight is optional — sales rows recorded before the column existed (or from
+  // a source that never tracked it) come back null, which is treated as 0 rather than
+  // skewing the total. Only computed for the primary continuous timeline (below), the
+  // one chart that shows it.
+  function monthlyWeight(rows, months) {
+    return months.map(({ year, month }) => rows
+      .filter((r) => { const d = new Date(r.date); return d.getFullYear() === year && d.getMonth() + 1 === month; })
+      .reduce((a, r) => a + (r.weight || 0), 0));
+  }
+
   let monthlyTimeline = null, periodTrend = null;
   if (period) {
     // Period mode: one series for the chosen months, and (if given) a second for the
@@ -282,7 +308,8 @@ router.get('/', async (req, res) => {
       months: timelineMonths.map((m) => m.year + '-' + String(m.month).padStart(2, '0')),
       data: monthlyRevenue(trendRows, timelineMonths),
       compareData: compareTrendRows ? monthlyRevenue(compareTrendRows, timelineMonths) : null,
-      yoyData: monthlyRevenue(trendRows, timelineYoyMonths)
+      yoyData: monthlyRevenue(trendRows, timelineYoyMonths),
+      weight: monthlyWeight(trendRows, timelineMonths)
     };
   }
 
@@ -294,6 +321,7 @@ router.get('/', async (req, res) => {
     productNames: productCodes.map((p) => nameOf(prodMap, p)),
     primaryClasses,
     customerTypes,
+    superTypes,
     boughtProducts,
     boughtProductNames: boughtProducts.map((p) => nameOf(prodMap, p)),
     notBoughtProducts,
@@ -307,6 +335,7 @@ router.get('/', async (req, res) => {
     compareProductNames: compareProductCodes.map((p) => nameOf(prodMap, p)),
     comparePrimaryClasses,
     compareCustomerTypes,
+    compareSuperTypes: effectiveCompareSuperTypes,
     totalRevenue: totalAgg._sum.revenue || 0,
     totalQuantity: totalAgg._sum.quantity || 0,
     activeCustomerCount: byCust.length,

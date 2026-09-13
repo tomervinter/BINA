@@ -83,6 +83,21 @@
                 </td>
               </tr>
               <tr>
+                <th scope="row">טיפוס על</th>
+                <td class="dft-field dft-primary">
+                  <div class="dft-cell">
+                    <div id="dashSuperTypePicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearSuperType" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
+                </td>
+                <td class="dft-field dft-compare">
+                  <div class="dft-cell">
+                    <div id="dashCompareSuperTypePicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearCompareSuperType" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
                 <th scope="row">מוצר</th>
                 <td class="dft-field dft-primary">
                   <div class="dft-cell">
@@ -182,6 +197,10 @@
       <div id="monthlyTrendRow" style="display:grid;grid-template-columns:1fr;gap:22px;position:relative;">
         <div class="card">
           <div class="chart-filter-desc" id="monthlyTrendPrimaryDesc"></div>
+          <div class="chart-legend-row" id="monthlyTrendWeightLegend" style="display:none;">
+            <span><span class="chart-legend-swatch" style="background:#3D5CF5;"></span>מחזור (ש"ח)</span>
+            <span><span class="chart-legend-swatch chart-legend-line" style="background:#7FD9B0;"></span>מכר במשקל (ק"ג)</span>
+          </div>
           <div style="position:relative;height:300px;"><canvas id="monthlyTrendChart"></canvas></div>
         </div>
         <div class="card" id="monthlyTrendCompareCard" style="display:none;">
