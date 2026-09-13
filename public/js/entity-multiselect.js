@@ -42,7 +42,7 @@ function createEntityMultiSelect(containerId, opts) {
     const f = (filterText || '').trim().toLowerCase();
     const filtered = f ? options.filter((o) => o.label.toLowerCase().includes(f)) : options;
     optsWrap.innerHTML = filtered.length
-      ? filtered.map((o) => '<label class="mms-option"><input type="checkbox" value="' + Layout.escapeHtml(o.value) + '"' + (selected.has(o.value) ? ' checked' : '') + '>' + Layout.escapeHtml(o.label) + '</label>').join('')
+      ? filtered.map((o) => '<label class="mms-option"><input type="checkbox" value="' + Layout.escapeHtml(o.value) + '"' + (selected.has(o.value) ? ' checked' : '') + '><span class="ems-opt-label">' + Layout.escapeHtml(o.label) + '</span></label>').join('')
       : '<div class="ems-empty">אין תוצאות</div>';
     optsWrap.querySelectorAll('input[type=checkbox]').forEach((cb) => {
       cb.addEventListener('change', () => {

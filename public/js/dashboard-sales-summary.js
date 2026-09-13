@@ -327,16 +327,18 @@ async function loadDashboardSalesSummary(filters) {
     '</a>'
   )).join('');
 
-  // Shows/hides the second trend-chart card and widens/narrows the row accordingly —
-  // one full-width chart when only primary filters are set, two side-by-side (each
-  // shrunk to make room) as soon as any comparison is active. Destroys the compare
-  // chart instance when hiding it so a later re-show always starts from a clean canvas.
-  function toggleCompareChart(show) {
-    const row = document.getElementById('monthlyTrendRow');
-    const card = document.getElementById('monthlyTrendCompareCard');
+  // Shows/hides a chart row's second (comparison) card and widens/narrows the row
+  // accordingly — one full-width chart when only primary filters are set, two
+  // side-by-side (each shrunk to make room) as soon as any comparison is active.
+  // Destroys the compare chart instance when hiding it so a later re-show always
+  // starts from a clean canvas. Used by every chart on the dashboard that has a
+  // primary/comparison pair (the trend chart and the four breakdown charts below it).
+  function toggleCompareChart(rowId, cardId, canvasId, show) {
+    const row = document.getElementById(rowId);
+    const card = document.getElementById(cardId);
     if (row) row.style.gridTemplateColumns = show ? '1fr 1fr' : '1fr';
     if (card) card.style.display = show ? '' : 'none';
-    if (!show && dashCharts.monthlyTrendCompareChart) { dashCharts.monthlyTrendCompareChart.destroy(); delete dashCharts.monthlyTrendCompareChart; }
+    if (!show && dashCharts[canvasId]) { dashCharts[canvasId].destroy(); delete dashCharts[canvasId]; }
   }
 
   if (s.periodTrend) {
@@ -373,7 +375,7 @@ async function loadDashboardSalesSummary(filters) {
         onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
       }
     });
-    toggleCompareChart(!!pt.compareData);
+    toggleCompareChart('monthlyTrendRow', 'monthlyTrendCompareCard', 'monthlyTrendCompareChart', !!pt.compareData);
     if (pt.compareData) {
       document.getElementById('monthlyTrendCompareChartTitle').textContent = 'השוואה — ' + pt.compareLabel;
       const cmpLabels = Array.from({ length: pt.compareMonths.length }, (_, i) => 'חודש ' + (i + 1));
@@ -429,7 +431,7 @@ async function loadDashboardSalesSummary(filters) {
         onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
       }
     });
-    toggleCompareChart(!!mt.compareData);
+    toggleCompareChart('monthlyTrendRow', 'monthlyTrendCompareCard', 'monthlyTrendCompareChart', !!mt.compareData);
     if (mt.compareData) {
       document.getElementById('monthlyTrendCompareChartTitle').textContent = 'השוואה — ' + (compareAxisLabel || '');
       upsertChart('monthlyTrendCompareChart', {
@@ -451,7 +453,7 @@ async function loadDashboardSalesSummary(filters) {
   }
 
   const legendOpts = { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } };
-  function breakdownChart(canvasId, rows, filterKey, type, color) {
+  function oneBreakdownChart(canvasId, rows, filterKey, type, color, linkParams) {
     const cfg = {
       type,
       data: {
@@ -468,52 +470,61 @@ async function loadDashboardSalesSummary(filters) {
         layout: type === 'bar' ? { padding: { right: 46 } } : undefined,
         plugins: type === 'doughnut' ? legendOpts : { legend: { display: false } },
         scales: type === 'bar' ? { x: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } } : undefined,
-        onClick: onChartClick((label) => reportUrl(Object.assign({}, baseReportParams, { [filterKey]: label }))),
+        onClick: onChartClick((label) => reportUrl(Object.assign({}, linkParams, { [filterKey]: label }))),
         onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
       }
     };
     if (type === 'bar') cfg.plugins = [barValueLabelPlugin((v) => Math.round(v).toLocaleString('he-IL'))];
     upsertChart(canvasId, cfg);
   }
-
-  breakdownChart('superTypeChart', s.bySuperType, 'superType', 'bar', DASH_BLUE);
-  breakdownChart('departmentChart', s.byDepartment, 'department', 'bar', DASH_NAVY);
-
-  upsertChart('topCustomersChart', {
-    type: 'bar',
-    data: { labels: s.topCustomers.map((r) => r.name), datasets: [{ label: 'מחזור', data: s.topCustomers.map((r) => r.revenue), backgroundColor: DASH_BLUE, borderRadius: 6 }] },
-    plugins: [barValueLabelPlugin((v) => Math.round(v).toLocaleString('he-IL'))],
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      layout: { padding: { right: 46 } },
-      plugins: { legend: { display: false } },
-      scales: { x: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
-      onClick: function (evt, elements) {
-        if (!elements.length) return;
-        const c = s.topCustomers[elements[0].index];
-        window.location.href = reportUrl({ customerNumber: c.code });
-      },
-      onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
+  // Each breakdown chart follows the same primary/comparison-pair pattern as the
+  // trend chart above: full width alone, or split with a comparison version (same
+  // breakdown, computed from the compare-side data) whenever a comparison is active.
+  function breakdownChart(rowId, canvasId, compareCanvasId, compareCardId, compareTitleId, titleText, rows, compareRows, filterKey, type, color) {
+    oneBreakdownChart(canvasId, rows, filterKey, type, color, baseReportParams);
+    toggleCompareChart(rowId, compareCardId, compareCanvasId, !!compareRows);
+    if (compareRows) {
+      document.getElementById(compareTitleId).textContent = titleText + ' — השוואה' + (compareAxisLabel ? (' (' + compareAxisLabel + ')') : '');
+      oneBreakdownChart(compareCanvasId, compareRows, filterKey, type, DASH_PURPLE, compareBaseReportParams);
     }
-  });
+  }
 
-  upsertChart('topProductsChart', {
-    type: 'bar',
-    data: { labels: s.topProducts.map((r) => r.name), datasets: [{ label: 'מחזור', data: s.topProducts.map((r) => r.revenue), backgroundColor: DASH_SLATE, borderRadius: 6 }] },
-    plugins: [barValueLabelPlugin((v) => Math.round(v).toLocaleString('he-IL'))],
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      layout: { padding: { right: 46 } },
-      plugins: { legend: { display: false } },
-      scales: { x: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
-      onClick: function (evt, elements) {
-        if (!elements.length) return;
-        const p = s.topProducts[elements[0].index];
-        window.location.href = reportUrl(Object.assign({}, baseReportParams, { productCode: p.code }));
-      },
-      onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
-    }
-  });
+  breakdownChart('superTypeRow', 'superTypeChart', 'superTypeCompareChart', 'superTypeCompareCard', 'superTypeCompareTitle', 'מחזור לפי טיפוס על', s.bySuperType, s.compareBySuperType, 'superType', 'bar', DASH_BLUE);
+  breakdownChart('departmentRow', 'departmentChart', 'departmentCompareChart', 'departmentCompareCard', 'departmentCompareTitle', 'מחזור לפי מחלקת מוצר', s.byDepartment, s.compareByDepartment, 'department', 'bar', DASH_NAVY);
+
+  function oneRankedChart(canvasId, rows, color, linkFn) {
+    upsertChart(canvasId, {
+      type: 'bar',
+      data: { labels: rows.map((r) => r.name), datasets: [{ label: 'מחזור', data: rows.map((r) => r.revenue), backgroundColor: color, borderRadius: 6 }] },
+      plugins: [barValueLabelPlugin((v) => Math.round(v).toLocaleString('he-IL'))],
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        layout: { padding: { right: 46 } },
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+        onClick: function (evt, elements) {
+          if (!elements.length) return;
+          const url = linkFn(rows[elements[0].index]);
+          if (url) window.location.href = url;
+        },
+        onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
+      }
+    });
+  }
+
+  oneRankedChart('topCustomersChart', s.topCustomers, DASH_BLUE, (c) => reportUrl({ customerNumber: c.code }));
+  toggleCompareChart('topCustomersRow', 'topCustomersCompareCard', 'topCustomersCompareChart', !!s.compareTopCustomers);
+  if (s.compareTopCustomers) {
+    document.getElementById('topCustomersCompareTitle').textContent = 'הלקוחות המובילים במחזור — השוואה' + (compareAxisLabel ? (' (' + compareAxisLabel + ')') : '');
+    oneRankedChart('topCustomersCompareChart', s.compareTopCustomers, DASH_PURPLE, (c) => reportUrl({ customerNumber: c.code }));
+  }
+
+  oneRankedChart('topProductsChart', s.topProducts, DASH_SLATE, (p) => reportUrl(Object.assign({}, baseReportParams, { productCode: p.code })));
+  toggleCompareChart('topProductsRow', 'topProductsCompareCard', 'topProductsCompareChart', !!s.compareTopProducts);
+  if (s.compareTopProducts) {
+    document.getElementById('topProductsCompareTitle').textContent = 'המוצרים המובילים במחזור — השוואה' + (compareAxisLabel ? (' (' + compareAxisLabel + ')') : '');
+    oneRankedChart('topProductsCompareChart', s.compareTopProducts, DASH_PURPLE, (p) => reportUrl(Object.assign({}, compareBaseReportParams, { productCode: p.code })));
+  }
 
   return s;
 }

@@ -26,7 +26,8 @@
             <div class="page-subtitle" id="dashFilterSubtitle" style="margin-bottom:0;">כברירת מחדל, כל הנתונים בדשבורד מציגים את כלל הלקוחות וכל התקופות. מלאו כל שורה בנפרד כדי לסנן לפיה, ואת עמודת ההשוואה כדי להציג לצידה נתון להשוואה.</div>
           </div>
         </div>
-        <div class="table-scroll" style="margin-top:12px;max-width:100%;width:fit-content;overflow:visible;">
+        <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-top:12px;">
+        <div class="table-scroll" style="max-width:100%;width:fit-content;overflow:visible;">
           <table class="dash-filter-table">
             <thead>
               <tr>
@@ -115,23 +116,34 @@
           </table>
         </div>
 
-        <div class="table-head-row" style="margin-top:16px;">
-          <div class="table-head-right">
-            <div class="card-title" style="margin-bottom:2px;font-size:14px;">סינון לקוחות לפי רכישות</div>
-            <div class="page-subtitle" id="dashPurchaseCohortSubtitle" style="margin-bottom:0;">מצמצם את הלקוח/ות בבדיקה הראשית למי שקנו מוצר מסוים ו/או למי שלא קנו מוצר אחר.</div>
+        <div class="dash-cohort-panel">
+          <div class="card-title" style="margin-bottom:2px;font-size:14px;">סינון לקוחות לפי רכישות</div>
+          <div class="page-subtitle" id="dashPurchaseCohortSubtitle" style="margin-bottom:10px;">מצמצם את הלקוח/ות בבדיקה הראשית למי שקנו מוצר מסוים ו/או למי שלא קנו מוצר אחר.</div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-weight:700;font-size:12.5px;">קנו מוצר/ים:</span>
+              <div id="dashBoughtProductsPicker" style="flex:1;"></div>
+              <button class="dft-cell-clear" id="dashClearBoughtProducts" type="button" title="נקה" style="display:none;">✕</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-weight:700;font-size:12.5px;">לא קנו מוצר/ים:</span>
+              <div id="dashNotBoughtProductsPicker" style="flex:1;"></div>
+              <button class="dft-cell-clear" id="dashClearNotBoughtProducts" type="button" title="נקה" style="display:none;">✕</button>
+            </div>
+          </div>
+          <div id="dashCohortCustomersSection" style="display:none;margin-top:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <span style="font-weight:700;font-size:12.5px;" id="dashCohortCustomersCount"></span>
+              <a class="btn btn-success btn-sm" id="dashCohortExportBtn" href="#" target="_blank">ייצוא לאקסל</a>
+            </div>
+            <div class="table-scroll" style="margin-top:8px;max-height:220px;overflow-y:auto;">
+              <table>
+                <thead><tr><th>מספר לקוח</th><th>שם לקוח</th></tr></thead>
+                <tbody id="dashCohortCustomersBody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
-        <div class="dash-filter-row" style="display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-weight:700;font-size:12.5px;">קנו מוצר/ים:</span>
-            <div id="dashBoughtProductsPicker"></div>
-            <button class="dft-cell-clear" id="dashClearBoughtProducts" type="button" title="נקה" style="display:none;">✕</button>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-weight:700;font-size:12.5px;">לא קנו מוצר/ים:</span>
-            <div id="dashNotBoughtProductsPicker"></div>
-            <button class="dft-cell-clear" id="dashClearNotBoughtProducts" type="button" title="נקה" style="display:none;">✕</button>
-          </div>
         </div>
       </div>
 
@@ -175,25 +187,47 @@
         <div id="dashTopInsightsList"></div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;">
+      <div id="superTypeRow" style="display:grid;grid-template-columns:1fr;gap:22px;">
         <div class="card">
           <div class="card-title" id="superTypeTitle">מחזור לפי טיפוס על</div>
           <div style="position:relative;height:230px;"><canvas id="superTypeChart"></canvas></div>
         </div>
+        <div class="card" id="superTypeCompareCard" style="display:none;">
+          <div class="card-title" id="superTypeCompareTitle"></div>
+          <div style="position:relative;height:230px;"><canvas id="superTypeCompareChart"></canvas></div>
+        </div>
+      </div>
+
+      <div id="departmentRow" style="display:grid;grid-template-columns:1fr;gap:22px;margin-top:22px;">
         <div class="card">
           <div class="card-title" id="departmentTitle">מחזור לפי מחלקת מוצר</div>
           <div style="position:relative;height:230px;"><canvas id="departmentChart"></canvas></div>
         </div>
+        <div class="card" id="departmentCompareCard" style="display:none;">
+          <div class="card-title" id="departmentCompareTitle"></div>
+          <div style="position:relative;height:230px;"><canvas id="departmentCompareChart"></canvas></div>
+        </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:22px;">
+      <div id="topCustomersRow" style="display:grid;grid-template-columns:1fr;gap:22px;margin-top:22px;">
         <div class="card">
           <div class="card-title" id="topCustomersTitle">5 הלקוחות המובילים במחזור</div>
           <div style="position:relative;height:220px;"><canvas id="topCustomersChart"></canvas></div>
         </div>
+        <div class="card" id="topCustomersCompareCard" style="display:none;">
+          <div class="card-title" id="topCustomersCompareTitle"></div>
+          <div style="position:relative;height:220px;"><canvas id="topCustomersCompareChart"></canvas></div>
+        </div>
+      </div>
+
+      <div id="topProductsRow" style="display:grid;grid-template-columns:1fr;gap:22px;margin-top:22px;">
         <div class="card">
           <div class="card-title" id="topProductsTitle">5 המוצרים המובילים במחזור</div>
           <div style="position:relative;height:220px;"><canvas id="topProductsChart"></canvas></div>
+        </div>
+        <div class="card" id="topProductsCompareCard" style="display:none;">
+          <div class="card-title" id="topProductsCompareTitle"></div>
+          <div style="position:relative;height:220px;"><canvas id="topProductsCompareChart"></canvas></div>
         </div>
       </div>
     </main>

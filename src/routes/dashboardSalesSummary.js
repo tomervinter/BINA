@@ -1,6 +1,7 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
+const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -195,6 +196,18 @@ router.get('/', async (req, res) => {
   const prodMap = {};
   products.forEach((p) => { prodMap[p.itemCode] = p; });
 
+  // The exact customer set the primary side's filters resolved to (customer/segment
+  // selection and/or the purchase cohort) — null when nothing narrowed the customer
+  // set at all (a product-only filter, say, restricts sale rows but not to a specific
+  // customer list). Surfaced so the dashboard can show/export the matching customers.
+  const filteredCustomerNumbers = baseWhere.customerNumber ? baseWhere.customerNumber.in : null;
+  const filteredCustomers = filteredCustomerNumbers ? filteredCustomerNumbers.map((cn) => ({
+    customerNumber: cn,
+    name: (custMap[cn] && custMap[cn].name) || cn,
+    primaryClass: (custMap[cn] && custMap[cn].primaryClass) || null,
+    customerType: (custMap[cn] && custMap[cn].customerType) || null
+  })) : null;
+
   function groupRevenue(rows, idField, map, classifyField) {
     const out = {};
     rows.forEach((r) => {
@@ -278,6 +291,7 @@ router.get('/', async (req, res) => {
     boughtProductNames: boughtProducts.map((p) => nameOf(prodMap, p)),
     notBoughtProducts,
     notBoughtProductNames: notBoughtProducts.map((p) => nameOf(prodMap, p)),
+    filteredCustomers,
     period: period ? { months: period.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(period) } : null,
     comparePeriod: compare ? { months: compare.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(compare) } : null,
     compareCustomerNumbers,
@@ -302,8 +316,44 @@ router.get('/', async (req, res) => {
     byDepartment: groupRevenue(byProd, 'productCode', prodMap, 'department'),
     bySuperType: groupRevenue(byProd, 'productCode', prodMap, 'superType'),
     topCustomers: topN(byCust, 'customerNumber', custMap, 5),
-    topProducts: topN(byProd, 'productCode', prodMap, customerNumbers.length ? 10 : 5)
+    topProducts: topN(byProd, 'productCode', prodMap, customerNumbers.length ? 10 : 5),
+    // Same four breakdowns for the comparison side, when a comparison is active —
+    // each of the dashboard's breakdown charts can then show a primary/comparison
+    // pair side by side, the same way the trend chart already does.
+    compareByDepartment: compareByProd ? groupRevenue(compareByProd, 'productCode', prodMap, 'department') : null,
+    compareBySuperType: compareByProd ? groupRevenue(compareByProd, 'productCode', prodMap, 'superType') : null,
+    compareTopCustomers: compareByCust ? topN(compareByCust, 'customerNumber', custMap, 5) : null,
+    compareTopProducts: compareByProd ? topN(compareByProd, 'productCode', prodMap, customerNumbers.length ? 10 : 5) : null
   });
+});
+
+// Real .xlsx export of the exact customer list the primary side's filters (customer/
+// segment selection and/or the "bought X but not Y" purchase cohort) resolve to —
+// same query params as the main endpoint, re-resolved independently since this is a
+// separate request/response cycle.
+router.get('/cohort-customers/export', async (req, res) => {
+  const organizationId = req.user.organizationId;
+  const customerNumbers = parseCsv(req.query.customerNumber);
+  const primaryClasses = parseCsv(req.query.primaryClass);
+  const customerTypes = parseCsv(req.query.customerType);
+  const boughtProducts = parseCsv(req.query.boughtProducts);
+  const notBoughtProducts = parseCsv(req.query.notBoughtProducts);
+  const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts);
+  const hasEntityFilter = !!(customerNumbers.length || primaryClasses.length || customerTypes.length || purchaseCohort);
+  const where = hasEntityFilter
+    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes: [], primaryClasses, customerTypes, restrictToCustomers: purchaseCohort })
+    : { organizationId };
+  const customerFilter = where.customerNumber ? { organizationId, customerNumber: where.customerNumber } : { organizationId };
+  const rows = await prisma.customer.findMany({ where: customerFilter, orderBy: { name: 'asc' } });
+  const buffer = rowsToXlsxBuffer([
+    { key: 'customerNumber', label: 'מספר לקוח' },
+    { key: 'name', label: 'שם לקוח' },
+    { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
+    { key: 'customerType', label: 'סוג לקוח' }
+  ], rows);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="customers-filtered.xlsx"');
+  res.send(buffer);
 });
 
 module.exports = router;

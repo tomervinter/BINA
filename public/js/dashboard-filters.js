@@ -161,11 +161,38 @@ async function initDashboardFilters() {
     }
   }
 
+  const cohortSection = document.getElementById('dashCohortCustomersSection');
+  const cohortCountEl = document.getElementById('dashCohortCustomersCount');
+  const cohortBodyEl = document.getElementById('dashCohortCustomersBody');
+  const cohortExportBtn = document.getElementById('dashCohortExportBtn');
+
+  // Shows the exact customer list the primary side's filters resolved to (customer/
+  // segment selection and/or the purchase-cohort filter above), with a real .xlsx
+  // export of that same list — hidden when nothing narrowed the customer set (an
+  // all-customers or product-only view isn't a "list of matching customers").
+  function renderCohortCustomers(s) {
+    if (!s || !s.filteredCustomers) { cohortSection.style.display = 'none'; return; }
+    cohortSection.style.display = '';
+    cohortCountEl.textContent = s.filteredCustomers.length + ' לקוחות תואמים';
+    cohortBodyEl.innerHTML = s.filteredCustomers.map((c) =>
+      '<tr><td>' + Layout.escapeHtml(c.customerNumber) + '</td><td>' + Layout.escapeHtml(c.name) + '</td></tr>'
+    ).join('') || '<tr><td colspan="2">אין לקוחות תואמים</td></tr>';
+    const qs = new URLSearchParams();
+    const setList = (key, arr) => { if (arr && arr.length) qs.set(key, arr.join(',')); };
+    setList('customerNumber', state.customer);
+    setList('primaryClass', state.primaryClass);
+    setList('customerType', state.customerType);
+    setList('boughtProducts', state.boughtProducts);
+    setList('notBoughtProducts', state.notBoughtProducts);
+    cohortExportBtn.href = '/api/dashboard-sales-summary/cohort-customers/export?' + qs.toString();
+  }
+
   async function apply() {
     syncUrl();
     updateUi();
     const s = await loadDashboardSalesSummary(state);
     if (s && state.product.length && s.productNames) { state.productNames = s.productNames; updateUi(); }
+    renderCohortCustomers(s);
     if (window.refreshDashboardTopInsights) window.refreshDashboardTopInsights(state);
   }
 
