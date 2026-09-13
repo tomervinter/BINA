@@ -13,10 +13,9 @@ function createEntityMultiSelect(containerId, opts) {
   let selected = new Set(opts.initial || []);
   const onChange = opts.onChange || function () {};
 
-  // Optional one-click presets shown above the checklist (e.g. "רבעון 1", "מצטבר עד
-  // החודש האחרון") — each just replaces the whole selection with opts.quickActions[i]
-  // .values, same as calling setSelected() from outside, but reachable from within
-  // the open panel itself.
+  // Optional one-click presets shown above the checklist (e.g. "Q1", "מצטבר") — each
+  // toggles its whole value set into/out of the current selection (so e.g. Q1 and Q2
+  // can both be active together, covering Jan-Jun), rather than replacing it.
   const quickActions = opts.quickActions || [];
 
   container.classList.add('mms');
@@ -45,6 +44,14 @@ function createEntityMultiSelect(containerId, opts) {
     toggle.textContent = selected.size + ' נבחרו';
   }
 
+  function refreshQuickActions() {
+    container.querySelectorAll('.ems-quick-action').forEach((btn) => {
+      const qa = quickActions[+btn.getAttribute('data-qa')];
+      const fullySelected = !!qa && qa.values.every((v) => selected.has(v));
+      btn.classList.toggle('active', fullySelected);
+    });
+  }
+
   function renderOptions(filterText) {
     const f = (filterText || '').trim().toLowerCase();
     const filtered = f ? options.filter((o) => o.label.toLowerCase().includes(f)) : options;
@@ -55,9 +62,11 @@ function createEntityMultiSelect(containerId, opts) {
       cb.addEventListener('change', () => {
         if (cb.checked) selected.add(cb.value); else selected.delete(cb.value);
         refreshLabel();
+        refreshQuickActions();
         onChange(Array.from(selected));
       });
     });
+    refreshQuickActions();
   }
 
   toggle.addEventListener('click', (e) => {
@@ -72,7 +81,9 @@ function createEntityMultiSelect(containerId, opts) {
       e.stopPropagation();
       const qa = quickActions[+btn.getAttribute('data-qa')];
       if (!qa) return;
-      selected = new Set(qa.values);
+      const fullySelected = qa.values.every((v) => selected.has(v));
+      if (fullySelected) qa.values.forEach((v) => selected.delete(v));
+      else qa.values.forEach((v) => selected.add(v));
       renderOptions(search ? search.value : '');
       refreshLabel();
       onChange(Array.from(selected));

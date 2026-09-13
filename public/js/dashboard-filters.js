@@ -277,7 +277,7 @@ async function initDashboardFilters() {
     { label: 'Q2', values: ['4', '5', '6'] },
     { label: 'Q3', values: ['7', '8', '9'] },
     { label: 'Q4', values: ['10', '11', '12'] },
-    { label: 'מצטבר עד החודש האחרון שהסתיים', values: Array.from({ length: Math.max(1, new Date().getMonth()) }, (_, i) => String(i + 1)) }
+    { label: 'מצטבר', values: Array.from({ length: Math.max(1, new Date().getMonth()) }, (_, i) => String(i + 1)) }
   ];
   makePicker('dashCustomerPicker', custOptions, state.customer, true, (vals) => { state.customer = vals; apply(); });
   makePicker('dashCompareCustomerPicker', custOptions, state.compareCustomer, true, (vals) => { state.compareCustomer = vals; apply(); });

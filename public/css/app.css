@@ -314,7 +314,7 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
    max-width (not `90vw`) on purpose: a viewport-relative max-width can resolve
    below min-width whenever the viewport's width isn't reliably known yet at style
    time, which forces min-width to win and reproduces the exact same collapse.*/
-.mms-panel{position:absolute;top:calc(100% + 4px);right:0;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-card);padding:10px;max-height:280px;width:260px;max-width:320px;overflow-y:auto;overflow-x:hidden;min-width:190px;}
+.mms-panel{position:absolute;top:calc(100% + 4px);right:0;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-card);padding:10px;max-height:320px;width:260px;max-width:320px;overflow-y:auto;overflow-x:hidden;min-width:190px;}
 .mms-year-group{margin-bottom:8px;}
 .mms-year-group:last-child{margin-bottom:0;}
 .mms-year-label{font-weight:800;font-size:12px;color:var(--text-faint);margin-bottom:4px;padding:0 6px;}
@@ -324,12 +324,13 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .mms-option .ems-opt-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;}
 
 /* ---------- Generic entity multi-select (customer/product/segment dropdowns) ---------- */
-.ems-search{width:100%;margin:0 0 8px;padding:6px 8px;font-size:12.5px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);font-family:inherit;}
-.ems-options{max-height:220px;overflow-y:auto;}
+.ems-search{position:sticky;top:0;z-index:1;width:100%;margin:0 0 8px;padding:6px 8px;font-size:12.5px;border:1px solid var(--border);border-radius:7px;background:var(--surface-2);color:var(--text);font-family:inherit;}
+.ems-options{}
 .ems-empty{padding:6px;font-size:12px;color:var(--text-faint);text-align:center;}
 .ems-quick-actions{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border);}
 .ems-quick-action{font-size:11px;font-weight:600;padding:3px 8px;border:1px solid var(--border);border-radius:999px;background:var(--surface-2);color:var(--text-muted);cursor:pointer;}
 .ems-quick-action:hover{background:var(--accent-soft);color:var(--text);border-color:var(--accent);}
+.ems-quick-action.active{background:var(--accent);color:#fff;border-color:var(--accent);}
 .kpi-tile .kpi-value{font-size:19px;font-weight:800;position:static;}
 .chip{display:inline-flex;align-items:center;padding:4px 12px;border-radius:99px;background:var(--surface-2);font-size:12px;font-weight:700;margin-left:6px;}
 .section-title{font-size:14px;font-weight:800;margin:22px 0 10px;}
