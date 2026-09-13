@@ -569,7 +569,7 @@ async function computeInsights(organizationId) {
         customerId: h.cid,
         customerName: custLabel(h.cid),
         productCode: h.pid,
-        message: `הלקוח אינו רוכש את ${prodLabel(h.pid)}, בעוד ש${bits.join(' וגם ')} רוכשים אותו.`,
+        message: `הלקוח אינו רוכש את ${prodLabel(h.pid)} (מק"ט ${h.pid}), בעוד ש${bits.join(' וגם ')} רוכשים אותו.`,
         metric: maxPct,
         breakdown: {
           rows: [

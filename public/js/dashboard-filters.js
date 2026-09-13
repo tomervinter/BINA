@@ -376,13 +376,14 @@ async function initDashboardFilters() {
   };
 
   // A peerGap insight ("customer X doesn't buy product Y, unlike most of its peers")
-  // drills down differently from the other two types: the point isn't one customer,
-  // it's the whole gap — every peer missing the product. So instead of narrowing to
-  // the clicked customer, this sets customerType (the peer group the insight found,
-  // when it was the customerType path that triggered it) + the insight's own trailing
-  // window as the period, and puts the product into "לא קנו מוצר/ים" in the
-  // purchase-cohort panel — which then lists every matching customer, not just the
-  // one named in the insight.
+  // drills down differently from the other two types: the point isn't the one
+  // customer named in it, it's the conclusion behind the percentage — every peer who
+  // DOES buy the product (the majority the insight is measuring against). So instead
+  // of narrowing to the clicked customer, this sets customerType (the peer group the
+  // insight found, when it was the customerType path that triggered it) + the
+  // insight's own trailing window as the period, and puts the product into "קנו
+  // מוצר/ים" in the purchase-cohort panel — which then lists every customer backing
+  // that percentage, not the single exception named in the insight.
   window.applyDashboardFiltersFromPeerGapInsight = function (f) {
     f = f || {};
     state.customer = []; state.product = []; state.productNames = null;
@@ -412,12 +413,13 @@ async function initDashboardFilters() {
     pickers.dashCompareDepartmentPicker.setSelected([]);
     pickers.dashCompareYearPicker.setSelected([]);
     pickers.dashCompareMonthPicker.setSelected([]);
-    // The whole point of this click: surface the cohort in the purchase-cohort
-    // table/export, via the same "לא קנו מוצר/ים" field a user would fill by hand.
-    state.boughtProducts = [];
-    state.notBoughtProducts = f.productCode ? [f.productCode] : [];
-    pickers.dashBoughtProductsPicker.setSelected([]);
-    pickers.dashNotBoughtProductsPicker.setSelected(state.notBoughtProducts);
+    // The whole point of this click: surface the cohort behind the insight's own
+    // percentage — the peers who DO buy the product — via the same "קנו מוצר/ים"
+    // field a user would fill by hand.
+    state.notBoughtProducts = [];
+    state.boughtProducts = f.productCode ? [f.productCode] : [];
+    pickers.dashNotBoughtProductsPicker.setSelected([]);
+    pickers.dashBoughtProductsPicker.setSelected(state.boughtProducts);
     document.dispatchEvent(new Event('click'));
     apply();
   };
