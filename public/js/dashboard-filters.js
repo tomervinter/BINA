@@ -266,9 +266,19 @@ async function initDashboardFilters() {
   }
 
   const pickers = {};
-  function makePicker(containerId, options, initial, searchable, onChange) {
-    pickers[containerId] = createEntityMultiSelect(containerId, { options, initial, searchable, onChange });
+  function makePicker(containerId, options, initial, searchable, onChange, quickActions) {
+    pickers[containerId] = createEntityMultiSelect(containerId, { options, initial, searchable, onChange, quickActions });
   }
+  // Quarter shortcuts are fixed month groups; the YTD-cumulative shortcut uses the
+  // last fully completed calendar month (same Math.max(1, ...) convention as the
+  // insights engine's own YTD rule) so it never includes the in-progress month.
+  const monthQuickActions = [
+    { label: 'רבעון 1 (ינואר-מרץ)', values: ['1', '2', '3'] },
+    { label: 'רבעון 2 (אפריל-יוני)', values: ['4', '5', '6'] },
+    { label: 'רבעון 3 (יולי-ספטמבר)', values: ['7', '8', '9'] },
+    { label: 'רבעון 4 (אוקטובר-דצמבר)', values: ['10', '11', '12'] },
+    { label: 'מצטבר עד החודש האחרון שהסתיים', values: Array.from({ length: Math.max(1, new Date().getMonth()) }, (_, i) => String(i + 1)) }
+  ];
   makePicker('dashCustomerPicker', custOptions, state.customer, true, (vals) => { state.customer = vals; apply(); });
   makePicker('dashCompareCustomerPicker', custOptions, state.compareCustomer, true, (vals) => { state.compareCustomer = vals; apply(); });
   makePicker('dashProductPicker', prodOptions, state.product, true, (vals) => { state.product = vals; state.productNames = null; apply(); });
@@ -284,9 +294,9 @@ async function initDashboardFilters() {
   makePicker('dashBoughtProductsPicker', prodOptions, state.boughtProducts, true, (vals) => { state.boughtProducts = vals; apply(); });
   makePicker('dashNotBoughtProductsPicker', prodOptions, state.notBoughtProducts, true, (vals) => { state.notBoughtProducts = vals; apply(); });
   makePicker('dashYearPicker', yearOptions, state.periodYears, false, (vals) => { state.periodYears = vals; state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel); apply(); });
-  makePicker('dashMonthPicker', monthOptions, state.periodMonthsSel, false, (vals) => { state.periodMonthsSel = vals; state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel); apply(); });
+  makePicker('dashMonthPicker', monthOptions, state.periodMonthsSel, false, (vals) => { state.periodMonthsSel = vals; state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel); apply(); }, monthQuickActions);
   makePicker('dashCompareYearPicker', yearOptions, state.compareYears, false, (vals) => { state.compareYears = vals; state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel); apply(); });
-  makePicker('dashCompareMonthPicker', monthOptions, state.compareMonthsSel, false, (vals) => { state.compareMonthsSel = vals; state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel); apply(); });
+  makePicker('dashCompareMonthPicker', monthOptions, state.compareMonthsSel, false, (vals) => { state.compareMonthsSel = vals; state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel); apply(); }, monthQuickActions);
 
   cellClearBtns.customer.addEventListener('click', () => { state.customer = []; pickers.dashCustomerPicker.setSelected([]); apply(); });
   cellClearBtns.compareCustomer.addEventListener('click', () => { state.compareCustomer = []; pickers.dashCompareCustomerPicker.setSelected([]); apply(); });
@@ -350,6 +360,53 @@ async function initDashboardFilters() {
     pickers.dashCompareYearPicker.setSelected(state.compareYears);
     pickers.dashCompareMonthPicker.setSelected(state.compareMonthsSel);
     document.dispatchEvent(new Event('click')); // closes any open picker panel
+    apply();
+  };
+
+  // A peerGap insight ("customer X doesn't buy product Y, unlike most of its peers")
+  // drills down differently from the other two types: the point isn't one customer,
+  // it's the whole gap — every peer missing the product. So instead of narrowing to
+  // the clicked customer, this sets customerType (the peer group the insight found,
+  // when it was the customerType path that triggered it) + the insight's own trailing
+  // window as the period, and puts the product into "לא קנו מוצר/ים" in the
+  // purchase-cohort panel — which then lists every matching customer, not just the
+  // one named in the insight.
+  window.applyDashboardFiltersFromPeerGapInsight = function (f) {
+    f = f || {};
+    state.customer = []; state.product = []; state.productNames = null;
+    state.primaryClass = []; state.superType = []; state.department = [];
+    state.customerType = f.customerType ? [f.customerType] : [];
+    pickers.dashCustomerPicker.setSelected([]);
+    pickers.dashProductPicker.setSelected([]);
+    pickers.dashPrimaryClassPicker.setSelected([]);
+    pickers.dashSuperTypePicker.setSelected([]);
+    pickers.dashDepartmentPicker.setSelected([]);
+    pickers.dashCustomerTypePicker.setSelected(state.customerType);
+    const periodDecomp = dashDecomposeMonths(f.periodMonths);
+    state.periodYears = periodDecomp.years; state.periodMonthsSel = periodDecomp.months;
+    state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel);
+    pickers.dashYearPicker.setSelected(state.periodYears);
+    pickers.dashMonthPicker.setSelected(state.periodMonthsSel);
+    // Comparison side isn't part of what the insight is about — cleared so it
+    // doesn't linger mixed in from whatever the user had set manually before.
+    state.compareCustomer = []; state.compareProduct = []; state.comparePrimaryClass = [];
+    state.compareCustomerType = []; state.compareSuperType = []; state.compareDepartment = [];
+    state.compareYears = []; state.compareMonthsSel = []; state.compareMonths = [];
+    pickers.dashCompareCustomerPicker.setSelected([]);
+    pickers.dashCompareProductPicker.setSelected([]);
+    pickers.dashComparePrimaryClassPicker.setSelected([]);
+    pickers.dashCompareCustomerTypePicker.setSelected([]);
+    pickers.dashCompareSuperTypePicker.setSelected([]);
+    pickers.dashCompareDepartmentPicker.setSelected([]);
+    pickers.dashCompareYearPicker.setSelected([]);
+    pickers.dashCompareMonthPicker.setSelected([]);
+    // The whole point of this click: surface the cohort in the purchase-cohort
+    // table/export, via the same "לא קנו מוצר/ים" field a user would fill by hand.
+    state.boughtProducts = [];
+    state.notBoughtProducts = f.productCode ? [f.productCode] : [];
+    pickers.dashBoughtProductsPicker.setSelected([]);
+    pickers.dashNotBoughtProductsPicker.setSelected(state.notBoughtProducts);
+    document.dispatchEvent(new Event('click'));
     apply();
   };
 

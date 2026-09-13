@@ -59,8 +59,20 @@ function renderDashboardTopInsights(filters) {
   container.querySelectorAll('.dash-insight-row.row-clickable').forEach((row) => {
     row.addEventListener('click', () => {
       const insight = shown[+row.getAttribute('data-idx')];
-      if (!insight || !insight.customerId || !window.applyDashboardFiltersFromInsight) return;
+      if (!insight || !insight.customerId) return;
       const dashFilter = (insight.breakdown && insight.breakdown.dashFilter) || {};
+      // peerGap is about the whole gap, not the one customer named in it — drill
+      // down via the purchase-cohort filter instead of narrowing to that customer.
+      if (insight.type === 'peerGap') {
+        if (!window.applyDashboardFiltersFromPeerGapInsight) return;
+        window.applyDashboardFiltersFromPeerGapInsight({
+          customerType: dashFilter.customerType || null,
+          productCode: insight.productCode || null,
+          periodMonths: dashFilter.periodMonths || []
+        });
+        return;
+      }
+      if (!window.applyDashboardFiltersFromInsight) return;
       window.applyDashboardFiltersFromInsight({
         customerId: insight.customerId,
         productCode: insight.productCode || null,

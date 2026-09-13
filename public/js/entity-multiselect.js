@@ -13,11 +13,18 @@ function createEntityMultiSelect(containerId, opts) {
   let selected = new Set(opts.initial || []);
   const onChange = opts.onChange || function () {};
 
+  // Optional one-click presets shown above the checklist (e.g. "רבעון 1", "מצטבר עד
+  // החודש האחרון") — each just replaces the whole selection with opts.quickActions[i]
+  // .values, same as calling setSelected() from outside, but reachable from within
+  // the open panel itself.
+  const quickActions = opts.quickActions || [];
+
   container.classList.add('mms');
   container.innerHTML =
     '<button type="button" class="mms-toggle"></button>' +
     '<div class="mms-panel" hidden>' +
       (searchable ? '<input type="text" class="ems-search" placeholder="חיפוש...">' : '') +
+      (quickActions.length ? '<div class="ems-quick-actions">' + quickActions.map((qa, i) => '<button type="button" class="ems-quick-action" data-qa="' + i + '">' + Layout.escapeHtml(qa.label) + '</button>').join('') + '</div>' : '') +
       '<div class="ems-options"></div>' +
     '</div>';
 
@@ -60,6 +67,17 @@ function createEntityMultiSelect(containerId, opts) {
   });
   document.addEventListener('click', (e) => { if (!container.contains(e.target)) panel.hidden = true; });
   if (search) search.addEventListener('input', () => renderOptions(search.value));
+  container.querySelectorAll('.ems-quick-action').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const qa = quickActions[+btn.getAttribute('data-qa')];
+      if (!qa) return;
+      selected = new Set(qa.values);
+      renderOptions(search ? search.value : '');
+      refreshLabel();
+      onChange(Array.from(selected));
+    });
+  });
 
   renderOptions('');
   refreshLabel();

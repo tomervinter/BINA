@@ -504,6 +504,7 @@ async function computeInsights(organizationId) {
     const winMonths = params.peerGap_windowMonths;
     const windowMonthKeys = new Set();
     for (let m = 0; m < winMonths; m++) windowMonthKeys.add(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
+    const sortedWindowMonthKeys = Array.from(windowMonthKeys).sort();
 
     const boughtInWindow = {}; // cid -> Set(pid)
     const productBuyers = {}; // pid -> Set(cid)
@@ -574,7 +575,12 @@ async function computeInsights(organizationId) {
           rows: [
             h.centralPct != null ? { label: 'אחוז קונים — לקוח מרכז ' + h.centralName, value: h.centralPct } : null,
             h.typePct != null ? { label: 'אחוז קונים — סוג לקוח ' + h.typeName, value: h.typePct } : null
-          ].filter(Boolean)
+          ].filter(Boolean),
+          // Lets a dashboard click reproduce the exact cohort behind this insight:
+          // the same trailing window the rule scanned, and — when the customerType
+          // path triggered it — that type as a filter (centralCustomer has no
+          // matching dashboard filter field yet, so it isn't surfaced here).
+          dashFilter: { periodMonths: sortedWindowMonthKeys, customerType: h.typeName || null }
         }
       });
     });
