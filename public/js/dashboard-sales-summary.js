@@ -30,17 +30,6 @@ function reportUrl(params) {
   return 'reports-full-sales.html' + (q ? '?' + q : '');
 }
 
-// Chart.js click handler factory: resolves the clicked element back to its data label
-// (bar/donut slice) and navigates. Works for both single- and multi-dataset charts.
-function onChartClick(getUrl) {
-  return function (evt, elements, chart) {
-    if (!elements.length) return;
-    const el = elements[0];
-    const label = chart.data.labels[el.index];
-    const url = getUrl(label, el);
-    if (url) window.location.href = url;
-  };
-}
 
 // Year-over-year indicator for the trend bar charts: one combined arrow + % + ₪
 // label drawn above each month's bar (or pair of bars), comparing that month's value
@@ -264,6 +253,14 @@ async function loadDashboardSalesSummary(filters) {
     : compareProductLabel ? ('המוצר ' + compareProductLabel)
     : compareSuperTypeLabel ? ('טיפוס על ' + compareSuperTypeLabel)
     : (s.comparePeriod ? s.comparePeriod.label : null);
+  // Same single-axis label for the primary side's own KPI tiles, which previously
+  // stated no filter at all (only the comparison tiles named what they were about).
+  const primaryAxisLabel = primaryClassLabel ? ('סיווג ' + primaryClassLabel)
+    : customerTypeLabel ? ('סוג לקוח ' + customerTypeLabel)
+    : customerLabel ? ('הלקוח ' + customerLabel)
+    : productLabel ? ('המוצר ' + productLabel)
+    : superTypeLabel ? ('טיפוס על ' + superTypeLabel)
+    : (s.period ? s.period.label : null);
   const compareFilterDesc = joinFilterParts([
     compareCustomerLabel ? ('לקוח: ' + compareCustomerLabel) : null,
     compareProductLabel ? ('מוצר: ' + compareProductLabel) : null,
@@ -350,9 +347,10 @@ async function loadDashboardSalesSummary(filters) {
   // for its comparison — rather than which metric it is, so the two sides read as two
   // visually distinct groups at a glance (matching the same blue/purple split used on
   // the filter table above).
+  const primSuffix = primaryAxisLabel ? (' — ' + primaryAxisLabel) : '';
   const kpiTiles = [
-    ['blue', 'v-blue', fmtMoneyShort(s.totalRevenue), (s.period ? 'מכירות תקופה נוכחית' : 'מכירות') + ' (ש"ח)', reportUrl(curReportParams)],
-    ['blue', 'v-blue', s.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו' + (s.period ? ' בתקופה נוכחית' : ''), reportUrl(curReportParams)]
+    ['blue', 'v-blue', fmtMoneyShort(s.totalRevenue), (s.period ? 'מכירות תקופה נוכחית' : 'מכירות') + primSuffix + ' (ש"ח)', reportUrl(curReportParams)],
+    ['blue', 'v-blue', s.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו' + (s.period ? ' בתקופה נוכחית' : '') + primSuffix, reportUrl(curReportParams)]
   ];
   if (ct) {
     const cmpSuffix = compareAxisLabel ? (' — ' + compareAxisLabel) : '';
@@ -419,8 +417,8 @@ async function loadDashboardSalesSummary(filters) {
         onClick: function (evt, elements) {
           if (!elements.length) return;
           const m = pt.periodMonths[elements[0].index];
-          if (!m) return;
-          window.location.href = reportUrl(Object.assign({}, baseReportParams, { year: m.year, month: m.month }));
+          if (!m || !window.applyDashboardPeriodFilter) return;
+          window.applyDashboardPeriodFilter(m.year, m.month, false);
         },
         onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
       }
@@ -439,8 +437,8 @@ async function loadDashboardSalesSummary(filters) {
           onClick: function (evt, elements) {
             if (!elements.length) return;
             const m = pt.compareMonths[elements[0].index];
-            if (!m) return;
-            window.location.href = reportUrl(Object.assign({}, compareBaseReportParams, { year: m.year, month: m.month }));
+            if (!m || !window.applyDashboardPeriodFilter) return;
+            window.applyDashboardPeriodFilter(m.year, m.month, true);
           },
           onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
         }
@@ -492,9 +490,9 @@ async function loadDashboardSalesSummary(filters) {
         },
         scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
-          if (!elements.length) return;
+          if (!elements.length || !window.applyDashboardPeriodFilter) return;
           const m = monthMeta[elements[0].index];
-          window.location.href = reportUrl(Object.assign({}, baseReportParams, { year: m.year, month: m.month }));
+          window.applyDashboardPeriodFilter(m.year, m.month, false);
         },
         onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
       }
@@ -510,9 +508,9 @@ async function loadDashboardSalesSummary(filters) {
           plugins: { legend: { display: false } },
           scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
           onClick: function (evt, elements) {
-            if (!elements.length) return;
+            if (!elements.length || !window.applyDashboardPeriodFilter) return;
             const m = monthMeta[elements[0].index];
-            window.location.href = reportUrl(Object.assign({}, compareBaseReportParams, { year: m.year, month: m.month }));
+            window.applyDashboardPeriodFilter(m.year, m.month, true);
           },
           onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
         }
@@ -521,7 +519,14 @@ async function loadDashboardSalesSummary(filters) {
   }
 
   const legendOpts = { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } };
-  function oneBreakdownChart(canvasId, rows, filterKey, type, color, linkParams) {
+  // Clicking a bar/slice narrows the dashboard's own filters (see
+  // applyDashboardFilterByDimension in dashboard-filters.js) instead of navigating to
+  // the full sales report — only for dimensions the filter table actually has a field
+  // for. "department" has no such field, so those bars stay non-interactive rather
+  // than linking anywhere.
+  const DASH_FILTERABLE_DIMENSIONS = { customer: true, product: true, superType: true };
+  function oneBreakdownChart(canvasId, rows, filterKey, type, color, isCompare) {
+    const clickable = DASH_FILTERABLE_DIMENSIONS[filterKey] && !!window.applyDashboardFilterByDimension;
     const cfg = {
       type,
       data: {
@@ -538,8 +543,11 @@ async function loadDashboardSalesSummary(filters) {
         layout: type === 'bar' ? { padding: { right: 46 } } : undefined,
         plugins: type === 'doughnut' ? legendOpts : { legend: { display: false } },
         scales: type === 'bar' ? { x: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } } : undefined,
-        onClick: onChartClick((label) => reportUrl(Object.assign({}, linkParams, { [filterKey]: label }))),
-        onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
+        onClick: clickable ? function (evt, elements) {
+          if (!elements.length) return;
+          window.applyDashboardFilterByDimension(filterKey, rows[elements[0].index].name, isCompare);
+        } : undefined,
+        onHover: clickable ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined
       }
     };
     if (type === 'bar') cfg.plugins = [barValueLabelPlugin((v) => Math.round(v).toLocaleString('he-IL'))];
@@ -549,18 +557,19 @@ async function loadDashboardSalesSummary(filters) {
   // trend chart above: full width alone, or split with a comparison version (same
   // breakdown, computed from the compare-side data) whenever a comparison is active.
   function breakdownChart(rowId, canvasId, compareCanvasId, compareCardId, compareTitleId, rows, compareRows, filterKey, type, color) {
-    oneBreakdownChart(canvasId, rows, filterKey, type, color, baseReportParams);
+    oneBreakdownChart(canvasId, rows, filterKey, type, color, false);
     toggleCompareChart(rowId, compareCardId, compareCanvasId, !!compareRows);
     if (compareRows) {
       document.getElementById(compareTitleId).textContent = compareFilterDesc;
-      oneBreakdownChart(compareCanvasId, compareRows, filterKey, type, DASH_PURPLE, compareBaseReportParams);
+      oneBreakdownChart(compareCanvasId, compareRows, filterKey, type, DASH_PURPLE, true);
     }
   }
 
   breakdownChart('superTypeRow', 'superTypeChart', 'superTypeCompareChart', 'superTypeCompareCard', 'superTypeCompareTitle', s.bySuperType, s.compareBySuperType, 'superType', 'bar', DASH_BLUE);
   breakdownChart('departmentRow', 'departmentChart', 'departmentCompareChart', 'departmentCompareCard', 'departmentCompareTitle', s.byDepartment, s.compareByDepartment, 'department', 'bar', DASH_NAVY);
 
-  function oneRankedChart(canvasId, rows, color, linkFn) {
+  function oneRankedChart(canvasId, rows, color, filterKey, isCompare) {
+    const clickable = !!window.applyDashboardFilterByDimension;
     upsertChart(canvasId, {
       type: 'bar',
       data: { labels: rows.map((r) => r.name), datasets: [{ label: 'מחזור', data: rows.map((r) => r.revenue), backgroundColor: color, borderRadius: 6 }] },
@@ -570,28 +579,27 @@ async function loadDashboardSalesSummary(filters) {
         layout: { padding: { right: 46 } },
         plugins: { legend: { display: false } },
         scales: { x: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
-        onClick: function (evt, elements) {
+        onClick: clickable ? function (evt, elements) {
           if (!elements.length) return;
-          const url = linkFn(rows[elements[0].index]);
-          if (url) window.location.href = url;
-        },
-        onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
+          window.applyDashboardFilterByDimension(filterKey, rows[elements[0].index].code, isCompare);
+        } : undefined,
+        onHover: clickable ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined
       }
     });
   }
 
-  oneRankedChart('topCustomersChart', s.topCustomers, DASH_BLUE, (c) => reportUrl({ customerNumber: c.code }));
+  oneRankedChart('topCustomersChart', s.topCustomers, DASH_BLUE, 'customer', false);
   toggleCompareChart('topCustomersRow', 'topCustomersCompareCard', 'topCustomersCompareChart', !!s.compareTopCustomers);
   if (s.compareTopCustomers) {
     document.getElementById('topCustomersCompareTitle').textContent = compareFilterDesc;
-    oneRankedChart('topCustomersCompareChart', s.compareTopCustomers, DASH_PURPLE, (c) => reportUrl({ customerNumber: c.code }));
+    oneRankedChart('topCustomersCompareChart', s.compareTopCustomers, DASH_PURPLE, 'customer', true);
   }
 
-  oneRankedChart('topProductsChart', s.topProducts, DASH_SLATE, (p) => reportUrl(Object.assign({}, baseReportParams, { productCode: p.code })));
+  oneRankedChart('topProductsChart', s.topProducts, DASH_SLATE, 'product', false);
   toggleCompareChart('topProductsRow', 'topProductsCompareCard', 'topProductsCompareChart', !!s.compareTopProducts);
   if (s.compareTopProducts) {
     document.getElementById('topProductsCompareTitle').textContent = compareFilterDesc;
-    oneRankedChart('topProductsCompareChart', s.compareTopProducts, DASH_PURPLE, (p) => reportUrl(Object.assign({}, compareBaseReportParams, { productCode: p.code })));
+    oneRankedChart('topProductsCompareChart', s.compareTopProducts, DASH_PURPLE, 'product', true);
   }
 
   return s;

@@ -336,6 +336,47 @@ async function initDashboardFilters() {
     apply();
   };
 
+  // Lets a clicked bar/slice on one of the breakdown or ranked charts (see
+  // dashboard-sales-summary.js) narrow the dashboard's own filters directly, instead
+  // of navigating away to the full sales report — e.g. clicking the "יין ואלכוהול"
+  // bar in the superType breakdown sets the superType filter to that value. Only
+  // dimensions the filter table actually has a field for are wired this way.
+  const DASH_CLICK_DIMENSIONS = {
+    customer: { state: 'customer', compareState: 'compareCustomer', picker: 'dashCustomerPicker', comparePicker: 'dashCompareCustomerPicker' },
+    product: { state: 'product', compareState: 'compareProduct', picker: 'dashProductPicker', comparePicker: 'dashCompareProductPicker' },
+    superType: { state: 'superType', compareState: 'compareSuperType', picker: 'dashSuperTypePicker', comparePicker: 'dashCompareSuperTypePicker' }
+  };
+  window.applyDashboardFilterByDimension = function (dimension, value, isCompare) {
+    const map = DASH_CLICK_DIMENSIONS[dimension];
+    if (!map || value == null) return;
+    const stateKey = isCompare ? map.compareState : map.state;
+    const pickerId = isCompare ? map.comparePicker : map.picker;
+    state[stateKey] = [value];
+    if (stateKey === 'product') state.productNames = null;
+    pickers[pickerId].setSelected(state[stateKey]);
+    document.dispatchEvent(new Event('click'));
+    apply();
+  };
+
+  // Same idea for a clicked month bar on either trend chart — sets the year/month
+  // pickers to exactly that one month (primary or comparison side).
+  window.applyDashboardPeriodFilter = function (year, month, isCompare) {
+    const yearStr = String(year), monthStr = String(month);
+    if (isCompare) {
+      state.compareYears = [yearStr]; state.compareMonthsSel = [monthStr];
+      state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel);
+      pickers.dashCompareYearPicker.setSelected(state.compareYears);
+      pickers.dashCompareMonthPicker.setSelected(state.compareMonthsSel);
+    } else {
+      state.periodYears = [yearStr]; state.periodMonthsSel = [monthStr];
+      state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel);
+      pickers.dashYearPicker.setSelected(state.periodYears);
+      pickers.dashMonthPicker.setSelected(state.periodMonthsSel);
+    }
+    document.dispatchEvent(new Event('click'));
+    apply();
+  };
+
   // Fires the one initial dashboard-data fetch for this whole page — loadDashboardSalesSummary
   // must never be called a second, independent time elsewhere with a narrower filter
   // set (a stale duplicate of that kind previously raced this one and silently
