@@ -41,23 +41,32 @@ function monthsLabel(months) {
   return months.length + ' חודשים (' + MONTH_NAMES[f.month - 1] + ' ' + f.year + '–' + MONTH_NAMES[l.month - 1] + ' ' + l.year + ')';
 }
 
-// Resolves one side's (primary or comparison) full identity filter — customer,
-// product, and/or customer segment — into a Sale where-clause. primaryClass/
-// customerType live on Customer, not Sale, so they resolve to a customerNumber
-// set first; an explicit customerNumber is only used when no segment is given
-// (a segment is the coarser, intentionally-chosen filter when both are present).
-async function buildEntityWhere(organizationId, { customerNumber, productCode, primaryClass, customerType }) {
+// Parses a comma-separated list of raw string values (customer numbers, product
+// codes, or segment names — none of which can themselves contain a comma in this
+// app's data) into a deduplicated array; "" for an absent param.
+function parseCsv(str) {
+  if (!str) return [];
+  return Array.from(new Set(String(str).split(',').map((s) => s.trim()).filter(Boolean)));
+}
+
+// Resolves one side's (primary or comparison) full identity filter — any number of
+// customers, products, and/or customer segments, all OR'd within each dimension and
+// AND'd across dimensions — into a Sale where-clause. primaryClass/customerType live
+// on Customer, not Sale, so they resolve to a customerNumber set first; explicit
+// customerNumbers are only used when no segment is given (a segment is the coarser,
+// intentionally-chosen filter when both are present).
+async function buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes }) {
   const where = { organizationId };
-  if (primaryClass || customerType) {
+  if (primaryClasses.length || customerTypes.length) {
     const segCustomers = await prisma.customer.findMany({
-      where: Object.assign({ organizationId }, primaryClass && { primaryClass }, customerType && { customerType }),
+      where: Object.assign({ organizationId }, primaryClasses.length && { primaryClass: { in: primaryClasses } }, customerTypes.length && { customerType: { in: customerTypes } }),
       select: { customerNumber: true }
     });
     where.customerNumber = { in: segCustomers.map((c) => c.customerNumber) };
-  } else if (customerNumber) {
-    where.customerNumber = customerNumber;
+  } else if (customerNumbers.length) {
+    where.customerNumber = { in: customerNumbers };
   }
-  if (productCode) where.productCode = productCode;
+  if (productCodes.length) where.productCode = { in: productCodes };
   return where;
 }
 
@@ -67,8 +76,10 @@ async function buildEntityWhere(organizationId, { customerNumber, productCode, p
 // except for the trend chart, which only selects {date, revenue}.
 //
 // Optional filters, all combinable:
-// - ?customerNumber= / ?productCode= / ?primaryClass= / ?customerType= scope every
-//   aggregation to that one customer/product/customer-segment's sales.
+// - ?customerNumber= / ?productCode= / ?primaryClass= / ?customerType= (each a
+//   comma-separated list — one value works the same as before) scope every
+//   aggregation to that set of customers/products/customer-segments' sales, OR'd
+//   within each dimension and AND'd across dimensions.
 // - ?periodMonths= (comma-separated "YYYY-MM" values) scopes every number on the
 //   dashboard to that set of months instead of all-time.
 // - A comparison series (compareTotals, and — when periodMonths is also set — a
@@ -84,30 +95,31 @@ async function buildEntityWhere(organizationId, { customerNumber, productCode, p
 // everywhere else, so values from another organization simply match nothing.
 router.get('/', async (req, res) => {
   const organizationId = req.user.organizationId;
-  const customerNumber = req.query.customerNumber ? String(req.query.customerNumber) : null;
-  const productCode = req.query.productCode ? String(req.query.productCode) : null;
-  const primaryClass = req.query.primaryClass ? String(req.query.primaryClass) : null;
-  const customerType = req.query.customerType ? String(req.query.customerType) : null;
-  const compareCustomerNumber = req.query.compareCustomerNumber ? String(req.query.compareCustomerNumber) : null;
-  const compareProductCode = req.query.compareProductCode ? String(req.query.compareProductCode) : null;
-  const comparePrimaryClass = req.query.comparePrimaryClass ? String(req.query.comparePrimaryClass) : null;
-  const compareCustomerType = req.query.compareCustomerType ? String(req.query.compareCustomerType) : null;
+  const customerNumbers = parseCsv(req.query.customerNumber);
+  const productCodes = parseCsv(req.query.productCode);
+  const primaryClasses = parseCsv(req.query.primaryClass);
+  const customerTypes = parseCsv(req.query.customerType);
+  const compareCustomerNumbers = parseCsv(req.query.compareCustomerNumber);
+  const compareProductCodes = parseCsv(req.query.compareProductCode);
+  const comparePrimaryClasses = parseCsv(req.query.comparePrimaryClass);
+  const compareCustomerTypes = parseCsv(req.query.compareCustomerType);
 
-  const hasEntityFilter = !!(customerNumber || productCode || primaryClass || customerType);
+  const hasEntityFilter = !!(customerNumbers.length || productCodes.length || primaryClasses.length || customerTypes.length);
   const baseWhere = hasEntityFilter
-    ? await buildEntityWhere(organizationId, { customerNumber, productCode, primaryClass, customerType })
+    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes })
     : { organizationId };
 
   const period = parseMonthList(req.query.periodMonths);
   const compare = period ? parseMonthList(req.query.compareMonths) : null;
-  const hasCompareIdentity = !!(compareCustomerNumber || comparePrimaryClass || compareCustomerType);
-  const hasEntityCompare = hasCompareIdentity || !!compareProductCode;
+  const hasCompareIdentity = !!(compareCustomerNumbers.length || comparePrimaryClasses.length || compareCustomerTypes.length);
+  const hasEntityCompare = hasCompareIdentity || !!compareProductCodes.length;
+  const effectiveCompareProducts = compareProductCodes.length ? compareProductCodes : productCodes;
 
   let compareBaseWhere = null;
   if (hasEntityCompare || compare) {
     compareBaseWhere = await buildEntityWhere(organizationId, hasCompareIdentity
-      ? { customerNumber: compareCustomerNumber, primaryClass: comparePrimaryClass, customerType: compareCustomerType, productCode: compareProductCode || productCode }
-      : { customerNumber, primaryClass, customerType, productCode: compareProductCode || productCode });
+      ? { customerNumbers: compareCustomerNumbers, primaryClasses: comparePrimaryClasses, customerTypes: compareCustomerTypes, productCodes: effectiveCompareProducts }
+      : { customerNumbers, primaryClasses, customerTypes, productCodes: effectiveCompareProducts });
   }
 
   const where = period ? { AND: [baseWhere, monthsWhereClause(period)] } : baseWhere;
@@ -128,12 +140,16 @@ router.get('/', async (req, res) => {
     queries.push(
       prisma.sale.aggregate({ where: compareWhere, _sum: { revenue: true, quantity: true } }),
       prisma.sale.groupBy({ by: ['customerNumber'], where: compareWhere, _sum: { revenue: true } }),
-      prisma.sale.groupBy({ by: ['productCode'], where: compareWhere, _sum: { revenue: true } })
+      prisma.sale.groupBy({ by: ['productCode'], where: compareWhere, _sum: { revenue: true } }),
+      // Unrestricted by compareMonths (same reasoning as trendRows above) so the
+      // default continuous-timeline chart can plot the comparison entity's own
+      // month-by-month series alongside the primary one, not just its totals.
+      prisma.sale.findMany({ where: compareBaseWhere, select: { date: true, revenue: true } })
     );
   }
   const results = await Promise.all(queries);
   const [totalAgg, byCust, byProd, customers, products, trendRows] = results;
-  const [compareAgg, compareByCust, compareByProd] = compareWhere ? results.slice(6) : [null, null, null];
+  const [compareAgg, compareByCust, compareByProd, compareTrendRows] = compareWhere ? results.slice(6) : [null, null, null, null];
 
   const custMap = {};
   customers.forEach((c) => { custMap[c.customerNumber] = c; });
@@ -186,11 +202,15 @@ router.get('/', async (req, res) => {
     // Default mode: one continuous month-by-month series spanning the entire sales
     // history that has data (earliest to latest month with a sale), rather than
     // separate per-year series side by side — the whole timeline reads as one
-    // continuous trend. `yoyData` is each timeline month's exact same calendar month
-    // one year earlier, for the on-chart year-over-year indicator.
+    // continuous trend. When an entity comparison is active (customer/product/segment
+    // vs another), the timeline spans BOTH entities' data so the comparison series can
+    // be plotted alongside the primary one, month for month. `yoyData` is each
+    // timeline month's exact same calendar month one year earlier, for the on-chart
+    // year-over-year indicator (drawn on the primary series only).
+    const allRows = compareTrendRows ? trendRows.concat(compareTrendRows) : trendRows;
     let timelineMonths;
-    if (trendRows.length) {
-      const monthIndices = trendRows.map((r) => { const d = new Date(r.date); return d.getFullYear() * 12 + d.getMonth(); });
+    if (allRows.length) {
+      const monthIndices = allRows.map((r) => { const d = new Date(r.date); return d.getFullYear() * 12 + d.getMonth(); });
       const minIdx = Math.min.apply(null, monthIndices), maxIdx = Math.max.apply(null, monthIndices);
       timelineMonths = [];
       for (let idx = minIdx; idx <= maxIdx; idx++) timelineMonths.push({ year: Math.floor(idx / 12), month: (idx % 12) + 1 });
@@ -202,25 +222,27 @@ router.get('/', async (req, res) => {
     monthlyTimeline = {
       months: timelineMonths.map((m) => m.year + '-' + String(m.month).padStart(2, '0')),
       data: monthlyRevenue(trendRows, timelineMonths),
+      compareData: compareTrendRows ? monthlyRevenue(compareTrendRows, timelineMonths) : null,
       yoyData: monthlyRevenue(trendRows, timelineYoyMonths)
     };
   }
 
+  const nameOf = (map, code) => (map[code] && map[code].name) || code;
   res.json({
-    customerNumber,
-    customerName: customerNumber ? ((custMap[customerNumber] && custMap[customerNumber].name) || customerNumber) : null,
-    productCode,
-    productName: productCode ? ((prodMap[productCode] && prodMap[productCode].name) || productCode) : null,
-    primaryClass,
-    customerType,
+    customerNumbers,
+    customerNames: customerNumbers.map((c) => nameOf(custMap, c)),
+    productCodes,
+    productNames: productCodes.map((p) => nameOf(prodMap, p)),
+    primaryClasses,
+    customerTypes,
     period: period ? { months: period.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(period) } : null,
     comparePeriod: compare ? { months: compare.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(compare) } : null,
-    compareCustomerNumber,
-    compareCustomerName: compareCustomerNumber ? ((custMap[compareCustomerNumber] && custMap[compareCustomerNumber].name) || compareCustomerNumber) : null,
-    compareProductCode,
-    compareProductName: compareProductCode ? ((prodMap[compareProductCode] && prodMap[compareProductCode].name) || compareProductCode) : null,
-    comparePrimaryClass,
-    compareCustomerType,
+    compareCustomerNumbers,
+    compareCustomerNames: compareCustomerNumbers.map((c) => nameOf(custMap, c)),
+    compareProductCodes,
+    compareProductNames: compareProductCodes.map((p) => nameOf(prodMap, p)),
+    comparePrimaryClasses,
+    compareCustomerTypes,
     totalRevenue: totalAgg._sum.revenue || 0,
     totalQuantity: totalAgg._sum.quantity || 0,
     activeCustomerCount: byCust.length,
@@ -237,7 +259,7 @@ router.get('/', async (req, res) => {
     byDepartment: groupRevenue(byProd, 'productCode', prodMap, 'department'),
     bySuperType: groupRevenue(byProd, 'productCode', prodMap, 'superType'),
     topCustomers: topN(byCust, 'customerNumber', custMap, 5),
-    topProducts: topN(byProd, 'productCode', prodMap, customerNumber ? 10 : 5)
+    topProducts: topN(byProd, 'productCode', prodMap, customerNumbers.length ? 10 : 5)
   });
 });
 

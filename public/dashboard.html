@@ -26,58 +26,90 @@
             <div class="page-subtitle" id="dashFilterSubtitle" style="margin-bottom:0;">כברירת מחדל, כל הנתונים בדשבורד מציגים את כלל הלקוחות וכל התקופות. מלאו כל שורה בנפרד כדי לסנן לפיה, ואת עמודת ההשוואה כדי להציג לצידה נתון להשוואה.</div>
           </div>
         </div>
-        <div class="table-scroll" style="margin-top:12px;">
+        <div class="table-scroll" style="margin-top:12px;max-width:100%;width:fit-content;overflow-x:auto;">
           <table class="dash-filter-table">
             <thead>
               <tr>
                 <th></th>
                 <th>בדיקה ראשית</th>
-                <th>השוואה ל...</th>
-                <th></th>
+                <th>נתוני השוואה</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <th scope="row">לקוח</th>
-                <td class="dft-field">
-                  <datalist id="dashCustomerList"></datalist>
-                  <input type="text" id="dashCustomerSearch" list="dashCustomerList" placeholder="הקלידו שם לקוח...">
+                <td class="dft-field dft-primary">
+                  <div class="dft-cell">
+                    <div id="dashCustomerPicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearCustomer" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
                 </td>
-                <td class="dft-field">
-                  <datalist id="dashCompareCustomerList"></datalist>
-                  <input type="text" id="dashCompareCustomerSearch" list="dashCompareCustomerList" placeholder="הקלידו שם לקוח...">
+                <td class="dft-field dft-compare">
+                  <div class="dft-cell">
+                    <div id="dashCompareCustomerPicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearCompareCustomer" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
                 </td>
-                <td class="dft-clear"><button class="dft-clear-btn" id="dashClearRowCustomer" type="button" title="נקה שורה" style="display:none;">✕</button></td>
               </tr>
               <tr>
                 <th scope="row">תקופה</th>
-                <td class="dft-field"><div id="dashPeriodPicker"></div></td>
-                <td class="dft-field"><div id="dashComparePicker"></div></td>
-                <td class="dft-clear"><button class="dft-clear-btn" id="dashClearRowPeriod" type="button" title="נקה שורה" style="display:none;">✕</button></td>
+                <td class="dft-field dft-primary">
+                  <div class="dft-cell">
+                    <div id="dashPeriodPicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearPeriod" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
+                </td>
+                <td class="dft-field dft-compare">
+                  <div class="dft-cell">
+                    <div id="dashComparePicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearComparePeriod" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
+                </td>
               </tr>
               <tr>
                 <th scope="row">מוצר</th>
-                <td class="dft-field">
-                  <datalist id="dashProductList"></datalist>
-                  <input type="text" id="dashProductSearch" list="dashProductList" placeholder="הקלידו שם מוצר...">
+                <td class="dft-field dft-primary">
+                  <div class="dft-cell">
+                    <div id="dashProductPicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearProduct" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
                 </td>
-                <td class="dft-field">
-                  <datalist id="dashCompareProductList"></datalist>
-                  <input type="text" id="dashCompareProductSearch" list="dashCompareProductList" placeholder="הקלידו שם מוצר...">
+                <td class="dft-field dft-compare">
+                  <div class="dft-cell">
+                    <div id="dashCompareProductPicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearCompareProduct" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
                 </td>
-                <td class="dft-clear"><button class="dft-clear-btn" id="dashClearRowProduct" type="button" title="נקה שורה" style="display:none;">✕</button></td>
               </tr>
               <tr>
                 <th scope="row">סיווג ראשי</th>
-                <td class="dft-field"><select id="dashPrimaryClass"><option value="">הכל</option></select></td>
-                <td class="dft-field"><select id="dashComparePrimaryClass"><option value="">הכל</option></select></td>
-                <td class="dft-clear"><button class="dft-clear-btn" id="dashClearRowPrimaryClass" type="button" title="נקה שורה" style="display:none;">✕</button></td>
+                <td class="dft-field dft-primary">
+                  <div class="dft-cell">
+                    <div id="dashPrimaryClassPicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearPrimaryClass" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
+                </td>
+                <td class="dft-field dft-compare">
+                  <div class="dft-cell">
+                    <div id="dashComparePrimaryClassPicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearComparePrimaryClass" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
+                </td>
               </tr>
               <tr>
                 <th scope="row">סוג לקוח</th>
-                <td class="dft-field"><select id="dashCustomerType"><option value="">הכל</option></select></td>
-                <td class="dft-field"><select id="dashCompareCustomerType"><option value="">הכל</option></select></td>
-                <td class="dft-clear"><button class="dft-clear-btn" id="dashClearRowCustomerType" type="button" title="נקה שורה" style="display:none;">✕</button></td>
+                <td class="dft-field dft-primary">
+                  <div class="dft-cell">
+                    <div id="dashCustomerTypePicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearCustomerType" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
+                </td>
+                <td class="dft-field dft-compare">
+                  <div class="dft-cell">
+                    <div id="dashCompareCustomerTypePicker" style="flex:1;"></div>
+                    <button class="dft-cell-clear" id="dashClearCompareCustomerType" type="button" title="נקה" style="display:none;">✕</button>
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -101,8 +133,14 @@
           <div class="page-subtitle" id="monthlyTrendSubtitle" style="margin-bottom:0;">השוואה חודשית בין כל השנים שקיימים עבורן נתונים. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא.</div>
         </div>
       </div>
-      <div class="card">
-        <div style="position:relative;height:300px;"><canvas id="monthlyTrendChart"></canvas></div>
+      <div id="monthlyTrendRow" style="display:grid;grid-template-columns:1fr;gap:22px;">
+        <div class="card">
+          <div style="position:relative;height:300px;"><canvas id="monthlyTrendChart"></canvas></div>
+        </div>
+        <div class="card" id="monthlyTrendCompareCard" style="display:none;">
+          <div class="card-title" id="monthlyTrendCompareChartTitle" style="margin-bottom:8px;"></div>
+          <div style="position:relative;height:300px;"><canvas id="monthlyTrendCompareChart"></canvas></div>
+        </div>
       </div>
 
       <div class="table-head-row" style="margin-top:6px;">
@@ -146,6 +184,7 @@
   <script src="js/type-meta.js"></script>
   <script src="js/app.js"></script>
   <script src="js/month-multiselect.js"></script>
+  <script src="js/entity-multiselect.js"></script>
   <script src="js/dashboard-sales-summary.js"></script>
   <script src="js/dashboard-filters.js"></script>
   <script src="js/dashboard-top-insights.js"></script>

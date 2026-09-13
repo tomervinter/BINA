@@ -15,6 +15,7 @@ const DASH_CHART_COLORS = ['#3D5CF5', '#2C48D8', '#1B2144', '#64748B', '#93A4C3'
 const DASH_BLUE = '#3D5CF5';
 const DASH_NAVY = '#1B2144';
 const DASH_SLATE = '#64748B';
+const DASH_PURPLE = '#8B5CF6';
 
 const dashCharts = {};
 function upsertChart(canvasId, config) {
@@ -155,31 +156,83 @@ function yoyTooltipAfterLabel(entries, onlyDsIndex) {
   };
 }
 
+// Draws each bar's own value just past its end (a small muted label), so the number
+// reads at a glance without hovering for the tooltip — vertical bars get it centered
+// above the bar, horizontal ones get it just past the bar's tip.
+function barValueLabelPlugin(formatFn) {
+  return {
+    id: 'barValueLabel',
+    afterDatasetsDraw(chart) {
+      const isHorizontal = chart.options.indexAxis === 'y';
+      const ctx = chart.ctx;
+      chart.data.datasets.forEach((ds, dsIndex) => {
+        const meta = chart.getDatasetMeta(dsIndex);
+        if (meta.hidden) return;
+        meta.data.forEach((bar, i) => {
+          const value = ds.data[i];
+          if (value == null) return;
+          const props = bar.getProps(['x', 'y'], true);
+          ctx.save();
+          ctx.font = '700 11px Assistant, Arial, sans-serif';
+          ctx.fillStyle = '#6A7093';
+          if (isHorizontal) {
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(formatFn(value), props.x + 6, props.y);
+          } else {
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(formatFn(value), props.x, props.y - 4);
+          }
+          ctx.restore();
+        });
+      });
+    }
+  };
+}
+
+// A field can hold several values now (multi-select) — a report link can only ever
+// filter by one exact value per column, so it degrades gracefully to "no filter on
+// this dimension" once more than one is picked; join(...) instead gives the display
+// text a readable name (or a count) regardless of how many are selected.
+function singleOrNull(arr) { return (arr && arr.length === 1) ? arr[0] : null; }
+function joinOrCount(arr, names, countWord) {
+  if (!arr || !arr.length) return null;
+  if (arr.length === 1) return (names && names[0]) || arr[0];
+  return arr.length + ' ' + countWord;
+}
+
 async function loadDashboardSalesSummary(filters) {
   filters = filters || {};
   const qs = new URLSearchParams();
-  if (filters.customer) qs.set('customerNumber', filters.customer);
-  if (filters.product) qs.set('productCode', filters.product);
-  if (filters.primaryClass) qs.set('primaryClass', filters.primaryClass);
-  if (filters.customerType) qs.set('customerType', filters.customerType);
-  if (filters.periodMonths && filters.periodMonths.length) qs.set('periodMonths', filters.periodMonths.join(','));
-  if (filters.compareMonths && filters.compareMonths.length) qs.set('compareMonths', filters.compareMonths.join(','));
-  if (filters.compareCustomer) qs.set('compareCustomerNumber', filters.compareCustomer);
-  if (filters.compareProduct) qs.set('compareProductCode', filters.compareProduct);
-  if (filters.comparePrimaryClass) qs.set('comparePrimaryClass', filters.comparePrimaryClass);
-  if (filters.compareCustomerType) qs.set('compareCustomerType', filters.compareCustomerType);
+  const setList = (key, arr) => { if (arr && arr.length) qs.set(key, arr.join(',')); };
+  setList('customerNumber', filters.customer);
+  setList('productCode', filters.product);
+  setList('primaryClass', filters.primaryClass);
+  setList('customerType', filters.customerType);
+  setList('periodMonths', filters.periodMonths);
+  setList('compareMonths', filters.compareMonths);
+  setList('compareCustomerNumber', filters.compareCustomer);
+  setList('compareProductCode', filters.compareProduct);
+  setList('comparePrimaryClass', filters.comparePrimaryClass);
+  setList('compareCustomerType', filters.compareCustomerType);
   const q = qs.toString();
   const res = await fetch('/api/dashboard-sales-summary' + (q ? '?' + q : ''), { credentials: 'include' });
   if (!res.ok) return;
   const s = await res.json();
-  const suffix = (s.customerName ? (' — ' + s.customerName) : '') + (s.productName ? (' — ' + s.productName) : '')
-    + (s.primaryClass ? (' — ' + s.primaryClass) : '') + (s.customerType ? (' — ' + s.customerType) : '');
+  const customerLabel = joinOrCount(s.customerNumbers, s.customerNames, 'לקוחות');
+  const productLabel = joinOrCount(s.productCodes, s.productNames, 'מוצרים');
+  const primaryClassLabel = joinOrCount(s.primaryClasses, null, 'סיווגים ראשיים');
+  const customerTypeLabel = joinOrCount(s.customerTypes, null, 'סוגי לקוח');
+  const suffix = (customerLabel ? (' — ' + customerLabel) : '') + (productLabel ? (' — ' + productLabel) : '')
+    + (primaryClassLabel ? (' — ' + primaryClassLabel) : '') + (customerTypeLabel ? (' — ' + customerTypeLabel) : '');
   const baseReportParams = Object.assign({},
-    s.customerNumber && { customerNumber: s.customerNumber },
-    s.productCode && { productCode: s.productCode },
-    s.primaryClass && { primaryClass: s.primaryClass },
-    s.customerType && { customerType: s.customerType }
+    singleOrNull(s.customerNumbers) && { customerNumber: singleOrNull(s.customerNumbers) },
+    singleOrNull(s.productCodes) && { productCode: singleOrNull(s.productCodes) },
+    singleOrNull(s.primaryClasses) && { primaryClass: singleOrNull(s.primaryClasses) },
+    singleOrNull(s.customerTypes) && { customerType: singleOrNull(s.customerTypes) }
   );
+  const hasCustomerFilter = !!(s.customerNumbers && s.customerNumbers.length);
   const ct = s.compareTotals;
 
   if (s.period) {
@@ -188,24 +241,25 @@ async function loadDashboardSalesSummary(filters) {
       'התקופה ' + s.period.label + (s.comparePeriod ? ' לעומת ' + s.comparePeriod.label : '') +
       '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. החץ מציין שינוי לעומת אותו חודש אשתקד (לחודשים שהסתיימו בלבד).';
     document.getElementById('salesSummaryTitle').textContent = 'תמונת מכירות — ' + s.period.label + suffix;
-    document.getElementById('salesSummarySubtitle').textContent = 'מבוסס על שורות המכירה בתקופה ' + s.period.label + (s.customerNumber ? (' של ' + s.customerName) : '') + '. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.';
+    document.getElementById('salesSummarySubtitle').textContent = 'מבוסס על שורות המכירה בתקופה ' + s.period.label + (customerLabel ? (' של ' + customerLabel) : '') + '. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.';
   } else {
     const mt = s.monthlyTimeline;
     const fmtKey = (mk) => { const [y, m] = mk.split('-'); return s.monthNames[+m - 1] + ' ' + y; };
     document.getElementById('monthlyTrendTitle').textContent = 'מחזור מכירות חודשי' + suffix;
     document.getElementById('monthlyTrendSubtitle').textContent =
       'נתוני ' + fmtKey(mt.months[0]) + (mt.months.length > 1 ? ' עד ' + fmtKey(mt.months[mt.months.length - 1]) : '') +
-      ', ברצף. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. החץ מציין את שיעור השינוי של התקופה הנוכחית בלבד, לעומת אותו חודש אשתקד.';
-    document.getElementById('salesSummaryTitle').textContent = (s.customerNumber ? 'תמונת מכירות — הלקוח הנבחר' : 'תמונת מכירות כוללת');
-    document.getElementById('salesSummarySubtitle').textContent = s.customerNumber
-      ? ('מבוסס על שורות המכירה של ' + s.customerName + ' בלבד. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.')
+      ', ברצף' + (mt.compareData ? ' — מוצג גם בהשוואה' : '') +
+      '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. החץ מציין את שיעור השינוי של התקופה הנוכחית בלבד, לעומת אותו חודש אשתקד.';
+    document.getElementById('salesSummaryTitle').textContent = (hasCustomerFilter ? 'תמונת מכירות — הלקוח הנבחר' : 'תמונת מכירות כוללת');
+    document.getElementById('salesSummarySubtitle').textContent = hasCustomerFilter
+      ? ('מבוסס על שורות המכירה של ' + customerLabel + ' בלבד. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.')
       : 'מבוסס על דוח המכירות המלא — כל שורות המכירות בצירוף נתוני הלקוחות והמוצרים. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.';
   }
   document.getElementById('salesSummaryFullReportLink').href = reportUrl(baseReportParams);
   document.getElementById('superTypeTitle').textContent = 'מחזור לפי טיפוס על' + suffix;
   document.getElementById('departmentTitle').textContent = 'מחזור לפי מחלקת מוצר' + suffix;
-  document.getElementById('topProductsTitle').textContent = s.customerNumber ? '10 המוצרים המובילים אצל הלקוח' : '5 המוצרים המובילים במחזור';
-  document.getElementById('topCustomersTitle').textContent = s.customerNumber ? 'מחזור הלקוח הנבחר' : '5 הלקוחות המובילים במחזור';
+  document.getElementById('topProductsTitle').textContent = hasCustomerFilter ? '10 המוצרים המובילים אצל הלקוח' : '5 המוצרים המובילים במחזור';
+  document.getElementById('topCustomersTitle').textContent = hasCustomerFilter ? 'מחזור הלקוח הנבחר' : '5 הלקוחות המובילים במחזור';
 
   // A single selected month can be expressed as the full report's own year/month
   // filter; a multi-month period has no equivalent there, so the tile link degrades
@@ -220,36 +274,45 @@ async function loadDashboardSalesSummary(filters) {
   // is one bundle: if the user gave ANY compare-specific identity field, use exactly
   // that bundle; otherwise inherit the primary side's identity wholesale — matching
   // the backend's own fallback logic exactly (see buildEntityWhere in
-  // dashboardSalesSummary.js). The product dimension falls back independently.
-  const hasCompareIdentity = !!(s.compareCustomerNumber || s.comparePrimaryClass || s.compareCustomerType);
+  // dashboardSalesSummary.js). The product dimension falls back independently. Each
+  // is still single-value-only for the report link, same degrade rule as above.
+  const hasCompareIdentity = !!((s.compareCustomerNumbers && s.compareCustomerNumbers.length) || (s.comparePrimaryClasses && s.comparePrimaryClasses.length) || (s.compareCustomerTypes && s.compareCustomerTypes.length));
   const compareBaseReportParams = {};
   if (hasCompareIdentity) {
-    if (s.comparePrimaryClass) compareBaseReportParams.primaryClass = s.comparePrimaryClass;
-    if (s.compareCustomerType) compareBaseReportParams.customerType = s.compareCustomerType;
-    if (s.compareCustomerNumber) compareBaseReportParams.customerNumber = s.compareCustomerNumber;
+    if (singleOrNull(s.comparePrimaryClasses)) compareBaseReportParams.primaryClass = singleOrNull(s.comparePrimaryClasses);
+    if (singleOrNull(s.compareCustomerTypes)) compareBaseReportParams.customerType = singleOrNull(s.compareCustomerTypes);
+    if (singleOrNull(s.compareCustomerNumbers)) compareBaseReportParams.customerNumber = singleOrNull(s.compareCustomerNumbers);
   } else {
-    if (s.primaryClass) compareBaseReportParams.primaryClass = s.primaryClass;
-    if (s.customerType) compareBaseReportParams.customerType = s.customerType;
-    if (s.customerNumber) compareBaseReportParams.customerNumber = s.customerNumber;
+    if (singleOrNull(s.primaryClasses)) compareBaseReportParams.primaryClass = singleOrNull(s.primaryClasses);
+    if (singleOrNull(s.customerTypes)) compareBaseReportParams.customerType = singleOrNull(s.customerTypes);
+    if (singleOrNull(s.customerNumbers)) compareBaseReportParams.customerNumber = singleOrNull(s.customerNumbers);
   }
-  const cmpProduct = s.compareProductCode || s.productCode;
-  if (cmpProduct) compareBaseReportParams.productCode = cmpProduct;
+  const cmpProductSingle = singleOrNull(s.compareProductCodes) || singleOrNull(s.productCodes);
+  if (cmpProductSingle) compareBaseReportParams.productCode = cmpProductSingle;
   const compareReportParams = Object.assign({}, compareBaseReportParams, singleMonthParams(s.comparePeriod));
-  const compareAxisLabel = s.comparePrimaryClass ? ('סיווג ' + s.comparePrimaryClass)
-    : s.compareCustomerType ? ('סוג לקוח ' + s.compareCustomerType)
-    : s.compareCustomerNumber ? ('הלקוח ' + s.compareCustomerName)
-    : s.compareProductCode ? ('המוצר ' + s.compareProductName)
+  const compareCustomerLabel = joinOrCount(s.compareCustomerNumbers, s.compareCustomerNames, 'לקוחות');
+  const compareProductLabel = joinOrCount(s.compareProductCodes, s.compareProductNames, 'מוצרים');
+  const comparePrimaryClassLabel = joinOrCount(s.comparePrimaryClasses, null, 'סיווגים ראשיים');
+  const compareCustomerTypeLabel = joinOrCount(s.compareCustomerTypes, null, 'סוגי לקוח');
+  const compareAxisLabel = comparePrimaryClassLabel ? ('סיווג ' + comparePrimaryClassLabel)
+    : compareCustomerTypeLabel ? ('סוג לקוח ' + compareCustomerTypeLabel)
+    : compareCustomerLabel ? ('הלקוח ' + compareCustomerLabel)
+    : compareProductLabel ? ('המוצר ' + compareProductLabel)
     : (s.comparePeriod ? s.comparePeriod.label : null);
 
+  // Color encodes which side a tile belongs to — blue for the primary check, purple
+  // for its comparison — rather than which metric it is, so the two sides read as two
+  // visually distinct groups at a glance (matching the same blue/purple split used on
+  // the filter table above).
   const kpiTiles = [
     ['blue', 'v-blue', fmtMoneyShort(s.totalRevenue), (s.period ? 'מכירות תקופה נוכחית' : 'מכירות') + ' (ש"ח)', reportUrl(curReportParams)],
-    ['green', 'v-green', s.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו' + (s.period ? ' בתקופה נוכחית' : ''), reportUrl(curReportParams)]
+    ['blue', 'v-blue', s.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו' + (s.period ? ' בתקופה נוכחית' : ''), reportUrl(curReportParams)]
   ];
   if (ct) {
     const cmpSuffix = compareAxisLabel ? (' — ' + compareAxisLabel) : '';
     kpiTiles.push(
-      ['blue', 'v-blue', fmtMoneyShort(ct.totalRevenue), 'מכירות להשוואה' + cmpSuffix + ' (ש"ח)', reportUrl(compareReportParams)],
-      ['green', 'v-green', ct.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו להשוואה' + cmpSuffix, reportUrl(compareReportParams)]
+      ['purple', 'v-purple', fmtMoneyShort(ct.totalRevenue), 'מכירות להשוואה' + cmpSuffix + ' (ש"ח)', reportUrl(compareReportParams)],
+      ['purple', 'v-purple', ct.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו להשוואה' + cmpSuffix, reportUrl(compareReportParams)]
     );
   }
 
@@ -262,21 +325,25 @@ async function loadDashboardSalesSummary(filters) {
     '</a>'
   )).join('');
 
+  // Shows/hides the second trend-chart card and widens/narrows the row accordingly —
+  // one full-width chart when only primary filters are set, two side-by-side (each
+  // shrunk to make room) as soon as any comparison is active. Destroys the compare
+  // chart instance when hiding it so a later re-show always starts from a clean canvas.
+  function toggleCompareChart(show) {
+    const row = document.getElementById('monthlyTrendRow');
+    const card = document.getElementById('monthlyTrendCompareCard');
+    if (row) row.style.gridTemplateColumns = show ? '1fr 1fr' : '1fr';
+    if (card) card.style.display = show ? '' : 'none';
+    if (!show && dashCharts.monthlyTrendCompareChart) { dashCharts.monthlyTrendCompareChart.destroy(); delete dashCharts.monthlyTrendCompareChart; }
+  }
+
   if (s.periodTrend) {
-    // Period vs comparison-period: aligned by relative month position (month 1 of
-    // period vs month 1 of comparison, etc.), since the two ranges are usually offset
-    // on purpose (e.g. this quarter vs the same quarter last year).
+    // Period vs comparison-period, each its own chart (aligned by relative month
+    // position — month 1 of period vs month 1 of comparison, etc. — since the two
+    // ranges are usually offset on purpose, e.g. this quarter vs the same quarter
+    // last year).
     const pt = s.periodTrend;
-    const n = Math.max(pt.periodMonths.length, pt.compareMonths ? pt.compareMonths.length : 0);
-    const labels = Array.from({ length: n }, (_, i) => 'חודש ' + (i + 1));
-    // Chart.js always draws dataset 0 on the physical left of each group and dataset 1
-    // to its right, regardless of page direction — on this RTL dashboard, the current
-    // period must always render on the right, so the comparison series (when present)
-    // goes first in the array and the current period's own series goes last.
-    const datasets = [];
-    if (pt.compareData) datasets.push({ label: pt.compareLabel, data: pt.compareData, backgroundColor: DASH_NAVY, borderRadius: 4 });
-    const periodDsIndex = datasets.length;
-    datasets.push({ label: pt.periodLabel, data: pt.periodData, backgroundColor: DASH_BLUE, borderRadius: 4 });
+    const labels = Array.from({ length: pt.periodMonths.length }, (_, i) => 'חודש ' + (i + 1));
     // Always vs. the exact same calendar month one year earlier (pt.yoyData), drawn
     // above the period's own bar — independent of whatever comparison series is shown.
     const ptYoyEntries = buildYoyEntries(pt.periodMonths.length,
@@ -285,27 +352,46 @@ async function loadDashboardSalesSummary(filters) {
     );
     upsertChart('monthlyTrendChart', {
       type: 'bar',
-      data: { labels, datasets },
-      plugins: [yoyDrawPlugin(ptYoyEntries, [periodDsIndex])],
+      data: { labels, datasets: [{ label: pt.periodLabel, data: pt.periodData, backgroundColor: DASH_BLUE, borderRadius: 4 }] },
+      plugins: [yoyDrawPlugin(ptYoyEntries, [0])],
       options: {
         responsive: true, maintainAspectRatio: false,
         layout: { padding: { top: 38 } },
         plugins: {
-          legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } },
-          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(ptYoyEntries, periodDsIndex) } }
+          legend: { display: false },
+          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(ptYoyEntries, 0) } }
         },
         scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
-          const el = elements[0];
-          const months = el.datasetIndex === periodDsIndex ? pt.periodMonths : pt.compareMonths;
-          const m = months && months[el.index];
+          const m = pt.periodMonths[elements[0].index];
           if (!m) return;
           window.location.href = reportUrl(Object.assign({}, baseReportParams, { year: m.year, month: m.month }));
         },
         onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
       }
     });
+    toggleCompareChart(!!pt.compareData);
+    if (pt.compareData) {
+      document.getElementById('monthlyTrendCompareChartTitle').textContent = 'השוואה — ' + pt.compareLabel;
+      const cmpLabels = Array.from({ length: pt.compareMonths.length }, (_, i) => 'חודש ' + (i + 1));
+      upsertChart('monthlyTrendCompareChart', {
+        type: 'bar',
+        data: { labels: cmpLabels, datasets: [{ label: pt.compareLabel, data: pt.compareData, backgroundColor: DASH_PURPLE, borderRadius: 4 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+          onClick: function (evt, elements) {
+            if (!elements.length) return;
+            const m = pt.compareMonths[elements[0].index];
+            if (!m) return;
+            window.location.href = reportUrl(Object.assign({}, compareBaseReportParams, { year: m.year, month: m.month }));
+          },
+          onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
+        }
+      });
+    }
   } else {
     // Continuous monthly revenue trend across the whole sales history — one bar per
     // month in sequence, not grouped by calendar month across years. A year-over-year
@@ -335,13 +421,31 @@ async function loadDashboardSalesSummary(filters) {
         scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
-          const el = elements[0];
-          const m = monthMeta[el.index];
+          const m = monthMeta[elements[0].index];
           window.location.href = reportUrl(Object.assign({}, baseReportParams, { year: m.year, month: m.month }));
         },
         onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
       }
     });
+    toggleCompareChart(!!mt.compareData);
+    if (mt.compareData) {
+      document.getElementById('monthlyTrendCompareChartTitle').textContent = 'השוואה — ' + (compareAxisLabel || '');
+      upsertChart('monthlyTrendCompareChart', {
+        type: 'bar',
+        data: { labels, datasets: [{ label: compareAxisLabel || 'השוואה', data: mt.compareData, backgroundColor: DASH_PURPLE, borderRadius: 4 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+          onClick: function (evt, elements) {
+            if (!elements.length) return;
+            const m = monthMeta[elements[0].index];
+            window.location.href = reportUrl(Object.assign({}, compareBaseReportParams, { year: m.year, month: m.month }));
+          },
+          onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
+        }
+      });
+    }
   }
 
   const legendOpts = { legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } } };
@@ -359,12 +463,14 @@ async function loadDashboardSalesSummary(filters) {
       options: {
         indexAxis: type === 'bar' ? 'y' : undefined,
         responsive: true, maintainAspectRatio: false,
+        layout: type === 'bar' ? { padding: { right: 46 } } : undefined,
         plugins: type === 'doughnut' ? legendOpts : { legend: { display: false } },
         scales: type === 'bar' ? { x: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } } : undefined,
         onClick: onChartClick((label) => reportUrl(Object.assign({}, baseReportParams, { [filterKey]: label }))),
         onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
       }
     };
+    if (type === 'bar') cfg.plugins = [barValueLabelPlugin((v) => Math.round(v).toLocaleString('he-IL'))];
     upsertChart(canvasId, cfg);
   }
 
@@ -374,8 +480,10 @@ async function loadDashboardSalesSummary(filters) {
   upsertChart('topCustomersChart', {
     type: 'bar',
     data: { labels: s.topCustomers.map((r) => r.name), datasets: [{ label: 'מחזור', data: s.topCustomers.map((r) => r.revenue), backgroundColor: DASH_BLUE, borderRadius: 6 }] },
+    plugins: [barValueLabelPlugin((v) => Math.round(v).toLocaleString('he-IL'))],
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: 46 } },
       plugins: { legend: { display: false } },
       scales: { x: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
       onClick: function (evt, elements) {
@@ -390,8 +498,10 @@ async function loadDashboardSalesSummary(filters) {
   upsertChart('topProductsChart', {
     type: 'bar',
     data: { labels: s.topProducts.map((r) => r.name), datasets: [{ label: 'מחזור', data: s.topProducts.map((r) => r.revenue), backgroundColor: DASH_SLATE, borderRadius: 6 }] },
+    plugins: [barValueLabelPlugin((v) => Math.round(v).toLocaleString('he-IL'))],
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: 46 } },
       plugins: { legend: { display: false } },
       scales: { x: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
       onClick: function (evt, elements) {

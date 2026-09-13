@@ -23,7 +23,8 @@ function renderDashboardTopInsights(filters) {
   const list = document.getElementById('dashTopInsightsList');
   if (!list || !dashAllInsights) return;
   filters = filters || {};
-  const filtered = filters.customer ? dashAllInsights.filter((i) => i.customerId === filters.customer) : dashAllInsights;
+  const customerIds = filters.customer || []; // array — the dashboard's customer filter is a multi-select
+  const filtered = customerIds.length ? dashAllInsights.filter((i) => customerIds.includes(i.customerId)) : dashAllInsights;
   const top = filtered.slice(0, 5);
 
   list.innerHTML = top.length ? top.map((i, idx) => (
@@ -32,7 +33,7 @@ function renderDashboardTopInsights(filters) {
     '<div><div class="dash-insight-entity">' + Layout.escapeHtml((TYPE_META[i.type] || {}).label || i.type) + (i.customerName ? ' — ' + Layout.escapeHtml(i.customerName) : '') + '</div>' +
     '<div class="dash-insight-msg">' + Layout.escapeHtml(i.message) + '</div></div>' +
     '</div>'
-  )).join('') : '<div class="dash-insight-empty">' + (filters.customer
+  )).join('') : '<div class="dash-insight-empty">' + (customerIds.length
     ? 'אין תובנות עבור הלקוח הנבחר.'
     : 'לא נוצרו תובנות עדיין — עברו למסך <a href="insights.html">יומן תובנות</a> וייצרו אותן.') + '</div>';
 
@@ -57,7 +58,7 @@ async function initDashboardTopInsights() {
   if (!document.getElementById('dashTopInsightsList')) return;
   const res = await fetch('/api/insights', { credentials: 'include' });
   dashAllInsights = res.ok ? await res.json() : [];
-  const initialCustomer = new URLSearchParams(window.location.search).get('customer') || null;
+  const initialCustomer = (new URLSearchParams(window.location.search).get('customer') || '').split(',').filter(Boolean);
   renderDashboardTopInsights({ customer: initialCustomer });
 }
 

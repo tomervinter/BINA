@@ -1,32 +1,27 @@
 // Combined dashboard filter controls, laid out as a table: one row per filterable
 // dimension (customer, period, product, primary classification, customer type),
-// each with a primary-side control and a comparison-side control (see
-// dashboard.html's .dash-filter-table). Every field is synced to the URL query
-// string and drives one call to loadDashboardSalesSummary (dashboard-sales-summary.js)
-// whenever any of them change, so a refresh or a shared link reproduces the exact
-// same filtered view. A "period" is an arbitrary set of selected months, not
-// necessarily contiguous — see month-multiselect.js.
+// each with a primary-side multi-select and a comparison-side multi-select (see
+// dashboard.html's .dash-filter-table and entity-multiselect.js). Every field is
+// synced to the URL query string (each as a comma-separated list) and drives one
+// call to loadDashboardSalesSummary (dashboard-sales-summary.js) whenever any of
+// them change, so a refresh or a shared link reproduces the exact same filtered
+// view. A "period" is likewise an arbitrary set of selected months, not necessarily
+// contiguous — see month-multiselect.js.
 async function initDashboardFilters() {
-  const custInput = document.getElementById('dashCustomerSearch');
-  if (!custInput) return;
-  const custDatalist = document.getElementById('dashCustomerList');
-  const prodInput = document.getElementById('dashProductSearch');
-  const prodDatalist = document.getElementById('dashProductList');
-  const primaryClassSel = document.getElementById('dashPrimaryClass');
-  const customerTypeSel = document.getElementById('dashCustomerType');
+  const custPickerEl = document.getElementById('dashCustomerPicker');
+  if (!custPickerEl) return;
   const subtitle = document.getElementById('dashFilterSubtitle');
-  const cmpCustInput = document.getElementById('dashCompareCustomerSearch');
-  const cmpCustDatalist = document.getElementById('dashCompareCustomerList');
-  const cmpProdInput = document.getElementById('dashCompareProductSearch');
-  const cmpProdDatalist = document.getElementById('dashCompareProductList');
-  const cmpPrimaryClassSel = document.getElementById('dashComparePrimaryClass');
-  const cmpCustomerTypeSel = document.getElementById('dashCompareCustomerType');
-  const rowClearBtns = {
-    customer: document.getElementById('dashClearRowCustomer'),
-    period: document.getElementById('dashClearRowPeriod'),
-    product: document.getElementById('dashClearRowProduct'),
-    primaryClass: document.getElementById('dashClearRowPrimaryClass'),
-    customerType: document.getElementById('dashClearRowCustomerType')
+  const cellClearBtns = {
+    customer: document.getElementById('dashClearCustomer'),
+    compareCustomer: document.getElementById('dashClearCompareCustomer'),
+    period: document.getElementById('dashClearPeriod'),
+    comparePeriod: document.getElementById('dashClearComparePeriod'),
+    product: document.getElementById('dashClearProduct'),
+    compareProduct: document.getElementById('dashClearCompareProduct'),
+    primaryClass: document.getElementById('dashClearPrimaryClass'),
+    comparePrimaryClass: document.getElementById('dashClearComparePrimaryClass'),
+    customerType: document.getElementById('dashClearCustomerType'),
+    compareCustomerType: document.getElementById('dashClearCompareCustomerType')
   };
 
   const [custRes, prodRes] = await Promise.all([
@@ -35,62 +30,50 @@ async function initDashboardFilters() {
   ]);
   const customers = custRes.ok ? (await custRes.json()).rows : [];
   const products = prodRes.ok ? (await prodRes.json()).rows : [];
-  const byDisplay = {};
   const nameByCode = {};
-  customers.forEach((c) => {
-    byDisplay[c.customerNumber + ' — ' + c.name] = c.customerNumber;
-    nameByCode[c.customerNumber] = c.name;
-  });
-  custDatalist.innerHTML = Object.keys(byDisplay).map((d) => '<option value="' + Layout.escapeHtml(d) + '"></option>').join('');
-  cmpCustDatalist.innerHTML = custDatalist.innerHTML;
-  const prodByDisplay = {};
+  customers.forEach((c) => { nameByCode[c.customerNumber] = c.name; });
   const prodNameByCode = {};
-  products.forEach((p) => {
-    prodByDisplay[p.itemCode + ' — ' + p.name] = p.itemCode;
-    prodNameByCode[p.itemCode] = p.name;
-  });
-  prodDatalist.innerHTML = Object.keys(prodByDisplay).map((d) => '<option value="' + Layout.escapeHtml(d) + '"></option>').join('');
-  cmpProdDatalist.innerHTML = prodDatalist.innerHTML;
+  products.forEach((p) => { prodNameByCode[p.itemCode] = p.name; });
+  const custOptions = customers.map((c) => ({ value: c.customerNumber, label: c.customerNumber + ' — ' + c.name }));
+  const prodOptions = products.map((p) => ({ value: p.itemCode, label: p.itemCode + ' — ' + p.name }));
   // Distinct values straight off the already-fetched customer list — no separate
   // endpoint needed for the four segment dropdowns (primary + compare, class + type).
-  function fillSelect(sel, values) {
-    sel.innerHTML = '<option value="">הכל</option>' + Array.from(new Set(values.filter(Boolean))).sort()
-      .map((v) => '<option value="' + Layout.escapeHtml(v) + '">' + Layout.escapeHtml(v) + '</option>').join('');
+  function distinctOptions(values) {
+    return Array.from(new Set(values.filter(Boolean))).sort().map((v) => ({ value: v, label: v }));
   }
-  fillSelect(primaryClassSel, customers.map((c) => c.primaryClass));
-  fillSelect(customerTypeSel, customers.map((c) => c.customerType));
-  fillSelect(cmpPrimaryClassSel, customers.map((c) => c.primaryClass));
-  fillSelect(cmpCustomerTypeSel, customers.map((c) => c.customerType));
+  const primaryClassOptions = distinctOptions(customers.map((c) => c.primaryClass));
+  const customerTypeOptions = distinctOptions(customers.map((c) => c.customerType));
 
   const urlParams = new URLSearchParams(window.location.search);
+  const csv = (key) => (urlParams.get(key) || '').split(',').filter(Boolean);
   const state = {
-    customer: urlParams.get('customer') || null,
-    product: urlParams.get('product') || null,
+    customer: csv('customer'),
+    product: csv('product'),
     // Resolved from the dashboard-sales-summary response once it comes back — the
-    // URL/insight click only ever carries the product's code, not its display name.
-    productName: null,
-    primaryClass: urlParams.get('primaryClass') || null,
-    customerType: urlParams.get('customerType') || null,
-    periodMonths: (urlParams.get('periodMonths') || '').split(',').filter(Boolean),
-    compareMonths: (urlParams.get('compareMonths') || '').split(',').filter(Boolean),
+    // URL/insight click only ever carries product codes, not their display names.
+    productNames: null,
+    primaryClass: csv('primaryClass'),
+    customerType: csv('customerType'),
+    periodMonths: csv('periodMonths'),
+    compareMonths: csv('compareMonths'),
     // Entity-comparison axis: each is independent and optional, and each falls back
     // to the primary filter's own value on the server when unset — exactly like
     // compareMonths already does for dates (see dashboardSalesSummary.js).
-    compareCustomer: urlParams.get('compareCustomer') || null,
-    compareProduct: urlParams.get('compareProduct') || null,
-    comparePrimaryClass: urlParams.get('comparePrimaryClass') || null,
-    compareCustomerType: urlParams.get('compareCustomerType') || null
+    compareCustomer: csv('compareCustomer'),
+    compareProduct: csv('compareProduct'),
+    comparePrimaryClass: csv('comparePrimaryClass'),
+    compareCustomerType: csv('compareCustomerType')
   };
 
   function syncUrl() {
     const url = new URL(window.location.href);
-    const set = (key, val) => { if (val) url.searchParams.set(key, val); else url.searchParams.delete(key); };
+    const set = (key, arr) => { if (arr && arr.length) url.searchParams.set(key, arr.join(',')); else url.searchParams.delete(key); };
     set('customer', state.customer);
     set('product', state.product);
     set('primaryClass', state.primaryClass);
     set('customerType', state.customerType);
-    set('periodMonths', state.periodMonths.length ? state.periodMonths.join(',') : null);
-    set('compareMonths', state.compareMonths.length ? state.compareMonths.join(',') : null);
+    set('periodMonths', state.periodMonths);
+    set('compareMonths', state.compareMonths);
     set('compareCustomer', state.compareCustomer);
     set('compareProduct', state.compareProduct);
     set('comparePrimaryClass', state.comparePrimaryClass);
@@ -98,36 +81,47 @@ async function initDashboardFilters() {
     window.history.replaceState(null, '', url.pathname + url.search);
   }
 
-  function updateUi() {
-    custInput.value = (state.customer && nameByCode[state.customer]) ? (state.customer + ' — ' + nameByCode[state.customer]) : '';
-    prodInput.value = (state.product && prodNameByCode[state.product]) ? (state.product + ' — ' + (state.productName || prodNameByCode[state.product])) : '';
-    primaryClassSel.value = state.primaryClass || '';
-    customerTypeSel.value = state.customerType || '';
-    cmpCustInput.value = (state.compareCustomer && nameByCode[state.compareCustomer]) ? (state.compareCustomer + ' — ' + nameByCode[state.compareCustomer]) : '';
-    cmpProdInput.value = (state.compareProduct && prodNameByCode[state.compareProduct]) ? (state.compareProduct + ' — ' + prodNameByCode[state.compareProduct]) : '';
-    cmpPrimaryClassSel.value = state.comparePrimaryClass || '';
-    cmpCustomerTypeSel.value = state.compareCustomerType || '';
+  // Joins a list of values into a short human sentence fragment, using the given
+  // preposition-prefixed word for 1 item and a plain count for more (e.g. "הלקוח X"
+  // vs "3 לקוחות"), so the subtitle stays readable regardless of how many are picked.
+  function joinNamed(codes, nameMap, singularLabel, pluralLabel) {
+    if (!codes.length) return null;
+    if (codes.length === 1) return singularLabel + ' ' + (nameMap ? (nameMap[codes[0]] || codes[0]) : codes[0]);
+    return codes.length + ' ' + pluralLabel;
+  }
 
+  function updateUi() {
     const periodActive = state.periodMonths.length > 0;
-    rowClearBtns.customer.style.display = (state.customer || state.compareCustomer) ? '' : 'none';
-    rowClearBtns.period.style.display = (periodActive || state.compareMonths.length) ? '' : 'none';
-    rowClearBtns.product.style.display = (state.product || state.compareProduct) ? '' : 'none';
-    rowClearBtns.primaryClass.style.display = (state.primaryClass || state.comparePrimaryClass) ? '' : 'none';
-    rowClearBtns.customerType.style.display = (state.customerType || state.compareCustomerType) ? '' : 'none';
+    cellClearBtns.customer.style.display = state.customer.length ? '' : 'none';
+    cellClearBtns.compareCustomer.style.display = state.compareCustomer.length ? '' : 'none';
+    cellClearBtns.period.style.display = periodActive ? '' : 'none';
+    cellClearBtns.comparePeriod.style.display = state.compareMonths.length ? '' : 'none';
+    cellClearBtns.product.style.display = state.product.length ? '' : 'none';
+    cellClearBtns.compareProduct.style.display = state.compareProduct.length ? '' : 'none';
+    cellClearBtns.primaryClass.style.display = state.primaryClass.length ? '' : 'none';
+    cellClearBtns.comparePrimaryClass.style.display = state.comparePrimaryClass.length ? '' : 'none';
+    cellClearBtns.customerType.style.display = state.customerType.length ? '' : 'none';
+    cellClearBtns.compareCustomerType.style.display = state.compareCustomerType.length ? '' : 'none';
 
     const parts = [];
-    if (state.customer && nameByCode[state.customer]) parts.push('הלקוח ' + nameByCode[state.customer]);
-    if (state.product) parts.push('המוצר ' + (state.productName || state.product));
-    if (state.primaryClass) parts.push('סיווג ' + state.primaryClass);
-    if (state.customerType) parts.push('סוג לקוח ' + state.customerType);
+    const custPart = joinNamed(state.customer, nameByCode, 'הלקוח', 'לקוחות');
+    if (custPart) parts.push(custPart);
+    const prodPart = state.product.length
+      ? (state.product.length === 1 ? 'המוצר ' + ((state.productNames && state.productNames[0]) || prodNameByCode[state.product[0]] || state.product[0]) : state.product.length + ' מוצרים')
+      : null;
+    if (prodPart) parts.push(prodPart);
+    if (state.primaryClass.length) parts.push(state.primaryClass.length === 1 ? 'סיווג ' + state.primaryClass[0] : state.primaryClass.length + ' סיווגים ראשיים');
+    if (state.customerType.length) parts.push(state.customerType.length === 1 ? 'סוג לקוח ' + state.customerType[0] : state.customerType.length + ' סוגי לקוח');
     if (periodActive) parts.push('התקופה שנבחרה');
+
     // Each compare-side part already carries its own preposition ("ל...") so joining
     // them never needs a second one inserted in front.
     const cmpParts = [];
-    if (state.compareCustomer && nameByCode[state.compareCustomer]) cmpParts.push('ללקוח ' + nameByCode[state.compareCustomer]);
-    if (state.compareProduct && prodNameByCode[state.compareProduct]) cmpParts.push('למוצר ' + prodNameByCode[state.compareProduct]);
-    if (state.comparePrimaryClass) cmpParts.push('לסיווג ' + state.comparePrimaryClass);
-    if (state.compareCustomerType) cmpParts.push('לסוג לקוח ' + state.compareCustomerType);
+    const cmpCustPart = joinNamed(state.compareCustomer, nameByCode, 'ללקוח', 'לקוחות');
+    if (cmpCustPart) cmpParts.push(cmpCustPart);
+    if (state.compareProduct.length) cmpParts.push(state.compareProduct.length === 1 ? 'למוצר ' + (prodNameByCode[state.compareProduct[0]] || state.compareProduct[0]) : 'ל-' + state.compareProduct.length + ' מוצרים');
+    if (state.comparePrimaryClass.length) cmpParts.push(state.comparePrimaryClass.length === 1 ? 'לסיווג ' + state.comparePrimaryClass[0] : 'ל-' + state.comparePrimaryClass.length + ' סיווגים ראשיים');
+    if (state.compareCustomerType.length) cmpParts.push(state.compareCustomerType.length === 1 ? 'לסוג לקוח ' + state.compareCustomerType[0] : 'ל-' + state.compareCustomerType.length + ' סוגי לקוח');
     if (state.compareMonths.length) cmpParts.push('לתקופה נוספת');
 
     if (parts.length && cmpParts.length) {
@@ -145,29 +139,22 @@ async function initDashboardFilters() {
     syncUrl();
     updateUi();
     const s = await loadDashboardSalesSummary(state);
-    if (s && state.product && s.productName !== state.productName) { state.productName = s.productName; updateUi(); }
+    if (s && state.product.length && s.productNames) { state.productNames = s.productNames; updateUi(); }
     if (window.refreshDashboardTopInsights) window.refreshDashboardTopInsights(state);
   }
 
-  function wireEntitySearch(input, byDisplayMap, onSelect) {
-    function handle() {
-      const v = input.value.trim();
-      if (!v) { onSelect(null); return; }
-      const code = byDisplayMap[v];
-      if (code) onSelect(code);
-    }
-    input.addEventListener('change', handle);
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handle(); });
+  const pickers = {};
+  function makePicker(containerId, options, initial, searchable, onChange) {
+    pickers[containerId] = createEntityMultiSelect(containerId, { options, initial, searchable, onChange });
   }
-  wireEntitySearch(custInput, byDisplay, (code) => { if (code !== state.customer) { state.customer = code; apply(); } });
-  wireEntitySearch(prodInput, prodByDisplay, (code) => { if (code !== state.product) { state.product = code; state.productName = null; apply(); } });
-  wireEntitySearch(cmpCustInput, byDisplay, (code) => { if (code !== state.compareCustomer) { state.compareCustomer = code; apply(); } });
-  wireEntitySearch(cmpProdInput, prodByDisplay, (code) => { if (code !== state.compareProduct) { state.compareProduct = code; apply(); } });
-
-  primaryClassSel.addEventListener('change', () => { state.primaryClass = primaryClassSel.value || null; apply(); });
-  customerTypeSel.addEventListener('change', () => { state.customerType = customerTypeSel.value || null; apply(); });
-  cmpPrimaryClassSel.addEventListener('change', () => { state.comparePrimaryClass = cmpPrimaryClassSel.value || null; apply(); });
-  cmpCustomerTypeSel.addEventListener('change', () => { state.compareCustomerType = cmpCustomerTypeSel.value || null; apply(); });
+  makePicker('dashCustomerPicker', custOptions, state.customer, true, (vals) => { state.customer = vals; apply(); });
+  makePicker('dashCompareCustomerPicker', custOptions, state.compareCustomer, true, (vals) => { state.compareCustomer = vals; apply(); });
+  makePicker('dashProductPicker', prodOptions, state.product, true, (vals) => { state.product = vals; state.productNames = null; apply(); });
+  makePicker('dashCompareProductPicker', prodOptions, state.compareProduct, true, (vals) => { state.compareProduct = vals; apply(); });
+  makePicker('dashPrimaryClassPicker', primaryClassOptions, state.primaryClass, false, (vals) => { state.primaryClass = vals; apply(); });
+  makePicker('dashComparePrimaryClassPicker', primaryClassOptions, state.comparePrimaryClass, false, (vals) => { state.comparePrimaryClass = vals; apply(); });
+  makePicker('dashCustomerTypePicker', customerTypeOptions, state.customerType, false, (vals) => { state.customerType = vals; apply(); });
+  makePicker('dashCompareCustomerTypePicker', customerTypeOptions, state.compareCustomerType, false, (vals) => { state.compareCustomerType = vals; apply(); });
 
   // Rebuilds both month pickers from the current state.periodMonths/compareMonths —
   // used on init, on manual clear, and when an insight click sets a period programmatically
@@ -188,12 +175,22 @@ async function initDashboardFilters() {
   }
   rebuildPeriodPickers();
 
-  rowClearBtns.customer.addEventListener('click', () => { state.customer = null; state.compareCustomer = null; apply(); });
-  rowClearBtns.product.addEventListener('click', () => { state.product = null; state.productName = null; state.compareProduct = null; apply(); });
-  rowClearBtns.primaryClass.addEventListener('click', () => { state.primaryClass = null; state.comparePrimaryClass = null; apply(); });
-  rowClearBtns.customerType.addEventListener('click', () => { state.customerType = null; state.compareCustomerType = null; apply(); });
-  rowClearBtns.period.addEventListener('click', () => {
-    state.periodMonths = []; state.compareMonths = [];
+  cellClearBtns.customer.addEventListener('click', () => { state.customer = []; pickers.dashCustomerPicker.setSelected([]); apply(); });
+  cellClearBtns.compareCustomer.addEventListener('click', () => { state.compareCustomer = []; pickers.dashCompareCustomerPicker.setSelected([]); apply(); });
+  cellClearBtns.product.addEventListener('click', () => { state.product = []; state.productNames = null; pickers.dashProductPicker.setSelected([]); apply(); });
+  cellClearBtns.compareProduct.addEventListener('click', () => { state.compareProduct = []; pickers.dashCompareProductPicker.setSelected([]); apply(); });
+  cellClearBtns.primaryClass.addEventListener('click', () => { state.primaryClass = []; pickers.dashPrimaryClassPicker.setSelected([]); apply(); });
+  cellClearBtns.comparePrimaryClass.addEventListener('click', () => { state.comparePrimaryClass = []; pickers.dashComparePrimaryClassPicker.setSelected([]); apply(); });
+  cellClearBtns.customerType.addEventListener('click', () => { state.customerType = []; pickers.dashCustomerTypePicker.setSelected([]); apply(); });
+  cellClearBtns.compareCustomerType.addEventListener('click', () => { state.compareCustomerType = []; pickers.dashCompareCustomerTypePicker.setSelected([]); apply(); });
+  cellClearBtns.period.addEventListener('click', () => {
+    state.periodMonths = [];
+    document.dispatchEvent(new Event('click')); // closes any open picker panel
+    rebuildPeriodPickers();
+    apply();
+  });
+  cellClearBtns.comparePeriod.addEventListener('click', () => {
+    state.compareMonths = [];
     document.dispatchEvent(new Event('click')); // closes any open picker panel
     rebuildPeriodPickers();
     apply();
@@ -204,15 +201,23 @@ async function initDashboardFilters() {
   // applied exactly as the insight's own rule computed them.
   window.applyDashboardFiltersFromInsight = function (f) {
     f = f || {};
-    state.customer = f.customerId || null;
-    state.product = f.productCode || null;
-    state.productName = null;
+    state.customer = f.customerId ? [f.customerId] : [];
+    state.product = f.productCode ? [f.productCode] : [];
+    state.productNames = null;
     state.periodMonths = f.periodMonths || [];
     state.compareMonths = f.compareMonths || [];
     // An insight names a customer/product/period, never a segment or a comparison
     // axis — clear anything the user had set manually so it doesn't linger mixed in.
-    state.primaryClass = null; state.customerType = null;
-    state.compareCustomer = null; state.compareProduct = null; state.comparePrimaryClass = null; state.compareCustomerType = null;
+    state.primaryClass = []; state.customerType = [];
+    state.compareCustomer = []; state.compareProduct = []; state.comparePrimaryClass = []; state.compareCustomerType = [];
+    pickers.dashCustomerPicker.setSelected(state.customer);
+    pickers.dashProductPicker.setSelected(state.product);
+    pickers.dashPrimaryClassPicker.setSelected([]);
+    pickers.dashCustomerTypePicker.setSelected([]);
+    pickers.dashCompareCustomerPicker.setSelected([]);
+    pickers.dashCompareProductPicker.setSelected([]);
+    pickers.dashComparePrimaryClassPicker.setSelected([]);
+    pickers.dashCompareCustomerTypePicker.setSelected([]);
     document.dispatchEvent(new Event('click')); // closes any open picker panel
     rebuildPeriodPickers();
     apply();
