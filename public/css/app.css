@@ -284,6 +284,9 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .dash-filter-table{table-layout:fixed;width:auto;max-width:560px;}
 .dash-filter-table td{text-align:right;white-space:normal;border-bottom:1px solid var(--border);}
 .dash-filter-table thead th{position:static;background:transparent;font-size:11.5px;color:var(--text-faint);font-weight:700;padding:0 10px 6px;text-align:center;border-bottom:none;}
+.dash-filter-table thead th.dft-primary,.dash-filter-table thead th.dft-compare{font-size:15px;font-weight:800;padding:8px 10px;border-radius:8px 8px 0 0;}
+.dash-filter-table thead th.dft-primary{background:rgba(222,75,75,.11);color:var(--blue);}
+.dash-filter-table thead th.dft-compare{background:rgba(47,163,96,.14);color:var(--purple);}
 .dash-filter-table tbody th{font-weight:700;color:var(--text);font-size:12.5px;width:80px;white-space:nowrap;padding:0 10px;text-align:right;border-bottom:1px solid var(--border);}
 .dash-filter-table td.dft-field{padding:2px 8px;width:200px;}
 .dash-filter-table td.dft-primary{background:rgba(222,75,75,.11);}
@@ -319,6 +322,11 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
    accent border+background+text so the user always sees at a glance which filters
    are currently narrowing the view. */
 .mms-toggle.mms-toggle-active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong);}
+/* Inside the dashboard's primary/comparison filter table, the active-filter
+   highlight matches that column's own color (red/green) instead of the generic
+   accent blue, so it reads as part of the same primary-vs-comparison table. */
+.dft-primary .mms-toggle.mms-toggle-active{border-color:var(--blue);background:var(--blue-soft);color:var(--blue);}
+.dft-compare .mms-toggle.mms-toggle-active{border-color:var(--purple);background:var(--purple-soft);color:var(--purple);}
 /* A definite `width` (not just min/max-width) is required here: .ems-opt-label
    below needs `overflow:hidden` for its ellipsis truncation, but overflow:hidden
    makes a flex item's automatic minimum size 0 — with no definite container width,

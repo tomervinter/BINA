@@ -15,8 +15,6 @@
 // --purple tokens which point at these same shades for the same reason.
 const DASH_CHART_COLORS = ['#DE4B4B', '#B33A3A', '#1B2144', '#64748B', '#93A4C3', '#B9C1E4', '#0F172A'];
 const DASH_BLUE = '#DE4B4B';
-const DASH_NAVY = '#1B2144';
-const DASH_SLATE = '#64748B';
 const DASH_PURPLE = '#2FA360';
 
 const dashCharts = {};
@@ -582,7 +580,7 @@ async function loadDashboardSalesSummary(filters) {
   }
 
   breakdownChart('superTypeRow', 'superTypeChart', 'superTypeCompareChart', 'superTypeCompareCard', 'superTypeCompareTitle', s.bySuperType, s.compareBySuperType, 'superType', 'bar', DASH_BLUE);
-  breakdownChart('departmentRow', 'departmentChart', 'departmentCompareChart', 'departmentCompareCard', 'departmentCompareTitle', s.byDepartment, s.compareByDepartment, 'department', 'bar', DASH_NAVY);
+  breakdownChart('departmentRow', 'departmentChart', 'departmentCompareChart', 'departmentCompareCard', 'departmentCompareTitle', s.byDepartment, s.compareByDepartment, 'department', 'bar', DASH_BLUE);
 
   function oneRankedChart(canvasId, rows, color, filterKey, isCompare) {
     const clickable = !!window.applyDashboardFilterByDimension;
@@ -611,7 +609,7 @@ async function loadDashboardSalesSummary(filters) {
     oneRankedChart('topCustomersCompareChart', s.compareTopCustomers, DASH_PURPLE, 'customer', true);
   }
 
-  oneRankedChart('topProductsChart', s.topProducts, DASH_SLATE, 'product', false);
+  oneRankedChart('topProductsChart', s.topProducts, DASH_BLUE, 'product', false);
   toggleCompareChart('topProductsRow', 'topProductsCompareCard', 'topProductsCompareChart', !!s.compareTopProducts);
   if (s.compareTopProducts) {
     document.getElementById('topProductsCompareTitle').textContent = compareFilterDesc;
