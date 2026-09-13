@@ -21,8 +21,11 @@ async function initDashboardFilters() {
     primaryClass: document.getElementById('dashClearPrimaryClass'),
     comparePrimaryClass: document.getElementById('dashClearComparePrimaryClass'),
     customerType: document.getElementById('dashClearCustomerType'),
-    compareCustomerType: document.getElementById('dashClearCompareCustomerType')
+    compareCustomerType: document.getElementById('dashClearCompareCustomerType'),
+    boughtProducts: document.getElementById('dashClearBoughtProducts'),
+    notBoughtProducts: document.getElementById('dashClearNotBoughtProducts')
   };
+  const purchaseCohortSubtitle = document.getElementById('dashPurchaseCohortSubtitle');
 
   const [custRes, prodRes] = await Promise.all([
     fetch('/api/customers?pageSize=all', { credentials: 'include' }),
@@ -62,7 +65,13 @@ async function initDashboardFilters() {
     compareCustomer: csv('compareCustomer'),
     compareProduct: csv('compareProduct'),
     comparePrimaryClass: csv('comparePrimaryClass'),
-    compareCustomerType: csv('compareCustomerType')
+    compareCustomerType: csv('compareCustomerType'),
+    // Cohort filter: narrows the primary customer selection to those who bought/didn't
+    // buy certain products — resolved server-side to a customer set (see
+    // resolvePurchaseCohort in dashboardSalesSummary.js). Primary-side only; doesn't
+    // apply to the comparison side.
+    boughtProducts: csv('boughtProducts'),
+    notBoughtProducts: csv('notBoughtProducts')
   };
 
   function syncUrl() {
@@ -78,6 +87,8 @@ async function initDashboardFilters() {
     set('compareProduct', state.compareProduct);
     set('comparePrimaryClass', state.comparePrimaryClass);
     set('compareCustomerType', state.compareCustomerType);
+    set('boughtProducts', state.boughtProducts);
+    set('notBoughtProducts', state.notBoughtProducts);
     window.history.replaceState(null, '', url.pathname + url.search);
   }
 
@@ -102,6 +113,8 @@ async function initDashboardFilters() {
     cellClearBtns.comparePrimaryClass.style.display = state.comparePrimaryClass.length ? '' : 'none';
     cellClearBtns.customerType.style.display = state.customerType.length ? '' : 'none';
     cellClearBtns.compareCustomerType.style.display = state.compareCustomerType.length ? '' : 'none';
+    cellClearBtns.boughtProducts.style.display = state.boughtProducts.length ? '' : 'none';
+    cellClearBtns.notBoughtProducts.style.display = state.notBoughtProducts.length ? '' : 'none';
 
     const parts = [];
     const custPart = joinNamed(state.customer, nameByCode, 'הלקוח', 'לקוחות');
@@ -113,6 +126,19 @@ async function initDashboardFilters() {
     if (state.primaryClass.length) parts.push(state.primaryClass.length === 1 ? 'סיווג ' + state.primaryClass[0] : state.primaryClass.length + ' סיווגים ראשיים');
     if (state.customerType.length) parts.push(state.customerType.length === 1 ? 'סוג לקוח ' + state.customerType[0] : state.customerType.length + ' סוגי לקוח');
     if (periodActive) parts.push('התקופה שנבחרה');
+    if (state.boughtProducts.length) parts.push('לקוחות שקנו ' + (state.boughtProducts.length === 1 ? (prodNameByCode[state.boughtProducts[0]] || state.boughtProducts[0]) : state.boughtProducts.length + ' מוצרים נבחרים'));
+    if (state.notBoughtProducts.length) parts.push('שלא קנו ' + (state.notBoughtProducts.length === 1 ? (prodNameByCode[state.notBoughtProducts[0]] || state.notBoughtProducts[0]) : state.notBoughtProducts.length + ' מוצרים נבחרים'));
+
+    if (purchaseCohortSubtitle) {
+      if (state.boughtProducts.length || state.notBoughtProducts.length) {
+        const cohortBits = [];
+        if (state.boughtProducts.length) cohortBits.push('קנו ' + state.boughtProducts.map((p) => prodNameByCode[p] || p).join(', '));
+        if (state.notBoughtProducts.length) cohortBits.push('לא קנו ' + state.notBoughtProducts.map((p) => prodNameByCode[p] || p).join(', '));
+        purchaseCohortSubtitle.textContent = 'מוצג רק לקוחות ש' + cohortBits.join(' ו') + '.';
+      } else {
+        purchaseCohortSubtitle.textContent = 'מצמצם את הלקוח/ות בבדיקה הראשית למי שקנו מוצר מסוים ו/או למי שלא קנו מוצר אחר.';
+      }
+    }
 
     // Each compare-side part already carries its own preposition ("ל...") so joining
     // them never needs a second one inserted in front.
@@ -155,6 +181,8 @@ async function initDashboardFilters() {
   makePicker('dashComparePrimaryClassPicker', primaryClassOptions, state.comparePrimaryClass, false, (vals) => { state.comparePrimaryClass = vals; apply(); });
   makePicker('dashCustomerTypePicker', customerTypeOptions, state.customerType, false, (vals) => { state.customerType = vals; apply(); });
   makePicker('dashCompareCustomerTypePicker', customerTypeOptions, state.compareCustomerType, false, (vals) => { state.compareCustomerType = vals; apply(); });
+  makePicker('dashBoughtProductsPicker', prodOptions, state.boughtProducts, true, (vals) => { state.boughtProducts = vals; apply(); });
+  makePicker('dashNotBoughtProductsPicker', prodOptions, state.notBoughtProducts, true, (vals) => { state.notBoughtProducts = vals; apply(); });
 
   // Rebuilds both month pickers from the current state.periodMonths/compareMonths —
   // used on init, on manual clear, and when an insight click sets a period programmatically
@@ -183,6 +211,8 @@ async function initDashboardFilters() {
   cellClearBtns.comparePrimaryClass.addEventListener('click', () => { state.comparePrimaryClass = []; pickers.dashComparePrimaryClassPicker.setSelected([]); apply(); });
   cellClearBtns.customerType.addEventListener('click', () => { state.customerType = []; pickers.dashCustomerTypePicker.setSelected([]); apply(); });
   cellClearBtns.compareCustomerType.addEventListener('click', () => { state.compareCustomerType = []; pickers.dashCompareCustomerTypePicker.setSelected([]); apply(); });
+  cellClearBtns.boughtProducts.addEventListener('click', () => { state.boughtProducts = []; pickers.dashBoughtProductsPicker.setSelected([]); apply(); });
+  cellClearBtns.notBoughtProducts.addEventListener('click', () => { state.notBoughtProducts = []; pickers.dashNotBoughtProductsPicker.setSelected([]); apply(); });
   cellClearBtns.period.addEventListener('click', () => {
     state.periodMonths = [];
     document.dispatchEvent(new Event('click')); // closes any open picker panel
@@ -210,6 +240,7 @@ async function initDashboardFilters() {
     // axis — clear anything the user had set manually so it doesn't linger mixed in.
     state.primaryClass = []; state.customerType = [];
     state.compareCustomer = []; state.compareProduct = []; state.comparePrimaryClass = []; state.compareCustomerType = [];
+    state.boughtProducts = []; state.notBoughtProducts = [];
     pickers.dashCustomerPicker.setSelected(state.customer);
     pickers.dashProductPicker.setSelected(state.product);
     pickers.dashPrimaryClassPicker.setSelected([]);
@@ -218,6 +249,8 @@ async function initDashboardFilters() {
     pickers.dashCompareProductPicker.setSelected([]);
     pickers.dashComparePrimaryClassPicker.setSelected([]);
     pickers.dashCompareCustomerTypePicker.setSelected([]);
+    pickers.dashBoughtProductsPicker.setSelected([]);
+    pickers.dashNotBoughtProductsPicker.setSelected([]);
     document.dispatchEvent(new Event('click')); // closes any open picker panel
     rebuildPeriodPickers();
     apply();

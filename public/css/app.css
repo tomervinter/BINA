@@ -251,15 +251,17 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
    column and a comparison column side by side, equal width, each subtly tinted so
    the two are easy to tell apart at a glance without being visually loud. ---------- */
 .dash-filter-table{table-layout:fixed;width:auto;max-width:560px;}
-.dash-filter-table th,.dash-filter-table td{text-align:center;white-space:normal;border-bottom:1px solid var(--border);}
-.dash-filter-table thead th{position:static;background:transparent;font-size:11.5px;color:var(--text-faint);font-weight:700;padding:0 10px 6px;}
-.dash-filter-table tbody th{font-weight:700;color:var(--text);font-size:12.5px;width:80px;white-space:nowrap;padding:0 10px;}
+.dash-filter-table td{text-align:right;white-space:normal;border-bottom:1px solid var(--border);}
+.dash-filter-table thead th{position:static;background:transparent;font-size:11.5px;color:var(--text-faint);font-weight:700;padding:0 10px 6px;text-align:center;border-bottom:none;}
+.dash-filter-table tbody th{font-weight:700;color:var(--text);font-size:12.5px;width:80px;white-space:nowrap;padding:0 10px;text-align:right;border-bottom:1px solid var(--border);}
 .dash-filter-table td.dft-field{padding:5px 8px;width:200px;}
 .dash-filter-table td.dft-primary{background:rgba(61,92,245,.05);}
 .dash-filter-table td.dft-compare{background:rgba(139,92,246,.06);}
 .dash-filter-table tbody tr:last-child td.dft-primary,.dash-filter-table tbody tr:last-child td.dft-compare{border-radius:0 0 8px 8px;}
-.dft-cell{display:flex;align-items:center;justify-content:center;gap:4px;}
-.dft-cell input,.dft-cell select{width:100%;min-width:0;margin-bottom:0;text-align:center;padding-top:6px;padding-bottom:6px;font-size:12.5px;}
+.dft-cell{display:flex;align-items:center;justify-content:flex-start;gap:4px;}
+.dft-cell .mms{flex:1;min-width:0;}
+.dft-cell .mms-toggle{width:100%;max-width:none;text-align:right;}
+.dft-cell input,.dft-cell select{width:100%;min-width:0;margin-bottom:0;text-align:right;padding-top:6px;padding-bottom:6px;font-size:12.5px;}
 .dft-cell-clear{flex:none;background:none;border:none;color:var(--text-faint);font-size:12px;cursor:pointer;line-height:1;padding:4px;border-radius:6px;}
 .dft-cell-clear:hover{color:var(--red);background:var(--surface);}
 .dash-filter-table tbody tr:last-child th,.dash-filter-table tbody tr:last-child td{border-bottom:none;}

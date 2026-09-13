@@ -26,7 +26,7 @@
             <div class="page-subtitle" id="dashFilterSubtitle" style="margin-bottom:0;">כברירת מחדל, כל הנתונים בדשבורד מציגים את כלל הלקוחות וכל התקופות. מלאו כל שורה בנפרד כדי לסנן לפיה, ואת עמודת ההשוואה כדי להציג לצידה נתון להשוואה.</div>
           </div>
         </div>
-        <div class="table-scroll" style="margin-top:12px;max-width:100%;width:fit-content;overflow-x:auto;">
+        <div class="table-scroll" style="margin-top:12px;max-width:100%;width:fit-content;overflow:visible;">
           <table class="dash-filter-table">
             <thead>
               <tr>
@@ -113,6 +113,25 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <div class="table-head-row" style="margin-top:16px;">
+          <div class="table-head-right">
+            <div class="card-title" style="margin-bottom:2px;font-size:14px;">סינון לקוחות לפי רכישות</div>
+            <div class="page-subtitle" id="dashPurchaseCohortSubtitle" style="margin-bottom:0;">מצמצם את הלקוח/ות בבדיקה הראשית למי שקנו מוצר מסוים ו/או למי שלא קנו מוצר אחר.</div>
+          </div>
+        </div>
+        <div class="dash-filter-row" style="display:flex;gap:18px;flex-wrap:wrap;margin-top:8px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-weight:700;font-size:12.5px;">קנו מוצר/ים:</span>
+            <div id="dashBoughtProductsPicker"></div>
+            <button class="dft-cell-clear" id="dashClearBoughtProducts" type="button" title="נקה" style="display:none;">✕</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-weight:700;font-size:12.5px;">לא קנו מוצר/ים:</span>
+            <div id="dashNotBoughtProductsPicker"></div>
+            <button class="dft-cell-clear" id="dashClearNotBoughtProducts" type="button" title="נקה" style="display:none;">✕</button>
+          </div>
         </div>
       </div>
 

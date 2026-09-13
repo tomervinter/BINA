@@ -216,6 +216,8 @@ async function loadDashboardSalesSummary(filters) {
   setList('compareProductCode', filters.compareProduct);
   setList('comparePrimaryClass', filters.comparePrimaryClass);
   setList('compareCustomerType', filters.compareCustomerType);
+  setList('boughtProducts', filters.boughtProducts);
+  setList('notBoughtProducts', filters.notBoughtProducts);
   const q = qs.toString();
   const res = await fetch('/api/dashboard-sales-summary' + (q ? '?' + q : ''), { credentials: 'include' });
   if (!res.ok) return;

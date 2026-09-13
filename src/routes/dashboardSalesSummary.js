@@ -54,20 +54,56 @@ function parseCsv(str) {
 // AND'd across dimensions — into a Sale where-clause. primaryClass/customerType live
 // on Customer, not Sale, so they resolve to a customerNumber set first; explicit
 // customerNumbers are only used when no segment is given (a segment is the coarser,
-// intentionally-chosen filter when both are present).
-async function buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes }) {
+// intentionally-chosen filter when both are present). `restrictToCustomers`, when
+// given, further narrows whatever customer set was otherwise resolved (or, if none
+// was, becomes the customer set outright) — used for the purchase-based cohort
+// filter (customers who bought/didn't buy certain products), which only ever applies
+// to the primary side.
+async function buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, restrictToCustomers }) {
   const where = { organizationId };
+  let resolvedCustomers = null;
   if (primaryClasses.length || customerTypes.length) {
     const segCustomers = await prisma.customer.findMany({
       where: Object.assign({ organizationId }, primaryClasses.length && { primaryClass: { in: primaryClasses } }, customerTypes.length && { customerType: { in: customerTypes } }),
       select: { customerNumber: true }
     });
-    where.customerNumber = { in: segCustomers.map((c) => c.customerNumber) };
+    resolvedCustomers = segCustomers.map((c) => c.customerNumber);
   } else if (customerNumbers.length) {
-    where.customerNumber = { in: customerNumbers };
+    resolvedCustomers = customerNumbers;
   }
+  if (restrictToCustomers) {
+    const restrictSet = new Set(restrictToCustomers);
+    resolvedCustomers = resolvedCustomers ? resolvedCustomers.filter((c) => restrictSet.has(c)) : restrictToCustomers;
+  }
+  if (resolvedCustomers) where.customerNumber = { in: resolvedCustomers };
   if (productCodes.length) where.productCode = { in: productCodes };
   return where;
+}
+
+// Resolves the "customers who bought X but not Y" cohort filter to a customer-number
+// array, or null when neither list is given (no cohort constraint at all). Buying is
+// "at least one sale of at least one product in the list" (OR within each list); the
+// two lists combine as bought MINUS excluded. With no boughtProducts, the starting
+// set is every customer in the org (so notBoughtProducts alone means "everyone except
+// those who bought these").
+async function resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts) {
+  if (!boughtProducts.length && !notBoughtProducts.length) return null;
+  const distinctBuyers = async (codes) => {
+    const rows = await prisma.sale.findMany({ where: { organizationId, productCode: { in: codes } }, select: { customerNumber: true }, distinct: ['customerNumber'] });
+    return new Set(rows.map((r) => r.customerNumber));
+  };
+  const [boughtSet, excludeSet] = await Promise.all([
+    boughtProducts.length ? distinctBuyers(boughtProducts) : null,
+    notBoughtProducts.length ? distinctBuyers(notBoughtProducts) : Promise.resolve(new Set())
+  ]);
+  let base;
+  if (boughtSet) {
+    base = Array.from(boughtSet);
+  } else {
+    const allCustomers = await prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true } });
+    base = allCustomers.map((c) => c.customerNumber);
+  }
+  return base.filter((c) => !excludeSet.has(c));
 }
 
 // Dashboard infographic data, sourced from the same sales-full-report consolidation.
@@ -103,10 +139,13 @@ router.get('/', async (req, res) => {
   const compareProductCodes = parseCsv(req.query.compareProductCode);
   const comparePrimaryClasses = parseCsv(req.query.comparePrimaryClass);
   const compareCustomerTypes = parseCsv(req.query.compareCustomerType);
+  const boughtProducts = parseCsv(req.query.boughtProducts);
+  const notBoughtProducts = parseCsv(req.query.notBoughtProducts);
 
-  const hasEntityFilter = !!(customerNumbers.length || productCodes.length || primaryClasses.length || customerTypes.length);
+  const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts);
+  const hasEntityFilter = !!(customerNumbers.length || productCodes.length || primaryClasses.length || customerTypes.length || purchaseCohort);
   const baseWhere = hasEntityFilter
-    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes })
+    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, restrictToCustomers: purchaseCohort })
     : { organizationId };
 
   const period = parseMonthList(req.query.periodMonths);
@@ -235,6 +274,10 @@ router.get('/', async (req, res) => {
     productNames: productCodes.map((p) => nameOf(prodMap, p)),
     primaryClasses,
     customerTypes,
+    boughtProducts,
+    boughtProductNames: boughtProducts.map((p) => nameOf(prodMap, p)),
+    notBoughtProducts,
+    notBoughtProductNames: notBoughtProducts.map((p) => nameOf(prodMap, p)),
     period: period ? { months: period.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(period) } : null,
     comparePeriod: compare ? { months: compare.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(compare) } : null,
     compareCustomerNumbers,
