@@ -1,9 +1,12 @@
-// The 5 highest-priority insights on the dashboard — the ones whose handling is most
-// likely to matter for sales. /api/insights already returns insights sorted by
-// severity first, then by the size of the swing within that severity (see
-// sortInsights in src/routes/insights.js) — severity itself is defined, per rule, by
-// how large the deviation/opportunity is, so the first 5 matching rows are exactly
-// "biggest severity, biggest magnitude" and need no separate re-ranking here.
+// The highest-priority insights on the dashboard — one equal-width column per
+// insight type (see TYPE_META in type-meta.js), each showing that type's own top 5.
+// /api/insights already returns insights sorted by severity first, then by the size
+// of the swing within that severity (see sortInsights in src/routes/insights.js) —
+// severity itself is defined, per rule, by how large the deviation/opportunity is,
+// so the first 5 matching rows per type are exactly "biggest severity, biggest
+// magnitude" for that type and need no separate re-ranking here. The column count
+// tracks Object.keys(TYPE_META) directly, so adding a new rule (and its TYPE_META
+// entry) grows the grid automatically — nothing here is hardcoded to "3 columns".
 //
 // Respects the dashboard's customer filter (see dashboard-filters.js, which calls
 // window.refreshDashboardTopInsights on every filter change): when a customer is
@@ -20,26 +23,42 @@
 let dashAllInsights = null;
 
 function renderDashboardTopInsights(filters) {
-  const list = document.getElementById('dashTopInsightsList');
-  if (!list || !dashAllInsights) return;
+  const container = document.getElementById('dashTopInsightsColumns');
+  if (!container || !dashAllInsights) return;
   filters = filters || {};
   const customerIds = filters.customer || []; // array — the dashboard's customer filter is a multi-select
   const filtered = customerIds.length ? dashAllInsights.filter((i) => customerIds.includes(i.customerId)) : dashAllInsights;
-  const top = filtered.slice(0, 5);
 
-  list.innerHTML = top.length ? top.map((i, idx) => (
-    '<div class="dash-insight-row' + (i.customerId ? ' row-clickable' : '') + '" data-idx="' + idx + '">' +
-    '<span class="pill ' + (SEV_CLASS[i.severity] || 'pill-gray') + '">' + (SEV_LABEL[i.severity] || i.severity) + '</span>' +
-    '<div><div class="dash-insight-entity">' + Layout.escapeHtml((TYPE_META[i.type] || {}).label || i.type) + (i.customerName ? ' — ' + Layout.escapeHtml(i.customerName) : '') + '</div>' +
-    '<div class="dash-insight-msg">' + Layout.escapeHtml(i.message) + '</div></div>' +
-    '</div>'
-  )).join('') : '<div class="dash-insight-empty">' + (customerIds.length
-    ? 'אין תובנות עבור הלקוח הנבחר.'
-    : 'לא נוצרו תובנות עדיין — עברו למסך <a href="insights.html">יומן תובנות</a> וייצרו אותן.') + '</div>';
+  if (!filtered.length) {
+    container.style.gridTemplateColumns = '1fr';
+    container.innerHTML = '<div class="dash-insight-empty">' + (customerIds.length
+      ? 'אין תובנות עבור הלקוח הנבחר.'
+      : 'לא נוצרו תובנות עדיין — עברו למסך <a href="insights.html">יומן תובנות</a> וייצרו אותן.') + '</div>';
+    return;
+  }
 
-  list.querySelectorAll('.dash-insight-row.row-clickable').forEach((row) => {
+  const types = Object.keys(TYPE_META);
+  container.style.gridTemplateColumns = 'repeat(' + types.length + ', 1fr)';
+  const shown = []; // flat, in render order, so click handlers can index back into it
+  container.innerHTML = types.map((type) => {
+    const top = filtered.filter((i) => i.type === type).slice(0, 5);
+    const rowsHtml = top.length ? top.map((i) => {
+      const idx = shown.length;
+      shown.push(i);
+      return '<div class="dash-insight-row' + (i.customerId ? ' row-clickable' : '') + '" data-idx="' + idx + '">' +
+        '<span class="pill ' + (SEV_CLASS[i.severity] || 'pill-gray') + '">' + (SEV_LABEL[i.severity] || i.severity) + '</span>' +
+        '<div class="dash-insight-body">' + (i.customerName ? '<div class="dash-insight-entity">' + Layout.escapeHtml(i.customerName) + '</div>' : '') +
+        '<div class="dash-insight-msg">' + Layout.escapeHtml(i.message) + '</div></div>' +
+        '</div>';
+    }).join('') : '<div class="dash-insight-empty">אין תובנות מסוג זה' + (customerIds.length ? ' עבור הלקוח הנבחר' : '') + '.</div>';
+    return '<div class="dash-insights-column">' +
+      '<div class="dash-insights-column-title">' + Layout.escapeHtml((TYPE_META[type] || {}).label || type) + '</div>' +
+      rowsHtml + '</div>';
+  }).join('');
+
+  container.querySelectorAll('.dash-insight-row.row-clickable').forEach((row) => {
     row.addEventListener('click', () => {
-      const insight = top[+row.getAttribute('data-idx')];
+      const insight = shown[+row.getAttribute('data-idx')];
       if (!insight || !insight.customerId || !window.applyDashboardFiltersFromInsight) return;
       const dashFilter = (insight.breakdown && insight.breakdown.dashFilter) || {};
       window.applyDashboardFiltersFromInsight({
@@ -55,7 +74,7 @@ function renderDashboardTopInsights(filters) {
 window.refreshDashboardTopInsights = renderDashboardTopInsights;
 
 async function initDashboardTopInsights() {
-  if (!document.getElementById('dashTopInsightsList')) return;
+  if (!document.getElementById('dashTopInsightsColumns')) return;
   const res = await fetch('/api/insights', { credentials: 'include' });
   dashAllInsights = res.ok ? await res.json() : [];
   const initialCustomer = (new URLSearchParams(window.location.search).get('customer') || '').split(',').filter(Boolean);

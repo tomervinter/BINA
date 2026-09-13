@@ -205,13 +205,23 @@ a.kpi-card:hover{box-shadow:0 2px 4px rgba(27,33,68,.06), 0 10px 24px rgba(27,33
 .kpi-desc{position:relative;font-size:12px;color:var(--text-muted);font-weight:600;line-height:1.5;}
 .v-red{color:var(--red);} .v-green{color:var(--green);} .v-blue{color:var(--blue);} .v-purple{color:var(--purple);}
 @media (max-width:1150px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
-.dash-insight-row{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);margin-bottom:8px;}
+.dash-insight-row{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);margin-bottom:8px;min-width:0;}
 .dash-insight-row.row-clickable{cursor:pointer;}
 .dash-insight-row.row-clickable:hover{background:var(--accent-soft);}
 .dash-insight-row .pill{flex:none;margin-top:1px;}
-.dash-insight-entity{font-weight:700;font-size:12.5px;color:var(--text);white-space:nowrap;}
-.dash-insight-msg{font-size:12px;color:var(--text-muted);}
+.dash-insight-body{flex:1;min-width:0;}
+.dash-insight-entity{font-weight:700;font-size:12.5px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dash-insight-msg{font-size:12px;color:var(--text-muted);overflow-wrap:break-word;}
 .dash-insight-empty{padding:16px;text-align:center;color:var(--text-faint);font-size:12.5px;}
+
+/* One equal-width column per insight type (see TYPE_META in type-meta.js) — the
+   column count follows however many rule types actually exist, so adding a new
+   rule to the engine grows this grid automatically without a code change here.
+   Columns stack on narrow viewports instead of squeezing, to stay scroll-free. */
+.dash-insights-columns{display:grid;gap:16px;align-items:start;margin-bottom:20px;}
+.dash-insights-column{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-m);box-shadow:var(--shadow-card);padding:16px 18px;min-width:0;}
+.dash-insights-column-title{font-size:14px;font-weight:800;margin-bottom:10px;}
+@media (max-width:900px){.dash-insights-columns{grid-template-columns:1fr !important;}}
 
 /* Larger type across the dashboard specifically — subtitles get the biggest bump,
    since at the default size they read as an afterthought next to the bold titles. */
