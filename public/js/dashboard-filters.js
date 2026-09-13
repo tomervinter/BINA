@@ -120,6 +120,18 @@ async function initDashboardFilters() {
     boughtProducts: csv('boughtProducts'),
     notBoughtProducts: csv('notBoughtProducts')
   };
+  // A genuinely fresh visit (no query string at all — not even from a stale link)
+  // defaults to the most immediately useful view: this year's cumulative revenue
+  // so far (Jan through the last fully completed month) vs. the same set of months
+  // last year. Anything already in the URL — a shared link, an insight click, a
+  // same-tab refresh after the user picked their own filters — is left alone.
+  if (!window.location.search) {
+    const defaultMonths = Array.from({ length: Math.max(1, new Date().getMonth()) }, (_, i) => String(i + 1));
+    state.periodYears = [String(dashCurrentYear)];
+    state.periodMonthsSel = defaultMonths;
+    state.compareYears = [String(dashCurrentYear - 1)];
+    state.compareMonthsSel = defaultMonths.slice();
+  }
   state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel);
   state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel);
 
