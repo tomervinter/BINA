@@ -190,6 +190,11 @@ async function computeInsights(organizationId) {
     }
     return overlaps(relCtx.holidays, 'holiday') || overlaps(relCtx.seasons, 'season');
   }
+  // A decline explained by seasonality is fully suppressed UNLESS it's severe enough
+  // to be flagged 'high' on its own terms — a high-severity decline is worth a
+  // human's attention even when a holiday/season could account for part of it, so
+  // it's shown with a caveat instead of hidden outright (general policy 8).
+  const SEASONALITY_CAVEAT = ' שימו לב: התקופה חופפת לחג/עונה המשויכים למוצר — ייתכן שהשינוי מוסבר בכך, ומומלץ לוודא את הנתון בפועל.';
 
   // Rule 1a — monthly revenue shift (bidirectional: flags a meaningful jump in
   // either direction, not just a decline), with the specific products driving it.
@@ -210,7 +215,9 @@ async function computeInsights(organizationId) {
     const delta = (curRev - prevRev) / prevRev;
     if (delta > -monthlyPct) return; // only a decline counts — see general policy 7
     const [curMStart, curMEnd] = monthRangeMs(curMK);
-    if (isExplainedBySeasonality(curMStart, curMEnd, Array.from(new Set(events.map((e) => e.pid))))) return;
+    const isHighSeverity = Math.abs(delta) >= monthlyHighPct;
+    const seasonalityExplained = isExplainedBySeasonality(curMStart, curMEnd, Array.from(new Set(events.map((e) => e.pid))));
+    if (seasonalityExplained && !isHighSeverity) return;
 
     const curByPid = {}, prevByPid = {};
     curEvents.forEach((e) => { curByPid[e.pid] = (curByPid[e.pid] || 0) + e.rev; });
@@ -225,10 +232,10 @@ async function computeInsights(organizationId) {
 
     insights.push({
       type: 'salesPattern',
-      severity: Math.abs(delta) >= monthlyHighPct ? 'high' : 'medium',
+      severity: isHighSeverity ? 'high' : 'medium',
       customerId: cid,
       customerName: custLabel(cid),
-      message: `ב${fmtMonthYearKey(curMK)} הכנסת הלקוח ירדה ב-${Math.round(Math.abs(delta) * 100)}% מול החודש הקודם${topDriver ? ', בעיקר עקב ' + topDriver : ''}.`,
+      message: `ב${fmtMonthYearKey(curMK)} הכנסת הלקוח ירדה ב-${Math.round(Math.abs(delta) * 100)}% מול החודש הקודם${topDriver ? ', בעיקר עקב ' + topDriver : ''}.` + (seasonalityExplained ? SEASONALITY_CAVEAT : ''),
       metric: Math.round(delta * 100),
       breakdown: {
         rows: [{ label: fmtMonthYearKey(curMK), value: Math.round(curRev) }, { label: fmtMonthYearKey(prevMK), value: Math.round(prevRev) }],
@@ -347,15 +354,17 @@ async function computeInsights(organizationId) {
       if (prevQty < params.productQty_minPriorQty) return;
       const delta = (curQty - prevQty) / prevQty;
       if (delta > -params.productQty_pctThreshold / 100) return; // only a decline counts — see general policy 7
-      if (isExplainedBySeasonality(curWindowStart, curWindowEnd, Array.from(familyMembers[famKey(pid)] || [pid]))) return;
+      const isHighSeverity = Math.abs(delta) >= params.productQty_highPct / 100;
+      const seasonalityExplained = isExplainedBySeasonality(curWindowStart, curWindowEnd, Array.from(familyMembers[famKey(pid)] || [pid]));
+      if (seasonalityExplained && !isHighSeverity) return;
       const label = familyLabel(pid);
       insights.push({
         type: 'purchasePattern',
-        severity: Math.abs(delta) >= params.productQty_highPct / 100 ? 'high' : 'medium',
+        severity: isHighSeverity ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `ב${monthKeysLabel(curMonthKeys)} הכמות שהלקוח קונה מ${label} ירדה ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${winMonths} החודשים שקדמו.`,
+        message: `ב${monthKeysLabel(curMonthKeys)} הכמות שהלקוח קונה מ${label} ירדה ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${winMonths} החודשים שקדמו.` + (seasonalityExplained ? SEASONALITY_CAVEAT : ''),
         metric: Math.round(delta * 100),
         breakdown: {
           rows: [{ label: 'כמות אחרונה', value: Math.round(curQty) }, { label: 'כמות קודמת', value: Math.round(prevQty) }],
