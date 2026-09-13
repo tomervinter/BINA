@@ -196,7 +196,7 @@ router.get('/', async (req, res) => {
     // Unrestricted by the period/compare date filters (customer filter still applies)
     // so the trend chart can always look up a given month's year-earlier counterpart
     // for the year-over-year indicator, regardless of which months were selected.
-    prisma.sale.findMany({ where: baseWhere, select: { date: true, revenue: true, weight: true } })
+    prisma.sale.findMany({ where: baseWhere, select: { date: true, revenue: true } })
   ];
   if (compareWhere) {
     queries.push(
@@ -254,16 +254,6 @@ router.get('/', async (req, res) => {
       .reduce((a, r) => a + r.revenue, 0));
   }
 
-  // Sale.weight is optional — sales rows recorded before the column existed (or from
-  // a source that never tracked it) come back null, which is treated as 0 rather than
-  // skewing the total. Only computed for the primary continuous timeline (below), the
-  // one chart that shows it.
-  function monthlyWeight(rows, months) {
-    return months.map(({ year, month }) => rows
-      .filter((r) => { const d = new Date(r.date); return d.getFullYear() === year && d.getMonth() + 1 === month; })
-      .reduce((a, r) => a + (r.weight || 0), 0));
-  }
-
   let monthlyTimeline = null, periodTrend = null;
   if (period) {
     // Period mode: one series for the chosen months, and (if given) a second for the
@@ -308,8 +298,7 @@ router.get('/', async (req, res) => {
       months: timelineMonths.map((m) => m.year + '-' + String(m.month).padStart(2, '0')),
       data: monthlyRevenue(trendRows, timelineMonths),
       compareData: compareTrendRows ? monthlyRevenue(compareTrendRows, timelineMonths) : null,
-      yoyData: monthlyRevenue(trendRows, timelineYoyMonths),
-      weight: monthlyWeight(trendRows, timelineMonths)
+      yoyData: monthlyRevenue(trendRows, timelineYoyMonths)
     };
   }
 

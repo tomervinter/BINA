@@ -16,7 +16,6 @@ const DASH_BLUE = '#3D5CF5';
 const DASH_NAVY = '#1B2144';
 const DASH_SLATE = '#64748B';
 const DASH_PURPLE = '#8B5CF6';
-const DASH_WEIGHT_LINE = '#7FD9B0';
 
 const dashCharts = {};
 function upsertChart(canvasId, config) {
@@ -192,32 +191,6 @@ function barValueLabelPlugin(formatFn) {
   };
 }
 
-// Labels each point of one specific line dataset with its value, just above the
-// point — used for the weight-overlay line on the monthly trend chart, where the
-// line's own scale (kg) has no other on-chart readout the way the bars already get
-// via barValueLabelPlugin.
-function lineValueLabelPlugin(datasetIndex, formatFn, color) {
-  return {
-    id: 'lineValueLabel',
-    afterDatasetsDraw(chart) {
-      const meta = chart.getDatasetMeta(datasetIndex);
-      if (!meta || meta.hidden) return;
-      const ctx = chart.ctx;
-      ctx.save();
-      ctx.font = '700 11px Assistant, Arial, sans-serif';
-      ctx.fillStyle = color;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      meta.data.forEach((point, i) => {
-        const value = chart.data.datasets[datasetIndex].data[i];
-        if (value == null) return;
-        const props = point.getProps(['x', 'y'], true);
-        ctx.fillText(formatFn(value), props.x, props.y - 8);
-      });
-      ctx.restore();
-    }
-  };
-}
 
 // A field can hold several values now (multi-select) — a report link can only ever
 // filter by one exact value per column, so it degrades gracefully to "no filter on
@@ -416,9 +389,6 @@ async function loadDashboardSalesSummary(filters) {
   // period-vs-comparison-period case (right below) ever populates it.
   const trendCompareBadge = document.getElementById('monthlyTrendCompareBadge');
   trendCompareBadge.style.display = 'none';
-  // Same idea for the weight-overlay legend — weight is only computed for the
-  // continuous timeline (the "else" branch below), not the period-trend view.
-  document.getElementById('monthlyTrendWeightLegend').style.display = 'none';
 
   if (s.periodTrend) {
     // Period vs comparison-period, each its own chart with its own real calendar
@@ -509,16 +479,10 @@ async function loadDashboardSalesSummary(filters) {
     // displayed alongside it, that side-by-side split is already the comparison, and
     // a dozen extra per-bar arrows on the primary chart would just add noise.
     const activeYoyEntries = mt.compareData ? [] : timelineYoyEntries;
-    document.getElementById('monthlyTrendWeightLegend').style.display = '';
     upsertChart('monthlyTrendChart', {
-      data: {
-        labels,
-        datasets: [
-          { type: 'bar', label: 'מחזור', data: mt.data, backgroundColor: DASH_BLUE, borderRadius: 4, yAxisID: 'y', order: 1 },
-          { type: 'line', label: 'מכר במשקל', data: mt.weight, borderColor: DASH_WEIGHT_LINE, backgroundColor: DASH_WEIGHT_LINE, borderWidth: 2.5, pointRadius: 3.5, pointBackgroundColor: DASH_WEIGHT_LINE, pointBorderColor: '#fff', pointBorderWidth: 1.5, tension: 0.3, yAxisID: 'y1', order: 0 }
-        ]
-      },
-      plugins: [yoyDrawPlugin(activeYoyEntries, [0]), lineValueLabelPlugin(1, (v) => Math.round(v).toLocaleString('he-IL'), DASH_WEIGHT_LINE)],
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'מחזור', data: mt.data, backgroundColor: DASH_BLUE, borderRadius: 4 }] },
+      plugins: [yoyDrawPlugin(activeYoyEntries, [0])],
       options: {
         responsive: true, maintainAspectRatio: false,
         layout: { padding: { top: 38 } },
@@ -526,10 +490,7 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(activeYoyEntries, 0) } }
         },
-        scales: {
-          y: { position: 'left', ticks: { callback: (v) => v.toLocaleString('he-IL') } },
-          y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: (v) => v.toLocaleString('he-IL') } }
-        },
+        scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
           const m = monthMeta[elements[0].index];
