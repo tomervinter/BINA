@@ -90,7 +90,7 @@ function yoyDrawPlugin(entries, dsIndices) {
         // Row 2 (closer to the bars): the arrow + percentage, side by side.
         const pctBaselineY = topY - 6;
         const pctText = (e.up ? '+' : '') + e.pct + '%';
-        ctx.font = '800 12px Assistant, Arial, sans-serif';
+        ctx.font = '800 13.5px Assistant, Arial, sans-serif';
         const pctWidth = ctx.measureText(pctText).width;
         const gap = 4;
         const rowWidth = size * 2 + gap + pctWidth;
@@ -123,7 +123,7 @@ function yoyDrawPlugin(entries, dsIndices) {
         ctx.save();
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
-        ctx.font = '800 12px Assistant, Arial, sans-serif';
+        ctx.font = '800 13.5px Assistant, Arial, sans-serif';
         ctx.fillStyle = color;
         ctx.fillText(pctText, textStartX, pctBaselineY);
         ctx.restore();
@@ -132,7 +132,7 @@ function yoyDrawPlugin(entries, dsIndices) {
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.font = '700 9.5px Assistant, Arial, sans-serif';
+        ctx.font = '700 11px Assistant, Arial, sans-serif';
         ctx.fillStyle = '#6A7093';
         ctx.fillText((e.moneyDiff >= 0 ? '+' : '') + e.moneyDiff.toLocaleString('he-IL') + '₪', midX, pctBaselineY - 15);
         ctx.restore();
@@ -465,16 +465,21 @@ async function loadDashboardSalesSummary(filters) {
       (i) => ({ value: mt.data[i], meta: monthMeta[i] }),
       (i) => mt.yoyData[i]
     );
+    // The per-bar YoY indicator only makes sense as the "how did each month do"
+    // story when this is the only chart on show — once a comparison chart is also
+    // displayed alongside it, that side-by-side split is already the comparison, and
+    // a dozen extra per-bar arrows on the primary chart would just add noise.
+    const activeYoyEntries = mt.compareData ? [] : timelineYoyEntries;
     upsertChart('monthlyTrendChart', {
       type: 'bar',
       data: { labels, datasets: [{ label: 'מחזור', data: mt.data, backgroundColor: DASH_BLUE, borderRadius: 4 }] },
-      plugins: [yoyDrawPlugin(timelineYoyEntries, [0])],
+      plugins: [yoyDrawPlugin(activeYoyEntries, [0])],
       options: {
         responsive: true, maintainAspectRatio: false,
         layout: { padding: { top: 38 } },
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(timelineYoyEntries, 0) } }
+          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(activeYoyEntries, 0) } }
         },
         scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
