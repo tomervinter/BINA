@@ -134,9 +134,9 @@ async function initDashboardFilters() {
         const cohortBits = [];
         if (state.boughtProducts.length) cohortBits.push('קנו ' + state.boughtProducts.map((p) => prodNameByCode[p] || p).join(', '));
         if (state.notBoughtProducts.length) cohortBits.push('לא קנו ' + state.notBoughtProducts.map((p) => prodNameByCode[p] || p).join(', '));
-        purchaseCohortSubtitle.textContent = 'מוצג רק לקוחות ש' + cohortBits.join(' ו') + '.';
+        purchaseCohortSubtitle.textContent = 'מוצג רק לקוחות ש' + cohortBits.join(' ו') + (periodActive ? ' בתקופה הנוכחית שנבחרה' : '') + '.';
       } else {
-        purchaseCohortSubtitle.textContent = 'מצמצם את הלקוח/ות בבדיקה הראשית למי שקנו מוצר מסוים ו/או למי שלא קנו מוצר אחר.';
+        purchaseCohortSubtitle.textContent = 'מצמצם את הלקוח/ות בבדיקה הראשית למי שקנו מוצר מסוים ו/או למי שלא קנו מוצר אחר' + (periodActive ? ', בתקופה הנוכחית שנבחרה' : '') + '.';
       }
     }
 
@@ -186,6 +186,7 @@ async function initDashboardFilters() {
     setList('customerType', state.customerType);
     setList('boughtProducts', state.boughtProducts);
     setList('notBoughtProducts', state.notBoughtProducts);
+    setList('periodMonths', state.periodMonths);
     cohortExportBtn.href = '/api/dashboard-sales-summary/cohort-customers/export?' + qs.toString();
   }
 

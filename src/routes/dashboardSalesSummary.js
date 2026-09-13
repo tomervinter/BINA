@@ -83,14 +83,18 @@ async function buildEntityWhere(organizationId, { customerNumbers, productCodes,
 
 // Resolves the "customers who bought X but not Y" cohort filter to a customer-number
 // array, or null when neither list is given (no cohort constraint at all). Buying is
-// "at least one sale of at least one product in the list" (OR within each list); the
-// two lists combine as bought MINUS excluded. With no boughtProducts, the starting
-// set is every customer in the org (so notBoughtProducts alone means "everyone except
-// those who bought these").
-async function resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts) {
+// "at least one sale of at least one product in the list, within the selected period
+// if one is set" (OR within each list); the two lists combine as bought MINUS
+// excluded. With no boughtProducts, the starting set is every customer in the org (so
+// notBoughtProducts alone means "everyone except those who bought these"). `period`
+// (an array of {year, month}, from parseMonthList) scopes both lists to the same
+// months as the rest of the dashboard — "bought X" means "bought X during the
+// selected period", not "ever bought X".
+async function resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts, period) {
   if (!boughtProducts.length && !notBoughtProducts.length) return null;
+  const dateWhere = period ? monthsWhereClause(period) : {};
   const distinctBuyers = async (codes) => {
-    const rows = await prisma.sale.findMany({ where: { organizationId, productCode: { in: codes } }, select: { customerNumber: true }, distinct: ['customerNumber'] });
+    const rows = await prisma.sale.findMany({ where: Object.assign({ organizationId, productCode: { in: codes } }, dateWhere), select: { customerNumber: true }, distinct: ['customerNumber'] });
     return new Set(rows.map((r) => r.customerNumber));
   };
   const [boughtSet, excludeSet] = await Promise.all([
@@ -142,14 +146,16 @@ router.get('/', async (req, res) => {
   const compareCustomerTypes = parseCsv(req.query.compareCustomerType);
   const boughtProducts = parseCsv(req.query.boughtProducts);
   const notBoughtProducts = parseCsv(req.query.notBoughtProducts);
+  const period = parseMonthList(req.query.periodMonths);
 
-  const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts);
+  // "Bought X" / "didn't buy Y" is scoped to the selected period, same as every other
+  // number on the dashboard — not "ever bought", unless no period filter is active.
+  const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts, period);
   const hasEntityFilter = !!(customerNumbers.length || productCodes.length || primaryClasses.length || customerTypes.length || purchaseCohort);
   const baseWhere = hasEntityFilter
     ? await buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, restrictToCustomers: purchaseCohort })
     : { organizationId };
 
-  const period = parseMonthList(req.query.periodMonths);
   const compare = period ? parseMonthList(req.query.compareMonths) : null;
   const hasCompareIdentity = !!(compareCustomerNumbers.length || comparePrimaryClasses.length || compareCustomerTypes.length);
   const hasEntityCompare = hasCompareIdentity || !!compareProductCodes.length;
@@ -339,7 +345,8 @@ router.get('/cohort-customers/export', async (req, res) => {
   const customerTypes = parseCsv(req.query.customerType);
   const boughtProducts = parseCsv(req.query.boughtProducts);
   const notBoughtProducts = parseCsv(req.query.notBoughtProducts);
-  const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts);
+  const period = parseMonthList(req.query.periodMonths);
+  const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts, period);
   const hasEntityFilter = !!(customerNumbers.length || primaryClasses.length || customerTypes.length || purchaseCohort);
   const where = hasEntityFilter
     ? await buildEntityWhere(organizationId, { customerNumbers, productCodes: [], primaryClasses, customerTypes, restrictToCustomers: purchaseCohort })
