@@ -166,12 +166,13 @@ async function initDashboardFilters() {
   const cohortBodyEl = document.getElementById('dashCohortCustomersBody');
   const cohortExportBtn = document.getElementById('dashCohortExportBtn');
 
-  // Shows the exact customer list the primary side's filters resolved to (customer/
-  // segment selection and/or the purchase-cohort filter above), with a real .xlsx
-  // export of that same list — hidden when nothing narrowed the customer set (an
-  // all-customers or product-only view isn't a "list of matching customers").
+  // Shows the exact customer list the purchase-cohort filter above ("בחרו מוצר/ים
+  // שקנו/לא קנו") resolved to, with a real .xlsx export of that same list — hidden
+  // whenever that cohort filter itself is empty, even if the main filter table
+  // happens to narrow customers for an unrelated reason (e.g. a plain customer
+  // selection made for a different check shouldn't surface here).
   function renderCohortCustomers(s) {
-    if (!s || !s.filteredCustomers) { cohortSection.style.display = 'none'; return; }
+    if (!s || !s.filteredCustomers || !(state.boughtProducts.length || state.notBoughtProducts.length)) { cohortSection.style.display = 'none'; return; }
     cohortSection.style.display = '';
     cohortCountEl.textContent = s.filteredCustomers.length + ' לקוחות תואמים';
     cohortBodyEl.innerHTML = s.filteredCustomers.map((c) =>
