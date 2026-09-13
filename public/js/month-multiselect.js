@@ -32,7 +32,7 @@ function createMonthMultiSelect(containerId, opts) {
           '<div class="mms-year-label">' + y + '</div>' +
           MMS_MONTH_NAMES.map((name, i) => {
             const key = y + '-' + String(i + 1).padStart(2, '0');
-            return '<label class="mms-option"><input type="checkbox" value="' + key + '"' + (selected.has(key) ? ' checked' : '') + '>' + name + '</label>';
+            return '<label class="mms-option"><input type="checkbox" value="' + key + '"' + (selected.has(key) ? ' checked' : '') + '><span class="ems-opt-label">' + name + '</span></label>';
           }).join('') +
         '</div>'
       )).join('') +
