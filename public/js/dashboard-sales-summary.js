@@ -76,9 +76,12 @@ function yoyDrawPlugin(entries, dsIndices) {
         const lightColor = e.up ? '#9FE8BE' : '#F7B9B3';
         const size = 6;
 
-        // Row 2 (closer to the bars): the arrow + percentage, side by side.
+        // Row 2 (closer to the bars): the arrow + percentage, side by side. Sign is
+        // built as a trailing character on an explicit LTR string (rather than
+        // relying on the number's own leading "-") — canvas text inherits the page's
+        // RTL direction, which otherwise reorders a leading minus unpredictably.
         const pctBaselineY = topY - 6;
-        const pctText = (e.up ? '+' : '') + e.pct + '%';
+        const pctText = Math.abs(e.pct) + '%' + (e.up ? '+' : '-');
         ctx.font = '800 13.5px Assistant, Arial, sans-serif';
         const pctWidth = ctx.measureText(pctText).width;
         const gap = 4;
@@ -110,6 +113,7 @@ function yoyDrawPlugin(entries, dsIndices) {
         ctx.restore();
 
         ctx.save();
+        ctx.direction = 'ltr';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
         ctx.font = '800 13.5px Assistant, Arial, sans-serif';
@@ -117,13 +121,17 @@ function yoyDrawPlugin(entries, dsIndices) {
         ctx.fillText(pctText, textStartX, pctBaselineY);
         ctx.restore();
 
-        // Row 1 (above row 2): the ₪ delta, smaller and muted.
+        // Row 1 (above row 2): the ₪ delta, smaller and muted. Same trailing-sign,
+        // explicit-LTR approach as the percentage above, and "שח" spelled out rather
+        // than the ₪ symbol (per explicit request for this indicator specifically).
+        const moneyText = Math.abs(e.moneyDiff).toLocaleString('he-IL') + (e.moneyDiff >= 0 ? '+' : '-') + ' שח';
         ctx.save();
+        ctx.direction = 'ltr';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.font = '700 11px Assistant, Arial, sans-serif';
         ctx.fillStyle = '#6A7093';
-        ctx.fillText((e.moneyDiff >= 0 ? '+' : '') + e.moneyDiff.toLocaleString('he-IL') + '₪', midX, pctBaselineY - 15);
+        ctx.fillText(moneyText, midX, pctBaselineY - 15);
         ctx.restore();
       });
     }
@@ -140,8 +148,8 @@ function yoyTooltipAfterLabel(entries, onlyDsIndex) {
     if (onlyDsIndex != null && tooltipItem.datasetIndex !== onlyDsIndex) return undefined;
     const e = byIndex[tooltipItem.dataIndex];
     if (!e) return undefined;
-    const sign = e.up ? '+' : '';
-    return 'לעומת אותו חודש אשתקד: ' + sign + e.pct + '% (' + sign + e.moneyDiff.toLocaleString('he-IL') + '₪)';
+    const sign = e.up ? '+' : '-';
+    return 'לעומת אותו חודש אשתקד: ' + Math.abs(e.pct) + '%' + sign + ' (' + Math.abs(e.moneyDiff).toLocaleString('he-IL') + sign + ' שח)';
   };
 }
 
