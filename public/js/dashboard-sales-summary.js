@@ -228,6 +228,42 @@ async function loadDashboardSalesSummary(filters) {
   const customerTypeLabel = joinOrCount(s.customerTypes, null, 'סוגי לקוח');
   const suffix = (customerLabel ? (' — ' + customerLabel) : '') + (productLabel ? (' — ' + productLabel) : '')
     + (primaryClassLabel ? (' — ' + primaryClassLabel) : '') + (customerTypeLabel ? (' — ' + customerTypeLabel) : '');
+
+  // Per-chart-card filter description: every chart's own title stays generic (set
+  // separately per row below), while this line — shown inside each individual card —
+  // spells out exactly which filters that specific side (primary or comparison) is
+  // built from, so a viewer never has to scroll back up to the filter table to know
+  // what a given bar/slice represents.
+  function joinFilterParts(parts) { return parts.filter(Boolean).join(' • '); }
+  const primaryFilterDesc = joinFilterParts([
+    customerLabel ? ('לקוח: ' + customerLabel) : null,
+    productLabel ? ('מוצר: ' + productLabel) : null,
+    primaryClassLabel ? ('סיווג ראשי: ' + primaryClassLabel) : null,
+    customerTypeLabel ? ('סוג לקוח: ' + customerTypeLabel) : null,
+    s.period ? ('תקופה: ' + s.period.label) : null,
+    (s.boughtProductNames && s.boughtProductNames.length) ? ('קנו: ' + s.boughtProductNames.join(', ')) : null,
+    (s.notBoughtProductNames && s.notBoughtProductNames.length) ? ('לא קנו: ' + s.notBoughtProductNames.join(', ')) : null
+  ]) || 'כלל הנתונים, ללא סינון';
+  // Same idea for the comparison side — computed here (rather than only where the
+  // report-link params need it further down) so the trend chart's compare card can
+  // use it too, not just the breakdown charts below.
+  const compareCustomerLabel = joinOrCount(s.compareCustomerNumbers, s.compareCustomerNames, 'לקוחות');
+  const compareProductLabel = joinOrCount(s.compareProductCodes, s.compareProductNames, 'מוצרים');
+  const comparePrimaryClassLabel = joinOrCount(s.comparePrimaryClasses, null, 'סיווגים ראשיים');
+  const compareCustomerTypeLabel = joinOrCount(s.compareCustomerTypes, null, 'סוגי לקוח');
+  const compareAxisLabel = comparePrimaryClassLabel ? ('סיווג ' + comparePrimaryClassLabel)
+    : compareCustomerTypeLabel ? ('סוג לקוח ' + compareCustomerTypeLabel)
+    : compareCustomerLabel ? ('הלקוח ' + compareCustomerLabel)
+    : compareProductLabel ? ('המוצר ' + compareProductLabel)
+    : (s.comparePeriod ? s.comparePeriod.label : null);
+  const compareFilterDesc = joinFilterParts([
+    compareCustomerLabel ? ('לקוח: ' + compareCustomerLabel) : null,
+    compareProductLabel ? ('מוצר: ' + compareProductLabel) : null,
+    comparePrimaryClassLabel ? ('סיווג ראשי: ' + comparePrimaryClassLabel) : null,
+    compareCustomerTypeLabel ? ('סוג לקוח: ' + compareCustomerTypeLabel) : null,
+    s.comparePeriod ? ('תקופה: ' + s.comparePeriod.label) : null
+  ]) || 'יורש את סינון הבדיקה הראשית';
+
   const baseReportParams = Object.assign({},
     singleOrNull(s.customerNumbers) && { customerNumber: singleOrNull(s.customerNumbers) },
     singleOrNull(s.productCodes) && { productCode: singleOrNull(s.productCodes) },
@@ -237,8 +273,11 @@ async function loadDashboardSalesSummary(filters) {
   const hasCustomerFilter = !!(s.customerNumbers && s.customerNumbers.length);
   const ct = s.compareTotals;
 
+  // Each chart/chart-pair's own title (set per-row below) names only the metric it
+  // shows, generically — the specific filters behind the numbers are spelled out
+  // separately inside each card via primaryFilterDesc/compareFilterDesc above.
   if (s.period) {
-    document.getElementById('monthlyTrendTitle').textContent = 'השוואת תקופות' + suffix;
+    document.getElementById('monthlyTrendTitle').textContent = 'השוואת תקופות';
     document.getElementById('monthlyTrendSubtitle').textContent =
       'התקופה ' + s.period.label + (s.comparePeriod ? ' לעומת ' + s.comparePeriod.label : '') +
       '. לחצו על עמודה כדי לצפות בשורות המכירה של אותו חודש בדוח המלא. החץ מציין שינוי לעומת אותו חודש אשתקד (לחודשים שהסתיימו בלבד).';
@@ -247,7 +286,7 @@ async function loadDashboardSalesSummary(filters) {
   } else {
     const mt = s.monthlyTimeline;
     const fmtKey = (mk) => { const [y, m] = mk.split('-'); return s.monthNames[+m - 1] + ' ' + y; };
-    document.getElementById('monthlyTrendTitle').textContent = 'מחזור מכירות חודשי' + suffix;
+    document.getElementById('monthlyTrendTitle').textContent = 'מחזור מכירות חודשי';
     document.getElementById('monthlyTrendSubtitle').textContent =
       'נתוני ' + fmtKey(mt.months[0]) + (mt.months.length > 1 ? ' עד ' + fmtKey(mt.months[mt.months.length - 1]) : '') +
       ', ברצף' + (mt.compareData ? ' — מוצג גם בהשוואה' : '') +
@@ -257,11 +296,16 @@ async function loadDashboardSalesSummary(filters) {
       ? ('מבוסס על שורות המכירה של ' + customerLabel + ' בלבד. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.')
       : 'מבוסס על דוח המכירות המלא — כל שורות המכירות בצירוף נתוני הלקוחות והמוצרים. לחצו על כל פרוסה/עמודה כדי לצפות בשורות הרלוונטיות בדוח המלא.';
   }
+  document.getElementById('monthlyTrendPrimaryDesc').textContent = primaryFilterDesc;
   document.getElementById('salesSummaryFullReportLink').href = reportUrl(baseReportParams);
-  document.getElementById('superTypeTitle').textContent = 'מחזור לפי טיפוס על' + suffix;
-  document.getElementById('departmentTitle').textContent = 'מחזור לפי מחלקת מוצר' + suffix;
-  document.getElementById('topProductsTitle').textContent = hasCustomerFilter ? '10 המוצרים המובילים אצל הלקוח' : '5 המוצרים המובילים במחזור';
-  document.getElementById('topCustomersTitle').textContent = hasCustomerFilter ? 'מחזור הלקוח הנבחר' : '5 הלקוחות המובילים במחזור';
+  document.getElementById('superTypeRowTitle').textContent = 'מחזור לפי טיפוס על';
+  document.getElementById('departmentRowTitle').textContent = 'מחזור לפי מחלקת מוצר';
+  document.getElementById('topProductsRowTitle').textContent = hasCustomerFilter ? '10 המוצרים המובילים אצל הלקוח' : '5 המוצרים המובילים במחזור';
+  document.getElementById('topCustomersRowTitle').textContent = hasCustomerFilter ? 'מחזור הלקוח הנבחר' : '5 הלקוחות המובילים במחזור';
+  document.getElementById('superTypeTitle').textContent = primaryFilterDesc;
+  document.getElementById('departmentTitle').textContent = primaryFilterDesc;
+  document.getElementById('topProductsTitle').textContent = primaryFilterDesc;
+  document.getElementById('topCustomersTitle').textContent = primaryFilterDesc;
 
   // A single selected month can be expressed as the full report's own year/month
   // filter; a multi-month period has no equivalent there, so the tile link degrades
@@ -292,15 +336,6 @@ async function loadDashboardSalesSummary(filters) {
   const cmpProductSingle = singleOrNull(s.compareProductCodes) || singleOrNull(s.productCodes);
   if (cmpProductSingle) compareBaseReportParams.productCode = cmpProductSingle;
   const compareReportParams = Object.assign({}, compareBaseReportParams, singleMonthParams(s.comparePeriod));
-  const compareCustomerLabel = joinOrCount(s.compareCustomerNumbers, s.compareCustomerNames, 'לקוחות');
-  const compareProductLabel = joinOrCount(s.compareProductCodes, s.compareProductNames, 'מוצרים');
-  const comparePrimaryClassLabel = joinOrCount(s.comparePrimaryClasses, null, 'סיווגים ראשיים');
-  const compareCustomerTypeLabel = joinOrCount(s.compareCustomerTypes, null, 'סוגי לקוח');
-  const compareAxisLabel = comparePrimaryClassLabel ? ('סיווג ' + comparePrimaryClassLabel)
-    : compareCustomerTypeLabel ? ('סוג לקוח ' + compareCustomerTypeLabel)
-    : compareCustomerLabel ? ('הלקוח ' + compareCustomerLabel)
-    : compareProductLabel ? ('המוצר ' + compareProductLabel)
-    : (s.comparePeriod ? s.comparePeriod.label : null);
 
   // Color encodes which side a tile belongs to — blue for the primary check, purple
   // for its comparison — rather than which metric it is, so the two sides read as two
@@ -377,7 +412,7 @@ async function loadDashboardSalesSummary(filters) {
     });
     toggleCompareChart('monthlyTrendRow', 'monthlyTrendCompareCard', 'monthlyTrendCompareChart', !!pt.compareData);
     if (pt.compareData) {
-      document.getElementById('monthlyTrendCompareChartTitle').textContent = 'השוואה — ' + pt.compareLabel;
+      document.getElementById('monthlyTrendCompareChartTitle').textContent = compareFilterDesc;
       const cmpLabels = Array.from({ length: pt.compareMonths.length }, (_, i) => 'חודש ' + (i + 1));
       upsertChart('monthlyTrendCompareChart', {
         type: 'bar',
@@ -433,7 +468,7 @@ async function loadDashboardSalesSummary(filters) {
     });
     toggleCompareChart('monthlyTrendRow', 'monthlyTrendCompareCard', 'monthlyTrendCompareChart', !!mt.compareData);
     if (mt.compareData) {
-      document.getElementById('monthlyTrendCompareChartTitle').textContent = 'השוואה — ' + (compareAxisLabel || '');
+      document.getElementById('monthlyTrendCompareChartTitle').textContent = compareFilterDesc;
       upsertChart('monthlyTrendCompareChart', {
         type: 'bar',
         data: { labels, datasets: [{ label: compareAxisLabel || 'השוואה', data: mt.compareData, backgroundColor: DASH_PURPLE, borderRadius: 4 }] },
@@ -480,17 +515,17 @@ async function loadDashboardSalesSummary(filters) {
   // Each breakdown chart follows the same primary/comparison-pair pattern as the
   // trend chart above: full width alone, or split with a comparison version (same
   // breakdown, computed from the compare-side data) whenever a comparison is active.
-  function breakdownChart(rowId, canvasId, compareCanvasId, compareCardId, compareTitleId, titleText, rows, compareRows, filterKey, type, color) {
+  function breakdownChart(rowId, canvasId, compareCanvasId, compareCardId, compareTitleId, rows, compareRows, filterKey, type, color) {
     oneBreakdownChart(canvasId, rows, filterKey, type, color, baseReportParams);
     toggleCompareChart(rowId, compareCardId, compareCanvasId, !!compareRows);
     if (compareRows) {
-      document.getElementById(compareTitleId).textContent = titleText + ' — השוואה' + (compareAxisLabel ? (' (' + compareAxisLabel + ')') : '');
+      document.getElementById(compareTitleId).textContent = compareFilterDesc;
       oneBreakdownChart(compareCanvasId, compareRows, filterKey, type, DASH_PURPLE, compareBaseReportParams);
     }
   }
 
-  breakdownChart('superTypeRow', 'superTypeChart', 'superTypeCompareChart', 'superTypeCompareCard', 'superTypeCompareTitle', 'מחזור לפי טיפוס על', s.bySuperType, s.compareBySuperType, 'superType', 'bar', DASH_BLUE);
-  breakdownChart('departmentRow', 'departmentChart', 'departmentCompareChart', 'departmentCompareCard', 'departmentCompareTitle', 'מחזור לפי מחלקת מוצר', s.byDepartment, s.compareByDepartment, 'department', 'bar', DASH_NAVY);
+  breakdownChart('superTypeRow', 'superTypeChart', 'superTypeCompareChart', 'superTypeCompareCard', 'superTypeCompareTitle', s.bySuperType, s.compareBySuperType, 'superType', 'bar', DASH_BLUE);
+  breakdownChart('departmentRow', 'departmentChart', 'departmentCompareChart', 'departmentCompareCard', 'departmentCompareTitle', s.byDepartment, s.compareByDepartment, 'department', 'bar', DASH_NAVY);
 
   function oneRankedChart(canvasId, rows, color, linkFn) {
     upsertChart(canvasId, {
@@ -515,14 +550,14 @@ async function loadDashboardSalesSummary(filters) {
   oneRankedChart('topCustomersChart', s.topCustomers, DASH_BLUE, (c) => reportUrl({ customerNumber: c.code }));
   toggleCompareChart('topCustomersRow', 'topCustomersCompareCard', 'topCustomersCompareChart', !!s.compareTopCustomers);
   if (s.compareTopCustomers) {
-    document.getElementById('topCustomersCompareTitle').textContent = 'הלקוחות המובילים במחזור — השוואה' + (compareAxisLabel ? (' (' + compareAxisLabel + ')') : '');
+    document.getElementById('topCustomersCompareTitle').textContent = compareFilterDesc;
     oneRankedChart('topCustomersCompareChart', s.compareTopCustomers, DASH_PURPLE, (c) => reportUrl({ customerNumber: c.code }));
   }
 
   oneRankedChart('topProductsChart', s.topProducts, DASH_SLATE, (p) => reportUrl(Object.assign({}, baseReportParams, { productCode: p.code })));
   toggleCompareChart('topProductsRow', 'topProductsCompareCard', 'topProductsCompareChart', !!s.compareTopProducts);
   if (s.compareTopProducts) {
-    document.getElementById('topProductsCompareTitle').textContent = 'המוצרים המובילים במחזור — השוואה' + (compareAxisLabel ? (' (' + compareAxisLabel + ')') : '');
+    document.getElementById('topProductsCompareTitle').textContent = compareFilterDesc;
     oneRankedChart('topProductsCompareChart', s.compareTopProducts, DASH_PURPLE, (p) => reportUrl(Object.assign({}, compareBaseReportParams, { productCode: p.code })));
   }
 

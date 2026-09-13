@@ -166,10 +166,11 @@
       </div>
       <div id="monthlyTrendRow" style="display:grid;grid-template-columns:1fr;gap:22px;">
         <div class="card">
+          <div class="chart-filter-desc" id="monthlyTrendPrimaryDesc"></div>
           <div style="position:relative;height:300px;"><canvas id="monthlyTrendChart"></canvas></div>
         </div>
         <div class="card" id="monthlyTrendCompareCard" style="display:none;">
-          <div class="card-title" id="monthlyTrendCompareChartTitle" style="margin-bottom:8px;"></div>
+          <div class="chart-filter-desc" id="monthlyTrendCompareChartTitle"></div>
           <div style="position:relative;height:300px;"><canvas id="monthlyTrendCompareChart"></canvas></div>
         </div>
       </div>
@@ -187,46 +188,66 @@
         <div id="dashTopInsightsList"></div>
       </div>
 
+      <div class="table-head-row" style="margin-top:22px;">
+        <div class="table-head-right">
+          <div class="card-title" id="superTypeRowTitle" style="margin-bottom:2px;">מחזור לפי טיפוס על</div>
+        </div>
+      </div>
       <div id="superTypeRow" style="display:grid;grid-template-columns:1fr;gap:22px;">
         <div class="card">
-          <div class="card-title" id="superTypeTitle">מחזור לפי טיפוס על</div>
+          <div class="chart-filter-desc" id="superTypeTitle"></div>
           <div style="position:relative;height:230px;"><canvas id="superTypeChart"></canvas></div>
         </div>
         <div class="card" id="superTypeCompareCard" style="display:none;">
-          <div class="card-title" id="superTypeCompareTitle"></div>
+          <div class="chart-filter-desc" id="superTypeCompareTitle"></div>
           <div style="position:relative;height:230px;"><canvas id="superTypeCompareChart"></canvas></div>
         </div>
       </div>
 
-      <div id="departmentRow" style="display:grid;grid-template-columns:1fr;gap:22px;margin-top:22px;">
+      <div class="table-head-row" style="margin-top:22px;">
+        <div class="table-head-right">
+          <div class="card-title" id="departmentRowTitle" style="margin-bottom:2px;">מחזור לפי מחלקת מוצר</div>
+        </div>
+      </div>
+      <div id="departmentRow" style="display:grid;grid-template-columns:1fr;gap:22px;">
         <div class="card">
-          <div class="card-title" id="departmentTitle">מחזור לפי מחלקת מוצר</div>
+          <div class="chart-filter-desc" id="departmentTitle"></div>
           <div style="position:relative;height:230px;"><canvas id="departmentChart"></canvas></div>
         </div>
         <div class="card" id="departmentCompareCard" style="display:none;">
-          <div class="card-title" id="departmentCompareTitle"></div>
+          <div class="chart-filter-desc" id="departmentCompareTitle"></div>
           <div style="position:relative;height:230px;"><canvas id="departmentCompareChart"></canvas></div>
         </div>
       </div>
 
-      <div id="topCustomersRow" style="display:grid;grid-template-columns:1fr;gap:22px;margin-top:22px;">
+      <div class="table-head-row" style="margin-top:22px;">
+        <div class="table-head-right">
+          <div class="card-title" id="topCustomersRowTitle" style="margin-bottom:2px;">5 הלקוחות המובילים במחזור</div>
+        </div>
+      </div>
+      <div id="topCustomersRow" style="display:grid;grid-template-columns:1fr;gap:22px;">
         <div class="card">
-          <div class="card-title" id="topCustomersTitle">5 הלקוחות המובילים במחזור</div>
+          <div class="chart-filter-desc" id="topCustomersTitle"></div>
           <div style="position:relative;height:220px;"><canvas id="topCustomersChart"></canvas></div>
         </div>
         <div class="card" id="topCustomersCompareCard" style="display:none;">
-          <div class="card-title" id="topCustomersCompareTitle"></div>
+          <div class="chart-filter-desc" id="topCustomersCompareTitle"></div>
           <div style="position:relative;height:220px;"><canvas id="topCustomersCompareChart"></canvas></div>
         </div>
       </div>
 
-      <div id="topProductsRow" style="display:grid;grid-template-columns:1fr;gap:22px;margin-top:22px;">
+      <div class="table-head-row" style="margin-top:22px;">
+        <div class="table-head-right">
+          <div class="card-title" id="topProductsRowTitle" style="margin-bottom:2px;">5 המוצרים המובילים במחזור</div>
+        </div>
+      </div>
+      <div id="topProductsRow" style="display:grid;grid-template-columns:1fr;gap:22px;">
         <div class="card">
-          <div class="card-title" id="topProductsTitle">5 המוצרים המובילים במחזור</div>
+          <div class="chart-filter-desc" id="topProductsTitle"></div>
           <div style="position:relative;height:220px;"><canvas id="topProductsChart"></canvas></div>
         </div>
         <div class="card" id="topProductsCompareCard" style="display:none;">
-          <div class="card-title" id="topProductsCompareTitle"></div>
+          <div class="chart-filter-desc" id="topProductsCompareTitle"></div>
           <div style="position:relative;height:220px;"><canvas id="topProductsCompareChart"></canvas></div>
         </div>
       </div>
