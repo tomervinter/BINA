@@ -160,6 +160,8 @@ async function loadDashboardSalesSummary(filters) {
   const qs = new URLSearchParams();
   if (filters.customer) qs.set('customerNumber', filters.customer);
   if (filters.product) qs.set('productCode', filters.product);
+  if (filters.primaryClass) qs.set('primaryClass', filters.primaryClass);
+  if (filters.customerType) qs.set('customerType', filters.customerType);
   if (filters.periodMonths && filters.periodMonths.length) qs.set('periodMonths', filters.periodMonths.join(','));
   if (filters.compareMonths && filters.compareMonths.length) qs.set('compareMonths', filters.compareMonths.join(','));
   if (filters.compareCustomer) qs.set('compareCustomerNumber', filters.compareCustomer);
@@ -170,8 +172,14 @@ async function loadDashboardSalesSummary(filters) {
   const res = await fetch('/api/dashboard-sales-summary' + (q ? '?' + q : ''), { credentials: 'include' });
   if (!res.ok) return;
   const s = await res.json();
-  const suffix = (s.customerName ? (' — ' + s.customerName) : '') + (s.productName ? (' — ' + s.productName) : '');
-  const baseReportParams = Object.assign({}, s.customerNumber && { customerNumber: s.customerNumber }, s.productCode && { productCode: s.productCode });
+  const suffix = (s.customerName ? (' — ' + s.customerName) : '') + (s.productName ? (' — ' + s.productName) : '')
+    + (s.primaryClass ? (' — ' + s.primaryClass) : '') + (s.customerType ? (' — ' + s.customerType) : '');
+  const baseReportParams = Object.assign({},
+    s.customerNumber && { customerNumber: s.customerNumber },
+    s.productCode && { productCode: s.productCode },
+    s.primaryClass && { primaryClass: s.primaryClass },
+    s.customerType && { customerType: s.customerType }
+  );
   const ct = s.compareTotals;
 
   if (s.period) {
@@ -208,16 +216,21 @@ async function loadDashboardSalesSummary(filters) {
     return { year: y, month: String(Number(m)) };
   }
   const curReportParams = Object.assign({}, baseReportParams, singleMonthParams(s.period));
-  // The comparison side can differ from the primary side along customer, product, or
-  // customer segment (primaryClass/customerType) — not only by date — so its report
-  // link and label are built from whichever compare filter is actually active, each
-  // falling back to the primary filter's own value exactly like the backend does.
+  // The comparison side's customer identity (customerNumber/primaryClass/customerType)
+  // is one bundle: if the user gave ANY compare-specific identity field, use exactly
+  // that bundle; otherwise inherit the primary side's identity wholesale — matching
+  // the backend's own fallback logic exactly (see buildEntityWhere in
+  // dashboardSalesSummary.js). The product dimension falls back independently.
+  const hasCompareIdentity = !!(s.compareCustomerNumber || s.comparePrimaryClass || s.compareCustomerType);
   const compareBaseReportParams = {};
-  if (s.comparePrimaryClass) compareBaseReportParams.primaryClass = s.comparePrimaryClass;
-  if (s.compareCustomerType) compareBaseReportParams.customerType = s.compareCustomerType;
-  if (!s.comparePrimaryClass && !s.compareCustomerType) {
-    const cmpCust = s.compareCustomerNumber || s.customerNumber;
-    if (cmpCust) compareBaseReportParams.customerNumber = cmpCust;
+  if (hasCompareIdentity) {
+    if (s.comparePrimaryClass) compareBaseReportParams.primaryClass = s.comparePrimaryClass;
+    if (s.compareCustomerType) compareBaseReportParams.customerType = s.compareCustomerType;
+    if (s.compareCustomerNumber) compareBaseReportParams.customerNumber = s.compareCustomerNumber;
+  } else {
+    if (s.primaryClass) compareBaseReportParams.primaryClass = s.primaryClass;
+    if (s.customerType) compareBaseReportParams.customerType = s.customerType;
+    if (s.customerNumber) compareBaseReportParams.customerNumber = s.customerNumber;
   }
   const cmpProduct = s.compareProductCode || s.productCode;
   if (cmpProduct) compareBaseReportParams.productCode = cmpProduct;

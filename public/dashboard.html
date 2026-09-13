@@ -22,56 +22,65 @@
       <div class="card" style="margin-top:16px;">
         <div class="table-head-row">
           <div class="table-head-right">
-            <div class="card-title" style="margin-bottom:2px;">סינון הדשבורד</div>
-            <div class="page-subtitle" id="dashFilterSubtitle" style="margin-bottom:0;">כברירת מחדל, כל הנתונים בדשבורד מציגים את כלל הלקוחות וכל התקופות. הקלידו שם לקוח ו/או בחרו תקופה כדי לסנן.</div>
-          </div>
-          <div class="table-head-left">
-            <button class="btn btn-ghost btn-sm" id="dashClearCustomerFilter" type="button" style="display:none;">הצג את כל הלקוחות</button>
-            <button class="btn btn-ghost btn-sm" id="dashClearProductFilter" type="button" style="display:none;">הצג את כל המוצרים</button>
-            <button class="btn btn-ghost btn-sm" id="dashClearPeriodFilter" type="button" style="display:none;">הצג את כל התקופות</button>
+            <div class="card-title" style="margin-bottom:2px;">סינון הדשבורד — בדיקה ראשית מול השוואה</div>
+            <div class="page-subtitle" id="dashFilterSubtitle" style="margin-bottom:0;">כברירת מחדל, כל הנתונים בדשבורד מציגים את כלל הלקוחות וכל התקופות. מלאו כל שורה בנפרד כדי לסנן לפיה, ואת עמודת ההשוואה כדי להציג לצידה נתון להשוואה.</div>
           </div>
         </div>
-        <div class="dash-filter-row">
-          <div class="dash-filter-field dash-filter-customer">
-            <datalist id="dashCustomerList"></datalist>
-            <input type="text" id="dashCustomerSearch" list="dashCustomerList" placeholder="הקלידו שם לקוח...">
-          </div>
-          <div class="dash-filter-field">
-            <span class="cp-period-label">תקופה נוכחית:</span>
-            <div id="dashPeriodPicker"></div>
-          </div>
-          <div class="dash-filter-field">
-            <span class="cp-period-label">תקופת השוואה:</span>
-            <div id="dashComparePicker"></div>
-          </div>
-        </div>
-        <div class="table-head-row" style="margin-top:14px;">
-          <div class="table-head-right">
-            <div class="page-subtitle" style="margin-bottom:0;">להשוואת פילוח אחר מול הנבחר למעלה — לקוח, מוצר, סיווג ראשי או סוג לקוח אחר.</div>
-          </div>
-          <div class="table-head-left">
-            <button class="btn btn-ghost btn-sm" id="dashClearEntityCompareFilter" type="button" style="display:none;">נקה את ההשוואה</button>
-          </div>
-        </div>
-        <div class="dash-filter-row">
-          <div class="dash-filter-field dash-filter-customer">
-            <span class="cp-period-label">לקוח השוואה:</span>
-            <datalist id="dashCompareCustomerList"></datalist>
-            <input type="text" id="dashCompareCustomerSearch" list="dashCompareCustomerList" placeholder="הקלידו שם לקוח...">
-          </div>
-          <div class="dash-filter-field dash-filter-customer">
-            <span class="cp-period-label">מוצר השוואה:</span>
-            <datalist id="dashCompareProductList"></datalist>
-            <input type="text" id="dashCompareProductSearch" list="dashCompareProductList" placeholder="הקלידו שם מוצר...">
-          </div>
-          <div class="dash-filter-field">
-            <span class="cp-period-label">סיווג ראשי השוואה:</span>
-            <select id="dashComparePrimaryClass"><option value="">הכל</option></select>
-          </div>
-          <div class="dash-filter-field">
-            <span class="cp-period-label">סוג לקוח השוואה:</span>
-            <select id="dashCompareCustomerType"><option value="">הכל</option></select>
-          </div>
+        <div class="table-scroll" style="margin-top:12px;">
+          <table class="dash-filter-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>בדיקה ראשית</th>
+                <th>השוואה ל...</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">לקוח</th>
+                <td class="dft-field">
+                  <datalist id="dashCustomerList"></datalist>
+                  <input type="text" id="dashCustomerSearch" list="dashCustomerList" placeholder="הקלידו שם לקוח...">
+                </td>
+                <td class="dft-field">
+                  <datalist id="dashCompareCustomerList"></datalist>
+                  <input type="text" id="dashCompareCustomerSearch" list="dashCompareCustomerList" placeholder="הקלידו שם לקוח...">
+                </td>
+                <td class="dft-clear"><button class="dft-clear-btn" id="dashClearRowCustomer" type="button" title="נקה שורה" style="display:none;">✕</button></td>
+              </tr>
+              <tr>
+                <th scope="row">תקופה</th>
+                <td class="dft-field"><div id="dashPeriodPicker"></div></td>
+                <td class="dft-field"><div id="dashComparePicker"></div></td>
+                <td class="dft-clear"><button class="dft-clear-btn" id="dashClearRowPeriod" type="button" title="נקה שורה" style="display:none;">✕</button></td>
+              </tr>
+              <tr>
+                <th scope="row">מוצר</th>
+                <td class="dft-field">
+                  <datalist id="dashProductList"></datalist>
+                  <input type="text" id="dashProductSearch" list="dashProductList" placeholder="הקלידו שם מוצר...">
+                </td>
+                <td class="dft-field">
+                  <datalist id="dashCompareProductList"></datalist>
+                  <input type="text" id="dashCompareProductSearch" list="dashCompareProductList" placeholder="הקלידו שם מוצר...">
+                </td>
+                <td class="dft-clear"><button class="dft-clear-btn" id="dashClearRowProduct" type="button" title="נקה שורה" style="display:none;">✕</button></td>
+              </tr>
+              <tr>
+                <th scope="row">סיווג ראשי</th>
+                <td class="dft-field"><select id="dashPrimaryClass"><option value="">הכל</option></select></td>
+                <td class="dft-field"><select id="dashComparePrimaryClass"><option value="">הכל</option></select></td>
+                <td class="dft-clear"><button class="dft-clear-btn" id="dashClearRowPrimaryClass" type="button" title="נקה שורה" style="display:none;">✕</button></td>
+              </tr>
+              <tr>
+                <th scope="row">סוג לקוח</th>
+                <td class="dft-field"><select id="dashCustomerType"><option value="">הכל</option></select></td>
+                <td class="dft-field"><select id="dashCompareCustomerType"><option value="">הכל</option></select></td>
+                <td class="dft-clear"><button class="dft-clear-btn" id="dashClearRowCustomerType" type="button" title="נקה שורה" style="display:none;">✕</button></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
