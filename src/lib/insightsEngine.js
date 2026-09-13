@@ -99,6 +99,7 @@ const DEFAULT_PARAMS = {
   cumulativeYoy_pctThreshold: 5, cumulativeYoy_highPct: 15, cumulativeYoy_minBaseRevenue: 100,
   quarterlyDecline_pctThreshold: 20, quarterlyDecline_highPct: 35, quarterlyDecline_minBaseRevenue: 100,
   productQty_windowMonths: 3, productQty_pctThreshold: 40, productQty_highPct: 60, productQty_minPriorQty: 5,
+  variety_windowMonths: 3, variety_pctThreshold: 30, variety_highPct: 50, variety_minPriorCount: 3,
   productFreqYoy_pctThreshold: 40, productFreqYoy_highPct: 60, productFreqYoy_minPriorMonths: 2,
   irregularity_minPurchases: 4, irregularity_cvThreshold: 70, irregularity_minRevenueShare: 5,
   concentration_topN: 2, concentration_pctThreshold: 70, concentration_minRevenue: 500,
@@ -376,6 +377,50 @@ async function computeInsights(organizationId) {
         metric: Math.round(delta * 100),
         breakdown: {
           rows: [{ label: 'כמות אחרונה', value: Math.round(curQty) }, { label: 'כמות קודמת', value: Math.round(prevQty) }],
+          dashFilter: { periodMonths: curMonthKeys, compareMonths: prevMonthKeys }
+        }
+      });
+    });
+  }
+
+  // Rule 2f — shrinking product variety: is the customer buying a NARROWER range of
+  // distinct products than before, even if quantities of what they still buy haven't
+  // dropped? Counted by product family (general policy 5), same window convention as
+  // rule 2a (both windows anchored at the last fully completed month). Independent of
+  // rule 2a — a customer who buys steady quantities of fewer and fewer products won't
+  // necessarily trip the per-product decline check, since each remaining product's
+  // own quantity may be flat or even up.
+  {
+    const winMonths = params.variety_windowMonths;
+    const curMonthKeys = [];
+    for (let m = 1; m <= winMonths; m++) curMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
+    const prevMonthKeys = [];
+    for (let m = winMonths + 1; m <= 2 * winMonths; m++) prevMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
+    function famLabelByKey(fam) { return Array.from(familyMembers[fam] || [fam]).map(prodLabel).join(' / '); }
+    Object.keys(byCustomer).forEach((cid) => {
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const events = byCustomer[cid];
+      const curFamilies = new Set(), prevFamilies = new Set();
+      events.forEach((e) => {
+        if (curMonthKeys.includes(monthKey(e.t))) curFamilies.add(famKey(e.pid));
+        else if (prevMonthKeys.includes(monthKey(e.t))) prevFamilies.add(famKey(e.pid));
+      });
+      if (prevFamilies.size < params.variety_minPriorCount) return;
+      const delta = (curFamilies.size - prevFamilies.size) / prevFamilies.size;
+      if (delta > -params.variety_pctThreshold / 100) return; // only a decline counts — see general policy 7
+      const dropped = Array.from(prevFamilies).filter((f) => !curFamilies.has(f));
+      if (!dropped.length) return; // shrank in count but the actual set didn't narrow (e.g. swapped one family for another) — not the pattern this rule targets
+      const droppedLabel = dropped.map(famLabelByKey).join(', ');
+      insights.push({
+        type: 'purchasePattern',
+        severity: Math.abs(delta) >= params.variety_highPct / 100 ? 'high' : 'medium',
+        customerId: cid,
+        customerName: custLabel(cid),
+        message: `מגוון המוצרים של הלקוח צומצם מ-${prevFamilies.size} ל-${curFamilies.size} מוצרים שונים ב-${winMonths} החודשים האחרונים, לעומת ${winMonths} החודשים שקדמו. הלקוח הפסיק לקנות: ${droppedLabel}.`,
+        metric: Math.round(delta * 100),
+        breakdown: {
+          rows: [{ label: 'מוצרים שונים — אחרונה', value: curFamilies.size }, { label: 'מוצרים שונים — קודמת', value: prevFamilies.size }],
           dashFilter: { periodMonths: curMonthKeys, compareMonths: prevMonthKeys }
         }
       });
