@@ -162,6 +162,10 @@ async function loadDashboardSalesSummary(filters) {
   if (filters.product) qs.set('productCode', filters.product);
   if (filters.periodMonths && filters.periodMonths.length) qs.set('periodMonths', filters.periodMonths.join(','));
   if (filters.compareMonths && filters.compareMonths.length) qs.set('compareMonths', filters.compareMonths.join(','));
+  if (filters.compareCustomer) qs.set('compareCustomerNumber', filters.compareCustomer);
+  if (filters.compareProduct) qs.set('compareProductCode', filters.compareProduct);
+  if (filters.comparePrimaryClass) qs.set('comparePrimaryClass', filters.comparePrimaryClass);
+  if (filters.compareCustomerType) qs.set('compareCustomerType', filters.compareCustomerType);
   const q = qs.toString();
   const res = await fetch('/api/dashboard-sales-summary' + (q ? '?' + q : ''), { credentials: 'include' });
   if (!res.ok) return;
@@ -204,16 +208,35 @@ async function loadDashboardSalesSummary(filters) {
     return { year: y, month: String(Number(m)) };
   }
   const curReportParams = Object.assign({}, baseReportParams, singleMonthParams(s.period));
-  const compareReportParams = Object.assign({}, baseReportParams, singleMonthParams(s.comparePeriod));
+  // The comparison side can differ from the primary side along customer, product, or
+  // customer segment (primaryClass/customerType) — not only by date — so its report
+  // link and label are built from whichever compare filter is actually active, each
+  // falling back to the primary filter's own value exactly like the backend does.
+  const compareBaseReportParams = {};
+  if (s.comparePrimaryClass) compareBaseReportParams.primaryClass = s.comparePrimaryClass;
+  if (s.compareCustomerType) compareBaseReportParams.customerType = s.compareCustomerType;
+  if (!s.comparePrimaryClass && !s.compareCustomerType) {
+    const cmpCust = s.compareCustomerNumber || s.customerNumber;
+    if (cmpCust) compareBaseReportParams.customerNumber = cmpCust;
+  }
+  const cmpProduct = s.compareProductCode || s.productCode;
+  if (cmpProduct) compareBaseReportParams.productCode = cmpProduct;
+  const compareReportParams = Object.assign({}, compareBaseReportParams, singleMonthParams(s.comparePeriod));
+  const compareAxisLabel = s.comparePrimaryClass ? ('סיווג ' + s.comparePrimaryClass)
+    : s.compareCustomerType ? ('סוג לקוח ' + s.compareCustomerType)
+    : s.compareCustomerNumber ? ('הלקוח ' + s.compareCustomerName)
+    : s.compareProductCode ? ('המוצר ' + s.compareProductName)
+    : (s.comparePeriod ? s.comparePeriod.label : null);
 
   const kpiTiles = [
-    ['blue', 'v-blue', fmtMoneyShort(s.totalRevenue), 'מכירות תקופה נוכחית (ש"ח)', reportUrl(curReportParams)],
-    ['green', 'v-green', s.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו בתקופה נוכחית', reportUrl(curReportParams)]
+    ['blue', 'v-blue', fmtMoneyShort(s.totalRevenue), (s.period ? 'מכירות תקופה נוכחית' : 'מכירות') + ' (ש"ח)', reportUrl(curReportParams)],
+    ['green', 'v-green', s.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו' + (s.period ? ' בתקופה נוכחית' : ''), reportUrl(curReportParams)]
   ];
   if (ct) {
+    const cmpSuffix = compareAxisLabel ? (' — ' + compareAxisLabel) : '';
     kpiTiles.push(
-      ['blue', 'v-blue', fmtMoneyShort(ct.totalRevenue), 'מכירות תקופת השוואה (ש"ח)', reportUrl(compareReportParams)],
-      ['green', 'v-green', ct.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו בתקופת השוואה', reportUrl(compareReportParams)]
+      ['blue', 'v-blue', fmtMoneyShort(ct.totalRevenue), 'מכירות להשוואה' + cmpSuffix + ' (ש"ח)', reportUrl(compareReportParams)],
+      ['green', 'v-green', ct.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו להשוואה' + cmpSuffix, reportUrl(compareReportParams)]
     );
   }
 
@@ -233,8 +256,14 @@ async function loadDashboardSalesSummary(filters) {
     const pt = s.periodTrend;
     const n = Math.max(pt.periodMonths.length, pt.compareMonths ? pt.compareMonths.length : 0);
     const labels = Array.from({ length: n }, (_, i) => 'חודש ' + (i + 1));
-    const datasets = [{ label: pt.periodLabel, data: pt.periodData, backgroundColor: DASH_BLUE, borderRadius: 4 }];
+    // Chart.js always draws dataset 0 on the physical left of each group and dataset 1
+    // to its right, regardless of page direction — on this RTL dashboard, the current
+    // period must always render on the right, so the comparison series (when present)
+    // goes first in the array and the current period's own series goes last.
+    const datasets = [];
     if (pt.compareData) datasets.push({ label: pt.compareLabel, data: pt.compareData, backgroundColor: DASH_NAVY, borderRadius: 4 });
+    const periodDsIndex = datasets.length;
+    datasets.push({ label: pt.periodLabel, data: pt.periodData, backgroundColor: DASH_BLUE, borderRadius: 4 });
     // Always vs. the exact same calendar month one year earlier (pt.yoyData), drawn
     // above the period's own bar — independent of whatever comparison series is shown.
     const ptYoyEntries = buildYoyEntries(pt.periodMonths.length,
@@ -244,19 +273,19 @@ async function loadDashboardSalesSummary(filters) {
     upsertChart('monthlyTrendChart', {
       type: 'bar',
       data: { labels, datasets },
-      plugins: [yoyDrawPlugin(ptYoyEntries, [0])],
+      plugins: [yoyDrawPlugin(ptYoyEntries, [periodDsIndex])],
       options: {
         responsive: true, maintainAspectRatio: false,
         layout: { padding: { top: 38 } },
         plugins: {
           legend: { position: 'bottom', rtl: true, labels: { font: { family: 'Assistant' } } },
-          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(ptYoyEntries, 0) } }
+          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(ptYoyEntries, periodDsIndex) } }
         },
         scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
           const el = elements[0];
-          const months = el.datasetIndex === 0 ? pt.periodMonths : pt.compareMonths;
+          const months = el.datasetIndex === periodDsIndex ? pt.periodMonths : pt.compareMonths;
           const m = months && months[el.index];
           if (!m) return;
           window.location.href = reportUrl(Object.assign({}, baseReportParams, { year: m.year, month: m.month }));
@@ -364,11 +393,3 @@ async function loadDashboardSalesSummary(filters) {
   return s;
 }
 
-(function () {
-  const params = new URLSearchParams(window.location.search);
-  loadDashboardSalesSummary({
-    customer: params.get('customer') || null,
-    periodMonths: (params.get('periodMonths') || '').split(',').filter(Boolean),
-    compareMonths: (params.get('compareMonths') || '').split(',').filter(Boolean)
-  });
-})();

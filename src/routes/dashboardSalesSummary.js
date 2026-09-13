@@ -47,23 +47,55 @@ function monthsLabel(months) {
 // except for the trend chart, which only selects {date, revenue}.
 //
 // Optional filters, all combinable:
-// - ?customerNumber= scopes every aggregation to that one customer's sales.
+// - ?customerNumber= / ?productCode= scope every aggregation to that one customer's
+//   or product's sales.
 // - ?periodMonths= (comma-separated "YYYY-MM" values) scopes every number on the
 //   dashboard to that set of months instead of all-time.
-// - ?compareMonths= (only meaningful together with periodMonths) adds a second,
-//   comparison set of totals and a second trend series alongside the period's.
+// - A comparison series (compareTotals, and — when periodMonths is also set — a
+//   second trend series) appears whenever ANY "compare" filter is given:
+//   ?compareMonths= (only meaningful together with periodMonths), ?compareCustomerNumber=,
+//   ?compareProductCode=, ?comparePrimaryClass=, ?compareCustomerType=. Each compare
+//   filter overrides just its own dimension for the comparison side — every dimension
+//   it doesn't touch falls back to the primary filter's own value (or "all"), exactly
+//   like compareMonths already did for dates. comparePrimaryClass/compareCustomerType
+//   resolve to a customer-number set (Sale has no customer-attribute columns of its
+//   own) and take precedence over compareCustomerNumber when given.
 // Every filter is folded into the same organizationId-scoped where clause used
 // everywhere else, so values from another organization simply match nothing.
 router.get('/', async (req, res) => {
   const organizationId = req.user.organizationId;
   const customerNumber = req.query.customerNumber ? String(req.query.customerNumber) : null;
   const productCode = req.query.productCode ? String(req.query.productCode) : null;
+  const compareCustomerNumber = req.query.compareCustomerNumber ? String(req.query.compareCustomerNumber) : null;
+  const compareProductCode = req.query.compareProductCode ? String(req.query.compareProductCode) : null;
+  const comparePrimaryClass = req.query.comparePrimaryClass ? String(req.query.comparePrimaryClass) : null;
+  const compareCustomerType = req.query.compareCustomerType ? String(req.query.compareCustomerType) : null;
   const baseWhere = Object.assign({ organizationId }, customerNumber && { customerNumber }, productCode && { productCode });
 
   const period = parseMonthList(req.query.periodMonths);
   const compare = period ? parseMonthList(req.query.compareMonths) : null;
+  const hasEntityCompare = !!(compareCustomerNumber || compareProductCode || comparePrimaryClass || compareCustomerType);
+
+  let compareBaseWhere = null;
+  if (hasEntityCompare || compare) {
+    compareBaseWhere = { organizationId };
+    if (comparePrimaryClass || compareCustomerType) {
+      const segCustomers = await prisma.customer.findMany({
+        where: Object.assign({ organizationId }, comparePrimaryClass && { primaryClass: comparePrimaryClass }, compareCustomerType && { customerType: compareCustomerType }),
+        select: { customerNumber: true }
+      });
+      compareBaseWhere.customerNumber = { in: segCustomers.map((c) => c.customerNumber) };
+    } else if (compareCustomerNumber) {
+      compareBaseWhere.customerNumber = compareCustomerNumber;
+    } else if (customerNumber) {
+      compareBaseWhere.customerNumber = customerNumber;
+    }
+    const cmpProduct = compareProductCode || productCode;
+    if (cmpProduct) compareBaseWhere.productCode = cmpProduct;
+  }
+
   const where = period ? { AND: [baseWhere, monthsWhereClause(period)] } : baseWhere;
-  const compareWhere = compare ? { AND: [baseWhere, monthsWhereClause(compare)] } : null;
+  const compareWhere = compareBaseWhere ? (compare ? { AND: [compareBaseWhere, monthsWhereClause(compare)] } : compareBaseWhere) : null;
 
   const queries = [
     prisma.sale.aggregate({ where, _sum: { revenue: true, quantity: true } }),
@@ -165,6 +197,12 @@ router.get('/', async (req, res) => {
     productName: productCode ? ((prodMap[productCode] && prodMap[productCode].name) || productCode) : null,
     period: period ? { months: period.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(period) } : null,
     comparePeriod: compare ? { months: compare.map((m) => m.year + '-' + String(m.month).padStart(2, '0')), label: monthsLabel(compare) } : null,
+    compareCustomerNumber,
+    compareCustomerName: compareCustomerNumber ? ((custMap[compareCustomerNumber] && custMap[compareCustomerNumber].name) || compareCustomerNumber) : null,
+    compareProductCode,
+    compareProductName: compareProductCode ? ((prodMap[compareProductCode] && prodMap[compareProductCode].name) || compareProductCode) : null,
+    comparePrimaryClass,
+    compareCustomerType,
     totalRevenue: totalAgg._sum.revenue || 0,
     totalQuantity: totalAgg._sum.quantity || 0,
     activeCustomerCount: byCust.length,

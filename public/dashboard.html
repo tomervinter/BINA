@@ -45,6 +45,34 @@
             <div id="dashComparePicker"></div>
           </div>
         </div>
+        <div class="table-head-row" style="margin-top:14px;">
+          <div class="table-head-right">
+            <div class="page-subtitle" style="margin-bottom:0;">להשוואת פילוח אחר מול הנבחר למעלה — לקוח, מוצר, סיווג ראשי או סוג לקוח אחר.</div>
+          </div>
+          <div class="table-head-left">
+            <button class="btn btn-ghost btn-sm" id="dashClearEntityCompareFilter" type="button" style="display:none;">נקה את ההשוואה</button>
+          </div>
+        </div>
+        <div class="dash-filter-row">
+          <div class="dash-filter-field dash-filter-customer">
+            <span class="cp-period-label">לקוח השוואה:</span>
+            <datalist id="dashCompareCustomerList"></datalist>
+            <input type="text" id="dashCompareCustomerSearch" list="dashCompareCustomerList" placeholder="הקלידו שם לקוח...">
+          </div>
+          <div class="dash-filter-field dash-filter-customer">
+            <span class="cp-period-label">מוצר השוואה:</span>
+            <datalist id="dashCompareProductList"></datalist>
+            <input type="text" id="dashCompareProductSearch" list="dashCompareProductList" placeholder="הקלידו שם מוצר...">
+          </div>
+          <div class="dash-filter-field">
+            <span class="cp-period-label">סיווג ראשי השוואה:</span>
+            <select id="dashComparePrimaryClass"><option value="">הכל</option></select>
+          </div>
+          <div class="dash-filter-field">
+            <span class="cp-period-label">סוג לקוח השוואה:</span>
+            <select id="dashCompareCustomerType"><option value="">הכל</option></select>
+          </div>
+        </div>
       </div>
 
       <div class="table-head-row" style="margin-top:6px;">

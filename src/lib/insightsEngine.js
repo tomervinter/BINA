@@ -9,6 +9,12 @@ const MONTH_NAMES_HE = ['ינואר', 'פברואר', 'מרץ', 'אפריל', '�
 // actual revenue/quantity/day-count was, so the number can be traced back by hand.
 function fmtMonthYear(t) { const d = new Date(t); return MONTH_NAMES_HE[d.getMonth()] + ' ' + d.getFullYear(); }
 function fmtMonthYearKey(mk) { const [y, m] = mk.split('-'); return MONTH_NAMES_HE[+m - 1] + ' ' + y; }
+// Names the exact month(s) an insight's "current" window covers, so the message
+// states when the decline happened rather than only a relative window size like
+// "the last 3 months" — e.g. "יולי 2026, אוגוסט 2026, ספטמבר 2026".
+function monthKeysLabel(keys) {
+  return keys.slice().sort().map(fmtMonthYearKey).join(', ');
+}
 function fmtMoneyHe(n) { return Math.round(n || 0).toLocaleString('he-IL') + '₪'; }
 function quarterLabel(t) { const d = new Date(t); return 'רבעון ' + (Math.floor(d.getMonth() / 3) + 1) + ' ' + d.getFullYear(); }
 
@@ -222,7 +228,7 @@ async function computeInsights(organizationId) {
       severity: Math.abs(delta) >= monthlyHighPct ? 'high' : 'medium',
       customerId: cid,
       customerName: custLabel(cid),
-      message: `הכנסת הלקוח ירדה ב-${Math.round(Math.abs(delta) * 100)}% מול החודש הקודם${topDriver ? ', בעיקר עקב ' + topDriver : ''}.`,
+      message: `ב${fmtMonthYearKey(curMK)} הכנסת הלקוח ירדה ב-${Math.round(Math.abs(delta) * 100)}% מול החודש הקודם${topDriver ? ', בעיקר עקב ' + topDriver : ''}.`,
       metric: Math.round(delta * 100),
       breakdown: {
         rows: [{ label: fmtMonthYearKey(curMK), value: Math.round(curRev) }, { label: fmtMonthYearKey(prevMK), value: Math.round(prevRev) }],
@@ -256,7 +262,7 @@ async function computeInsights(organizationId) {
           severity: Math.abs(delta) >= params.cumulativeYoy_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
-          message: `מחזור הלקוח מתחילת השנה ירד ב-${Math.round(Math.abs(delta) * 100)}% לעומת אותה תקופה אשתקד.`,
+          message: `מחזור הלקוח ב${rangeLabel} ${year} ירד ב-${Math.round(Math.abs(delta) * 100)}% לעומת אותה תקופה אשתקד.`,
           metric: Math.round(delta * 100),
           breakdown: {
             rows: [{ label: rangeLabel + ' ' + year, value: Math.round(thisRev) }, { label: rangeLabel + ' ' + (year - 1), value: Math.round(lastRev) }],
@@ -298,7 +304,7 @@ async function computeInsights(organizationId) {
           severity: Math.abs(delta) >= params.quarterlyDecline_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
-          message: `מחזור הלקוח ברבעון האחרון ירד ב-${Math.round(Math.abs(delta) * 100)}% ${basis}.`,
+          message: `מחזור הלקוח ב${quarterLabel(lastCompletedQStart)} ירד ב-${Math.round(Math.abs(delta) * 100)}% ${basis}.`,
           metric: Math.round(delta * 100),
           breakdown: {
             rows: [{ label: quarterLabel(lastCompletedQStart), value: Math.round(curQ) }, { label: baseLabel, value: Math.round(baseRev) }],
@@ -349,7 +355,7 @@ async function computeInsights(organizationId) {
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הכמות שהלקוח קונה מ${label} ירדה ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${winMonths} החודשים הקודמים.`,
+        message: `ב${monthKeysLabel(curMonthKeys)} הכמות שהלקוח קונה מ${label} ירדה ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${winMonths} החודשים שקדמו.`,
         metric: Math.round(delta * 100),
         breakdown: {
           rows: [{ label: 'כמות אחרונה', value: Math.round(curQty) }, { label: 'כמות קודמת', value: Math.round(prevQty) }],
@@ -389,7 +395,7 @@ async function computeInsights(organizationId) {
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `תדירות הרכישה של ${label} ירדה לעומת אשתקד.`,
+        message: `תדירות הרכישה של ${label} ב${rangeLabel2} ${year} ירדה לעומת אשתקד.`,
         metric: Math.round(delta * 100),
         breakdown: {
           rows: [{ label: rangeLabel2 + ' ' + year, value: thisMonths.size }, { label: rangeLabel2 + ' ' + (year - 1), value: lastMonths.size }],
