@@ -222,13 +222,13 @@ async function initDashboardFilters() {
     createMonthMultiSelect('dashPeriodPicker', {
       placeholder: 'בחרו חודשים...',
       initial: state.periodMonths,
-      yearsAhead: 0, yearsBack: 0, // current period is always within the current year
+      yearsAhead: 0, yearsBack: 5, // any year/month up to 5 years back — not locked to the current year
       onChange: (months) => { state.periodMonths = months; apply(); }
     });
     createMonthMultiSelect('dashComparePicker', {
       placeholder: 'בחרו חודשים...',
       initial: state.compareMonths,
-      yearsAhead: -1, yearsBack: 1, // comparison is always against last year's months
+      yearsAhead: 0, yearsBack: 5, // free choice of year/month here too — not locked to last year
       onChange: (months) => { state.compareMonths = months; apply(); }
     });
   }
