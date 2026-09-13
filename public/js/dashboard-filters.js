@@ -1,12 +1,34 @@
 // Combined dashboard filter controls, laid out as a table: one row per filterable
-// dimension (customer, period, product, primary classification, customer type),
+// dimension (customer, year, month, product, primary classification, customer type),
 // each with a primary-side multi-select and a comparison-side multi-select (see
 // dashboard.html's .dash-filter-table and entity-multiselect.js). Every field is
 // synced to the URL query string (each as a comma-separated list) and drives one
 // call to loadDashboardSalesSummary (dashboard-sales-summary.js) whenever any of
 // them change, so a refresh or a shared link reproduces the exact same filtered
-// view. A "period" is likewise an arbitrary set of selected months, not necessarily
-// contiguous — see month-multiselect.js.
+// view. "Year" and "month" are two independent multi-selects rather than one
+// combined picker — the actual period applied is every year/month combination
+// (the cross product), e.g. years [2025,2026] × months [ינואר,פברואר] gives
+// 2025-01, 2025-02, 2026-01, 2026-02. A period is only active once BOTH a year and
+// a month are picked on that side.
+const DASH_MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+function dashCrossProductMonths(years, months) {
+  if (!years.length || !months.length) return [];
+  const out = [];
+  years.forEach((y) => months.forEach((m) => out.push(y + '-' + String(m).padStart(2, '0'))));
+  return out.sort();
+}
+// Inverse of the above, for restoring the year/month pickers' selections from an
+// absolute "YYYY-MM" list (a bookmarked URL, or an insight's own dashFilter) —
+// best-effort: a rolling window that happens to straddle a year boundary (e.g. Dec
+// + Jan + Feb) decomposes into 2 years × 3 months, which re-applies as 6 months
+// rather than the original 3. Rare in practice (insights only span a year boundary
+// for "last N months" rules) and still lands on a reasonable, visible selection
+// rather than an invisible one the pickers can't represent.
+function dashDecomposeMonths(monthKeys) {
+  const years = new Set(), months = new Set();
+  (monthKeys || []).forEach((mk) => { const [y, m] = mk.split('-'); years.add(y); months.add(String(Number(m))); });
+  return { years: Array.from(years).sort(), months: Array.from(months).sort((a, b) => +a - +b) };
+}
 async function initDashboardFilters() {
   const custPickerEl = document.getElementById('dashCustomerPicker');
   if (!custPickerEl) return;
@@ -14,8 +36,10 @@ async function initDashboardFilters() {
   const cellClearBtns = {
     customer: document.getElementById('dashClearCustomer'),
     compareCustomer: document.getElementById('dashClearCompareCustomer'),
-    period: document.getElementById('dashClearPeriod'),
-    comparePeriod: document.getElementById('dashClearComparePeriod'),
+    year: document.getElementById('dashClearYear'),
+    compareYear: document.getElementById('dashClearCompareYear'),
+    month: document.getElementById('dashClearMonth'),
+    compareMonth: document.getElementById('dashClearCompareMonth'),
     product: document.getElementById('dashClearProduct'),
     compareProduct: document.getElementById('dashClearCompareProduct'),
     primaryClass: document.getElementById('dashClearPrimaryClass'),
@@ -46,6 +70,12 @@ async function initDashboardFilters() {
   }
   const primaryClassOptions = distinctOptions(customers.map((c) => c.primaryClass));
   const customerTypeOptions = distinctOptions(customers.map((c) => c.customerType));
+  // Same year range for both sides — no reason a comparison must be last year
+  // specifically, the user picks whichever year/month combination they want.
+  const dashCurrentYear = new Date().getFullYear();
+  const yearOptions = [];
+  for (let y = dashCurrentYear; y >= dashCurrentYear - 5; y--) yearOptions.push({ value: String(y), label: String(y) });
+  const monthOptions = DASH_MONTH_NAMES.map((name, i) => ({ value: String(i + 1), label: name }));
 
   const urlParams = new URLSearchParams(window.location.search);
   const csv = (key) => (urlParams.get(key) || '').split(',').filter(Boolean);
@@ -57,8 +87,15 @@ async function initDashboardFilters() {
     productNames: null,
     primaryClass: csv('primaryClass'),
     customerType: csv('customerType'),
-    periodMonths: csv('periodMonths'),
-    compareMonths: csv('compareMonths'),
+    // periodMonths/compareMonths are DERIVED (the year × month cross product) —
+    // never set directly except by that computation or by an insight click's own
+    // absolute month list (see dashDecomposeMonths / applyDashboardFiltersFromInsight).
+    periodYears: csv('periodYears'),
+    periodMonthsSel: csv('periodMonthsSel'),
+    compareYears: csv('compareYears'),
+    compareMonthsSel: csv('compareMonthsSel'),
+    periodMonths: [],
+    compareMonths: [],
     // Entity-comparison axis: each is independent and optional, and each falls back
     // to the primary filter's own value on the server when unset — exactly like
     // compareMonths already does for dates (see dashboardSalesSummary.js).
@@ -73,6 +110,8 @@ async function initDashboardFilters() {
     boughtProducts: csv('boughtProducts'),
     notBoughtProducts: csv('notBoughtProducts')
   };
+  state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel);
+  state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel);
 
   function syncUrl() {
     const url = new URL(window.location.href);
@@ -81,8 +120,10 @@ async function initDashboardFilters() {
     set('product', state.product);
     set('primaryClass', state.primaryClass);
     set('customerType', state.customerType);
-    set('periodMonths', state.periodMonths);
-    set('compareMonths', state.compareMonths);
+    set('periodYears', state.periodYears);
+    set('periodMonthsSel', state.periodMonthsSel);
+    set('compareYears', state.compareYears);
+    set('compareMonthsSel', state.compareMonthsSel);
     set('compareCustomer', state.compareCustomer);
     set('compareProduct', state.compareProduct);
     set('comparePrimaryClass', state.comparePrimaryClass);
@@ -105,8 +146,10 @@ async function initDashboardFilters() {
     const periodActive = state.periodMonths.length > 0;
     cellClearBtns.customer.style.display = state.customer.length ? '' : 'none';
     cellClearBtns.compareCustomer.style.display = state.compareCustomer.length ? '' : 'none';
-    cellClearBtns.period.style.display = periodActive ? '' : 'none';
-    cellClearBtns.comparePeriod.style.display = state.compareMonths.length ? '' : 'none';
+    cellClearBtns.year.style.display = state.periodYears.length ? '' : 'none';
+    cellClearBtns.compareYear.style.display = state.compareYears.length ? '' : 'none';
+    cellClearBtns.month.style.display = state.periodMonthsSel.length ? '' : 'none';
+    cellClearBtns.compareMonth.style.display = state.compareMonthsSel.length ? '' : 'none';
     cellClearBtns.product.style.display = state.product.length ? '' : 'none';
     cellClearBtns.compareProduct.style.display = state.compareProduct.length ? '' : 'none';
     cellClearBtns.primaryClass.style.display = state.primaryClass.length ? '' : 'none';
@@ -214,25 +257,10 @@ async function initDashboardFilters() {
   makePicker('dashCompareCustomerTypePicker', customerTypeOptions, state.compareCustomerType, false, (vals) => { state.compareCustomerType = vals; apply(); });
   makePicker('dashBoughtProductsPicker', prodOptions, state.boughtProducts, true, (vals) => { state.boughtProducts = vals; apply(); });
   makePicker('dashNotBoughtProductsPicker', prodOptions, state.notBoughtProducts, true, (vals) => { state.notBoughtProducts = vals; apply(); });
-
-  // Rebuilds both month pickers from the current state.periodMonths/compareMonths —
-  // used on init, on manual clear, and when an insight click sets a period programmatically
-  // (see applyDashboardFiltersFromInsight below), since the widget has no public setter.
-  function rebuildPeriodPickers() {
-    createMonthMultiSelect('dashPeriodPicker', {
-      placeholder: 'בחרו חודשים...',
-      initial: state.periodMonths,
-      yearsAhead: 0, yearsBack: 5, // any year/month up to 5 years back — not locked to the current year
-      onChange: (months) => { state.periodMonths = months; apply(); }
-    });
-    createMonthMultiSelect('dashComparePicker', {
-      placeholder: 'בחרו חודשים...',
-      initial: state.compareMonths,
-      yearsAhead: 0, yearsBack: 5, // free choice of year/month here too — not locked to last year
-      onChange: (months) => { state.compareMonths = months; apply(); }
-    });
-  }
-  rebuildPeriodPickers();
+  makePicker('dashYearPicker', yearOptions, state.periodYears, false, (vals) => { state.periodYears = vals; state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel); apply(); });
+  makePicker('dashMonthPicker', monthOptions, state.periodMonthsSel, false, (vals) => { state.periodMonthsSel = vals; state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel); apply(); });
+  makePicker('dashCompareYearPicker', yearOptions, state.compareYears, false, (vals) => { state.compareYears = vals; state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel); apply(); });
+  makePicker('dashCompareMonthPicker', monthOptions, state.compareMonthsSel, false, (vals) => { state.compareMonthsSel = vals; state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel); apply(); });
 
   cellClearBtns.customer.addEventListener('click', () => { state.customer = []; pickers.dashCustomerPicker.setSelected([]); apply(); });
   cellClearBtns.compareCustomer.addEventListener('click', () => { state.compareCustomer = []; pickers.dashCompareCustomerPicker.setSelected([]); apply(); });
@@ -244,18 +272,10 @@ async function initDashboardFilters() {
   cellClearBtns.compareCustomerType.addEventListener('click', () => { state.compareCustomerType = []; pickers.dashCompareCustomerTypePicker.setSelected([]); apply(); });
   cellClearBtns.boughtProducts.addEventListener('click', () => { state.boughtProducts = []; pickers.dashBoughtProductsPicker.setSelected([]); apply(); });
   cellClearBtns.notBoughtProducts.addEventListener('click', () => { state.notBoughtProducts = []; pickers.dashNotBoughtProductsPicker.setSelected([]); apply(); });
-  cellClearBtns.period.addEventListener('click', () => {
-    state.periodMonths = [];
-    document.dispatchEvent(new Event('click')); // closes any open picker panel
-    rebuildPeriodPickers();
-    apply();
-  });
-  cellClearBtns.comparePeriod.addEventListener('click', () => {
-    state.compareMonths = [];
-    document.dispatchEvent(new Event('click')); // closes any open picker panel
-    rebuildPeriodPickers();
-    apply();
-  });
+  cellClearBtns.year.addEventListener('click', () => { state.periodYears = []; state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel); pickers.dashYearPicker.setSelected([]); apply(); });
+  cellClearBtns.month.addEventListener('click', () => { state.periodMonthsSel = []; state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel); pickers.dashMonthPicker.setSelected([]); apply(); });
+  cellClearBtns.compareYear.addEventListener('click', () => { state.compareYears = []; state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel); pickers.dashCompareYearPicker.setSelected([]); apply(); });
+  cellClearBtns.compareMonth.addEventListener('click', () => { state.compareMonthsSel = []; state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel); pickers.dashCompareMonthPicker.setSelected([]); apply(); });
 
   // Lets a dashboard insight (see dashboard-top-insights.js) drive these same filters
   // directly when clicked — the customer/product/period/comparison-period it names,
@@ -265,8 +285,17 @@ async function initDashboardFilters() {
     state.customer = f.customerId ? [f.customerId] : [];
     state.product = f.productCode ? [f.productCode] : [];
     state.productNames = null;
-    state.periodMonths = f.periodMonths || [];
-    state.compareMonths = f.compareMonths || [];
+    // The insight names absolute months, not a year/month picker selection — decompose
+    // back into the two pickers (best-effort; see dashDecomposeMonths) so they display
+    // what's actually applied, then recompute the cross product from that decomposition
+    // rather than trusting f.periodMonths verbatim (it can differ slightly — e.g. a
+    // rolling window that straddles a year boundary — from what the pickers can express).
+    const periodDecomp = dashDecomposeMonths(f.periodMonths);
+    state.periodYears = periodDecomp.years; state.periodMonthsSel = periodDecomp.months;
+    state.periodMonths = dashCrossProductMonths(state.periodYears, state.periodMonthsSel);
+    const compareDecomp = dashDecomposeMonths(f.compareMonths);
+    state.compareYears = compareDecomp.years; state.compareMonthsSel = compareDecomp.months;
+    state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel);
     // An insight names a customer/product/period, never a segment or a comparison
     // axis — clear anything the user had set manually so it doesn't linger mixed in.
     state.primaryClass = []; state.customerType = [];
@@ -282,8 +311,11 @@ async function initDashboardFilters() {
     pickers.dashCompareCustomerTypePicker.setSelected([]);
     pickers.dashBoughtProductsPicker.setSelected([]);
     pickers.dashNotBoughtProductsPicker.setSelected([]);
+    pickers.dashYearPicker.setSelected(state.periodYears);
+    pickers.dashMonthPicker.setSelected(state.periodMonthsSel);
+    pickers.dashCompareYearPicker.setSelected(state.compareYears);
+    pickers.dashCompareMonthPicker.setSelected(state.compareMonthsSel);
     document.dispatchEvent(new Event('click')); // closes any open picker panel
-    rebuildPeriodPickers();
     apply();
   };
 

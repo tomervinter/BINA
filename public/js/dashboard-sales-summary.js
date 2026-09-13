@@ -376,6 +376,11 @@ async function loadDashboardSalesSummary(filters) {
     if (!show && dashCharts[canvasId]) { dashCharts[canvasId].destroy(); delete dashCharts[canvasId]; }
   }
 
+  // Reset before either branch below decides whether to show it — only the
+  // period-vs-comparison-period case (right below) ever populates it.
+  const trendCompareBadge = document.getElementById('monthlyTrendCompareBadge');
+  trendCompareBadge.style.display = 'none';
+
   if (s.periodTrend) {
     // Period vs comparison-period, each its own chart with its own real calendar
     // month labels — the two ranges don't have to line up (a quarter vs some
@@ -431,13 +436,27 @@ async function loadDashboardSalesSummary(filters) {
           onHover: (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; }
         }
       });
+      // The headline number the whole two-chart split exists to show — the total
+      // change between the two periods — floated right over the seam between them
+      // so it can't be missed or require mentally subtracting the two totals.
+      const curTotal = pt.periodData.reduce((a, v) => a + v, 0);
+      const cmpTotal = pt.compareData.reduce((a, v) => a + v, 0);
+      const diff = curTotal - cmpTotal;
+      const dir = diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat';
+      const arrow = dir === 'up' ? '▲' : dir === 'down' ? '▼' : '—';
+      const pctText = cmpTotal ? ((dir === 'up' ? '+' : '') + Math.round((diff / cmpTotal) * 100) + '%') : '';
+      trendCompareBadge.innerHTML =
+        '<span class="tcb-pct tcb-' + dir + '">' + arrow + (pctText ? ' ' + pctText : '') + '</span>' +
+        '<span class="tcb-money">' + (diff >= 0 ? '+' : '') + Math.round(diff).toLocaleString('he-IL') + ' ₪</span>';
+      trendCompareBadge.style.display = '';
     }
   } else {
     // Continuous monthly revenue trend across the whole sales history — one bar per
     // month in sequence, not grouped by calendar month across years. A year-over-year
-    // indicator is drawn only above the single most recent fully-completed month (the
-    // "current period" when no period filter is active), not above every historical
-    // month, so a long multi-year timeline doesn't end up cluttered with arrows.
+    // indicator is drawn above every month that has a same-calendar-month-last-year
+    // value to compare against (buildYoyEntries already skips months with none, e.g.
+    // the timeline's first year), not just the single most recent one — so a viewer
+    // never has to click into a period filter just to see how each month fared.
     const mt = s.monthlyTimeline;
     const n = mt.months.length;
     const labels = mt.months.map((mk) => { const [y, m] = mk.split('-'); return s.monthNames[+m - 1] + ' ' + y; });
@@ -446,17 +465,16 @@ async function loadDashboardSalesSummary(filters) {
       (i) => ({ value: mt.data[i], meta: monthMeta[i] }),
       (i) => mt.yoyData[i]
     );
-    const currentEntry = timelineYoyEntries.length ? [timelineYoyEntries[timelineYoyEntries.length - 1]] : [];
     upsertChart('monthlyTrendChart', {
       type: 'bar',
       data: { labels, datasets: [{ label: 'מחזור', data: mt.data, backgroundColor: DASH_BLUE, borderRadius: 4 }] },
-      plugins: [yoyDrawPlugin(currentEntry, [0])],
+      plugins: [yoyDrawPlugin(timelineYoyEntries, [0])],
       options: {
         responsive: true, maintainAspectRatio: false,
         layout: { padding: { top: 38 } },
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(currentEntry, 0) } }
+          tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(timelineYoyEntries, 0) } }
         },
         scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
