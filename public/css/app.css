@@ -8,16 +8,19 @@
   --accent:#3D5CF5;--accent-strong:#2C48D8;--accent-soft:#E8ECFE;
   --red:#DE4B4B;--red-soft:#FBE1E1;--red-dot:#F2A0A0;
   --green:#2FA360;--green-soft:#DFF4E7;--green-dot:#8FDBAE;--green-btn:#1E9E5C;--green-btn-hover:#188A50;
-  --blue:#3D5CF5;--blue-soft:#E8ECFE;--blue-dot:#A9BBFA;
+  /* --blue/-soft/-dot are the dashboard primary-side palette — a sky-blue ("תכלת"),
+     kept as its own token (distinct from --accent, which drives the sidebar/buttons
+     brand color) so this slot can be recolored without touching the app-wide accent. */
+  --blue:#2E9BD6;--blue-soft:#EAF5FB;--blue-dot:#96CDEB;
   --gray-soft:#EEF0F5;
   /* --purple/-soft/-dot are the dashboard comparison-side palette (comparison data
-     reads as green, not purple, per request) — a deliberately muted, low-saturation
-     teal-green rather than --green's brighter "success" tone, since this is a chart
-     accent shown constantly rather than an occasional status color. Kept as their
-     own tokens rather than reusing --green directly so this slot can be recolored
-     again without touching unrelated green usages elsewhere. --purple-seg is
-     unrelated (relevance-page "suggested" styling) — left as-is. */
-  --purple-seg:#8B5CF6;--purple:#3E8E74;--purple-soft:#E3F1EC;--purple-dot:#94C7B3;
+     reads as turquoise-green, not purple, per request) — a deliberately muted,
+     professional teal/turquoise rather than --green's brighter "success" tone,
+     since this is a chart accent shown constantly rather than an occasional status
+     color. Kept as their own tokens rather than reusing --green directly so this
+     slot can be recolored again without touching unrelated green usages elsewhere.
+     --purple-seg is unrelated (relevance-page "suggested" styling) — left as-is. */
+  --purple-seg:#8B5CF6;--purple:#149E8C;--purple-soft:#E8F5F4;--purple-dot:#8ACFC6;
   --shadow-card:0 1px 2px rgba(27,33,68,.04), 0 8px 20px rgba(27,33,68,.06);
   --radius-m:16px;--radius-s:10px;
 }
@@ -284,8 +287,8 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .dash-filter-table thead th{position:static;background:transparent;font-size:11.5px;color:var(--text-faint);font-weight:700;padding:0 10px 6px;text-align:center;border-bottom:none;}
 .dash-filter-table tbody th{font-weight:700;color:var(--text);font-size:12.5px;width:80px;white-space:nowrap;padding:0 10px;text-align:right;border-bottom:1px solid var(--border);}
 .dash-filter-table td.dft-field{padding:2px 8px;width:200px;}
-.dash-filter-table td.dft-primary{background:rgba(61,92,245,.11);}
-.dash-filter-table td.dft-compare{background:rgba(62,142,116,.14);}
+.dash-filter-table td.dft-primary{background:rgba(46,155,214,.11);}
+.dash-filter-table td.dft-compare{background:rgba(20,158,140,.14);}
 .dash-filter-table tbody tr:last-child td.dft-primary,.dash-filter-table tbody tr:last-child td.dft-compare{border-radius:0 0 8px 8px;}
 .dft-cell{display:flex;align-items:center;justify-content:flex-start;gap:4px;}
 .dft-cell .mms{flex:1;min-width:0;}
@@ -313,6 +316,10 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .mms{position:relative;display:inline-block;}
 .mms-toggle{min-width:150px;max-width:220px;text-align:start;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);font-size:13px;font-family:inherit;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .mms-toggle:hover{border-color:var(--accent);}
+/* A picker with an active selection reads visibly different from an empty one —
+   accent border+background+text so the user always sees at a glance which filters
+   are currently narrowing the view. */
+.mms-toggle.mms-toggle-active{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong);}
 /* A definite `width` (not just min/max-width) is required here: .ems-opt-label
    below needs `overflow:hidden` for its ellipsis truncation, but overflow:hidden
    makes a flex item's automatic minimum size 0 — with no definite container width,

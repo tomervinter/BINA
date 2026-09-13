@@ -35,6 +35,7 @@ function createEntityMultiSelect(containerId, opts) {
   options.forEach((o) => { byValue[o.value] = o.label; });
 
   function refreshLabel() {
+    toggle.classList.toggle('mms-toggle-active', !!selected.size);
     if (!selected.size) { toggle.textContent = placeholder; return; }
     if (selected.size === 1) {
       const v = Array.from(selected)[0];
