@@ -273,10 +273,10 @@ async function initDashboardFilters() {
   // last fully completed calendar month (same Math.max(1, ...) convention as the
   // insights engine's own YTD rule) so it never includes the in-progress month.
   const monthQuickActions = [
-    { label: 'רבעון 1 (ינואר-מרץ)', values: ['1', '2', '3'] },
-    { label: 'רבעון 2 (אפריל-יוני)', values: ['4', '5', '6'] },
-    { label: 'רבעון 3 (יולי-ספטמבר)', values: ['7', '8', '9'] },
-    { label: 'רבעון 4 (אוקטובר-דצמבר)', values: ['10', '11', '12'] },
+    { label: 'Q1', values: ['1', '2', '3'] },
+    { label: 'Q2', values: ['4', '5', '6'] },
+    { label: 'Q3', values: ['7', '8', '9'] },
+    { label: 'Q4', values: ['10', '11', '12'] },
     { label: 'מצטבר עד החודש האחרון שהסתיים', values: Array.from({ length: Math.max(1, new Date().getMonth()) }, (_, i) => String(i + 1)) }
   ];
   makePicker('dashCustomerPicker', custOptions, state.customer, true, (vals) => { state.customer = vals; apply(); });
