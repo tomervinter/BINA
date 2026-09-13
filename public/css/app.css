@@ -267,7 +267,7 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .dash-filter-table tbody tr:last-child th,.dash-filter-table tbody tr:last-child td{border-bottom:none;}
 
 /* ---------- Purchase-cohort filter panel, a bounded box beside the filter table ---------- */
-.dash-cohort-panel{flex:1;min-width:280px;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-2);}
+.dash-cohort-panel{flex:0 1 500px;width:100%;max-width:500px;box-sizing:border-box;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-2);}
 .dash-cohort-panel .mms-toggle{width:100%;max-width:none;}
 .dash-cohort-panel #dashBoughtProductsPicker,.dash-cohort-panel #dashNotBoughtProductsPicker{min-width:0;}
 

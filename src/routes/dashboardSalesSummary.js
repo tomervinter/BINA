@@ -169,7 +169,7 @@ router.get('/', async (req, res) => {
     prisma.sale.aggregate({ where, _sum: { revenue: true, quantity: true } }),
     prisma.sale.groupBy({ by: ['customerNumber'], where, _sum: { revenue: true } }),
     prisma.sale.groupBy({ by: ['productCode'], where, _sum: { revenue: true } }),
-    prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, customerType: true, primaryClass: true } }),
+    prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, customerType: true, primaryClass: true, centralCustomer: true } }),
     prisma.product.findMany({ where: { organizationId }, select: { itemCode: true, name: true, department: true, superType: true } }),
     // Unrestricted by the period/compare date filters (customer filter still applies)
     // so the trend chart can always look up a given month's year-earlier counterpart
@@ -204,6 +204,7 @@ router.get('/', async (req, res) => {
   const filteredCustomers = filteredCustomerNumbers ? filteredCustomerNumbers.map((cn) => ({
     customerNumber: cn,
     name: (custMap[cn] && custMap[cn].name) || cn,
+    centralCustomer: (custMap[cn] && custMap[cn].centralCustomer) || null,
     primaryClass: (custMap[cn] && custMap[cn].primaryClass) || null,
     customerType: (custMap[cn] && custMap[cn].customerType) || null
   })) : null;
@@ -348,6 +349,7 @@ router.get('/cohort-customers/export', async (req, res) => {
   const buffer = rowsToXlsxBuffer([
     { key: 'customerNumber', label: 'מספר לקוח' },
     { key: 'name', label: 'שם לקוח' },
+    { key: 'centralCustomer', label: 'לקוח מרכז' },
     { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
     { key: 'customerType', label: 'סוג לקוח' }
   ], rows);
