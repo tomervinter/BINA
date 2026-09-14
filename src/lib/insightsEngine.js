@@ -548,7 +548,7 @@ async function computeInsights(organizationId) {
   {
     const winMonths = params.peerGap_windowMonths;
     const windowMonthKeys = new Set();
-    for (let m = 0; m < winMonths; m++) windowMonthKeys.add(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
+    for (let m = 1; m <= winMonths; m++) windowMonthKeys.add(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
     const sortedWindowMonthKeys = Array.from(windowMonthKeys).sort();
 
     const boughtInWindow = {}; // cid -> Set(pid)
