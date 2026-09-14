@@ -398,6 +398,14 @@ tr.rel-row-unclassified td.rel-product-name{background:var(--red-soft);}
    inline-edit-table.js) needs to stay visible on hover, so the hover rule is
    overridden here to let it show through instead of the generic gray highlight. */
 .inline-edit-table tbody tr:hover td{background:transparent;}
+/* Freeze the header (both the column-label row and the filter-input row) while
+   scrolling. .table-scroll's overflow-x:auto forces overflow-y to auto too (per the
+   CSS overflow spec), which makes IT the sticky-positioning container instead of the
+   viewport — but since it has no bounded height, that container itself never scrolls,
+   so a viewport-relative sticky top:0 never actually engages. Giving it a max-height
+   here makes it scroll internally, which is what the header's position:sticky needs. */
+.inline-edit-table .table-scroll{max-height:65vh;overflow-y:auto;}
+.inline-edit-table thead{position:sticky;top:0;z-index:2;}
 .icon-btn,.btn-icon{width:28px;height:28px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;}
 .icon-btn{border:none;background:transparent;font-size:15px;padding:4px 8px;}
 .icon-btn:hover,.btn-icon:hover{color:var(--red);background:var(--surface-2);}

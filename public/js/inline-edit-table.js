@@ -11,7 +11,7 @@ async function initInlineEditTable(config) {
   if (!data) return;
 
   const container = document.getElementById('tableContainer');
-  const state = { rows: [], filters: {}, sortCol: null, sortDir: 'asc', focusedCol: null };
+  const state = { rows: [], filters: {}, sortCol: null, sortDir: 'asc', focusedCol: null, pinnedIds: [] };
   const nameField = config.fields[0].key;
   let columns = config.fields.slice();
   const originalColumns = config.fields.slice();
@@ -72,13 +72,25 @@ async function initInlineEditTable(config) {
         const cmp = (va !== '' && vb !== '' && !isNaN(na) && !isNaN(nb)) ? na - nb : String(va).localeCompare(String(vb), 'he');
         return state.sortDir === 'asc' ? cmp : -cmp;
       });
-    } else if (config.defaultSortOrder && config.defaultSortOrder.length) {
-      const rank = {};
-      config.defaultSortOrder.forEach((name, i) => { rank[name] = i; });
-      out = out
-        .map((row, i) => ({ row, i, rank: rank[row[nameField]] != null ? rank[row[nameField]] : config.defaultSortOrder.length }))
-        .sort((a, b) => a.rank - b.rank || a.i - b.i)
-        .map((x) => x.row);
+    } else {
+      if (config.defaultSortOrder && config.defaultSortOrder.length) {
+        const rank = {};
+        config.defaultSortOrder.forEach((name, i) => { rank[name] = i; });
+        out = out
+          .map((row, i) => ({ row, i, rank: rank[row[nameField]] != null ? rank[row[nameField]] : config.defaultSortOrder.length }))
+          .sort((a, b) => a.rank - b.rank || a.i - b.i)
+          .map((x) => x.row);
+      }
+      // Newly-added rows float to the top of this default view (most recent first) so
+      // you land straight on the row you just created instead of hunting for it at the
+      // bottom of a long table. Clicking a column header (the branch above) overrides
+      // this and sorts every row uniformly, same as any other sortable table here.
+      if (state.pinnedIds.length) {
+        const idsInOut = new Set(out.map((r) => r.id));
+        const pinned = state.pinnedIds.filter((id) => idsInOut.has(id)).map((id) => out.find((r) => r.id === id));
+        const pinnedSet = new Set(state.pinnedIds);
+        out = pinned.concat(out.filter((r) => !pinnedSet.has(r.id)));
+      }
     }
     return out;
   }
@@ -177,7 +189,11 @@ async function initInlineEditTable(config) {
       const payload = {};
       config.fields.forEach((f) => { payload[f.key] = f.default != null ? f.default : ''; });
       const res = await fetch(config.apiBase, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
-      if (res.ok) await load();
+      if (res.ok) {
+        const created = await res.json();
+        if (created && created.id) state.pinnedIds.unshift(created.id);
+        await load();
+      }
     });
     container.querySelector('.js-deleteAllBtn').addEventListener('click', () => {
       confirmDangerousDelete('פעולה זו תמחק את כל הנתונים בטבלה זו לצמיתות ואינה הפיכה.', async () => {
