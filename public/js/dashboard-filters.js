@@ -15,21 +15,28 @@
 const DASH_MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 function dashCrossProductMonths(years, months) {
   if (!years.length) return [];
-  // No month picked for a year that IS picked defaults to "January through the last
-  // fully completed calendar month" — the same window the fresh-visit default below
-  // uses — instead of returning no months at all. That old behavior meant selecting
-  // just a year looked like a real, applied filter (its picker showed a value, its
-  // clear button appeared) but silently had ZERO effect: with no months, period
-  // stayed null server-side and the dashboard quietly fell back to its all-time,
-  // every-year view — e.g. picking 2026 vs 2025 for a customer just showed BOTH
-  // years combined in one continuous trend chart on both sides, not a real
-  // year-vs-year comparison. Using today's completed-month count here (not the
-  // picked year's own full 12 months) also keeps both sides of a year-only
-  // comparison on equal footing when picked independently — 8 months of 2026 vs 8
-  // months of 2025, not 8 vs a misleadingly larger 12.
-  const effectiveMonths = months.length ? months : Array.from({ length: Math.max(1, new Date().getMonth()) }, (_, i) => String(i + 1));
+  // No month picked for a year that IS picked still activates a period, instead of
+  // producing none at all (the old behavior: the year picker showed a value and its
+  // clear button appeared, but silently had ZERO effect — period stayed null
+  // server-side and the dashboard fell back to its all-time, every-year view). What
+  // "no month" should mean for that year depends on whether the year is actually
+  // over yet: a past, fully-completed year defaults to its whole 12 months — picking
+  // "2025" means all of 2025 — while the CURRENT, still-in-progress year defaults to
+  // January through the last fully completed calendar month, since the rest of it
+  // hasn't happened. A future year has no months at all yet.
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const ytdMonths = Array.from({ length: Math.max(1, now.getMonth()) }, (_, i) => String(i + 1));
+  const allMonths = Array.from({ length: 12 }, (_, i) => String(i + 1));
   const out = [];
-  years.forEach((y) => effectiveMonths.forEach((m) => out.push(y + '-' + String(m).padStart(2, '0'))));
+  years.forEach((y) => {
+    let effectiveMonths = months;
+    if (!effectiveMonths.length) {
+      const yearNum = Number(y);
+      effectiveMonths = yearNum < currentYear ? allMonths : (yearNum === currentYear ? ytdMonths : []);
+    }
+    effectiveMonths.forEach((m) => out.push(y + '-' + String(m).padStart(2, '0')));
+  });
   return out.sort();
 }
 // Inverse of the above, for restoring the year/month pickers' selections from an
