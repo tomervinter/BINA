@@ -27,6 +27,9 @@ router.get('/matrix', async (req, res) => {
   const matrix = ctx.products.map((p) => ({
     productCode: p.itemCode,
     productName: p.name,
+    type: p.type,
+    superType: p.superType,
+    department: p.department,
     cells: events.map((ev) => ({ source: ev.source, name: ev.name, state: getCellState(ctx, p.itemCode, ev.source, ev.name) }))
   }));
 

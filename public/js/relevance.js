@@ -13,6 +13,18 @@ async function initRelevancePage() {
   let onlyUnclassified = false;
   let payload = { events: [], matrix: [] };
   const selected = new Set();
+  // The plain text/categorical product columns — each gets its own filter-row input
+  // and a clickable, sortable header (same th-inner/sorted-asc/sorted-desc pattern
+  // table.js uses elsewhere), independent of both the global search box above and
+  // the toggle-cell holiday/season columns, which stay as they were.
+  const SIMPLE_COLUMNS = [
+    { key: 'productCode', label: 'קוד פריט' },
+    { key: 'productName', label: 'שם פריט', cls: 'rel-product-name' },
+    { key: 'superType', label: 'טיפוס על' },
+    { key: 'type', label: 'טיפוס' },
+    { key: 'department', label: 'מחלקה' }
+  ];
+  const state = { sortCol: 'productName', sortDir: 'asc', filters: {}, focusedCol: null };
 
   function cellControl(row, cell) {
     const st = cell.state;
@@ -42,10 +54,19 @@ async function initRelevancePage() {
   }
 
   function visibleRows() {
-    let rows = payload.matrix.slice().sort((a, b) => String(a.productName || '').localeCompare(String(b.productName || ''), 'he'));
+    let rows = payload.matrix.slice();
     const term = searchTerm.trim().toLowerCase();
     if (term) rows = rows.filter((r) => (r.productName || '').toLowerCase().includes(term) || (r.productCode || '').toLowerCase().includes(term));
     if (onlyUnclassified) rows = rows.filter((r) => unknownCount(r) > 0);
+    SIMPLE_COLUMNS.forEach((col) => {
+      const f = (state.filters[col.key] || '').trim().toLowerCase();
+      if (!f) return;
+      rows = rows.filter((r) => String(r[col.key] || '').toLowerCase().indexOf(f) !== -1);
+    });
+    rows.sort((a, b) => {
+      const cmp = String(a[state.sortCol] || '').localeCompare(String(b[state.sortCol] || ''), 'he');
+      return state.sortDir === 'asc' ? cmp : -cmp;
+    });
     return rows;
   }
 
@@ -112,11 +133,23 @@ async function initRelevancePage() {
       '<input type="text" class="filter-input js-relSearch" placeholder="חיפוש לפי שם מוצר / קוד פריט..." style="max-width:220px;" value="' + Layout.escapeHtml(searchTerm) + '">' +
       '</div>';
 
-    html += '<div class="rel-matrix-scroll"><table class="rel-matrix"><thead><tr><th><input type="checkbox" class="js-relSelectAll"' + (allVisibleSelected ? ' checked' : '') + '></th><th>קוד פריט</th><th class="rel-product-name">שם פריט</th><th>סטטוס</th>';
+    html += '<div class="rel-matrix-scroll"><table class="rel-matrix"><thead><tr><th><input type="checkbox" class="js-relSelectAll"' + (allVisibleSelected ? ' checked' : '') + '></th>';
+    SIMPLE_COLUMNS.forEach((col) => {
+      const sortCls = state.sortCol === col.key ? (' sorted-' + state.sortDir) : '';
+      html += '<th' + (col.cls ? ' class="' + col.cls + '"' : '') + '><span class="th-inner js-relSortBtn' + sortCls + '" data-col="' + col.key + '"><span class="th-label">' + Layout.escapeHtml(col.label) + '</span>' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10l5 5 5-5"/></svg></span></th>';
+    });
+    html += '<th>סטטוס</th>';
     events.forEach((ev) => { html += '<th>' + Layout.escapeHtml(ev.name) + '<br><span style="font-weight:400;color:var(--text-faint);">(' + (ev.source === 'holiday' ? 'חג' : 'עונה') + ')</span></th>'; });
+    html += '</tr><tr class="filter-row"><td></td>';
+    SIMPLE_COLUMNS.forEach((col) => {
+      html += '<td><input class="filter-input js-relFilterInput" data-col="' + col.key + '" placeholder="סנן..." value="' + Layout.escapeHtml(state.filters[col.key] || '') + '"></td>';
+    });
+    html += '<td></td>';
+    events.forEach(() => { html += '<td></td>'; });
     html += '</tr></thead><tbody>';
     if (!rows.length) {
-      html += '<tr><td colspan="' + (4 + events.length) + '" class="table-empty">אין מוצרים להצגה</td></tr>';
+      html += '<tr><td colspan="' + (7 + events.length) + '" class="table-empty">אין מוצרים להצגה</td></tr>';
     } else {
       rows.forEach((row) => {
         const unknown = unknownCount(row);
@@ -125,7 +158,12 @@ async function initRelevancePage() {
           : '<span class="pill pill-green">✓ מסווג</span>';
         html += '<tr' + (unknown > 0 ? ' class="rel-row-unclassified"' : '') + '>' +
           '<td><input type="checkbox" class="js-relRowCheck" data-product="' + Layout.escapeHtml(row.productCode) + '"' + (selected.has(row.productCode) ? ' checked' : '') + '></td>' +
-          '<td>' + Layout.escapeHtml(row.productCode) + '</td><td class="rel-product-name">' + Layout.escapeHtml(row.productName || row.productCode) + '</td><td>' + statusHtml + '</td>';
+          '<td>' + Layout.escapeHtml(row.productCode) + '</td>' +
+          '<td class="rel-product-name">' + Layout.escapeHtml(row.productName || row.productCode) + '</td>' +
+          '<td>' + Layout.escapeHtml(row.superType || '') + '</td>' +
+          '<td>' + Layout.escapeHtml(row.type || '') + '</td>' +
+          '<td>' + Layout.escapeHtml(row.department || '') + '</td>' +
+          '<td>' + statusHtml + '</td>';
         row.cells.forEach((cell) => { html += '<td class="rel-cell">' + cellControl(row, cell) + '</td>'; });
         html += '</tr>';
       });
@@ -135,6 +173,22 @@ async function initRelevancePage() {
 
     container.querySelector('.js-relOnlyUnclassified').addEventListener('click', () => { onlyUnclassified = !onlyUnclassified; render(); });
     container.querySelector('.js-relSearch').addEventListener('input', (e) => { searchTerm = e.target.value; render(); });
+    container.querySelectorAll('.js-relSortBtn').forEach((el) => {
+      el.addEventListener('click', () => {
+        const col = el.getAttribute('data-col');
+        if (state.sortCol === col) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+        else { state.sortCol = col; state.sortDir = 'asc'; }
+        render();
+      });
+    });
+    container.querySelectorAll('.js-relFilterInput').forEach((el) => {
+      el.addEventListener('click', (e) => e.stopPropagation());
+      el.addEventListener('input', () => {
+        state.filters[el.getAttribute('data-col')] = el.value;
+        state.focusedCol = el.getAttribute('data-col');
+        render();
+      });
+    });
     const holidaysBtn = container.querySelector('.js-relBulkHolidays');
     if (holidaysBtn) holidaysBtn.addEventListener('click', () => bulkAssign('holiday'));
     const seasonsBtn = container.querySelector('.js-relBulkSeasons');
@@ -177,6 +231,11 @@ async function initRelevancePage() {
         await load();
       });
     });
+
+    if (state.focusedCol) {
+      const toFocus = container.querySelector('.js-relFilterInput[data-col="' + state.focusedCol + '"]');
+      if (toFocus) { toFocus.focus(); const v = toFocus.value; toFocus.setSelectionRange(v.length, v.length); }
+    }
   }
 
   await load();

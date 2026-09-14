@@ -2,47 +2,94 @@ async function initInsightsPage() {
   const data = await Layout.init('insights');
   if (!data) return;
 
-  const [insightsRes, productsRes] = await Promise.all([
+  const [insightsRes, productsRes, customersRes] = await Promise.all([
     fetch('/api/insights', { credentials: 'include' }),
-    fetch('/api/products?pageSize=all', { credentials: 'include' })
+    fetch('/api/products?pageSize=all', { credentials: 'include' }),
+    fetch('/api/customers?pageSize=all', { credentials: 'include' })
   ]);
   const insights = insightsRes.ok ? await insightsRes.json() : [];
   const products = productsRes.ok ? (await productsRes.json()).rows : [];
+  const customers = customersRes.ok ? (await customersRes.json()).rows : [];
   const prodName = {};
   products.forEach((p) => { prodName[p.itemCode] = p.name; });
+  const prodMap = {};
+  products.forEach((p) => { prodMap[p.itemCode] = p; });
+  const custMap = {};
+  customers.forEach((c) => { custMap[c.customerNumber] = c; });
 
+  // Every insight's own customer/product carries the same segment attributes the
+  // dashboard's filter table can narrow by (see dashboard.html/dashboard-filters.js)
+  // — surfaced here as their own sortable/filterable columns so a filter applied on
+  // the dashboard (then carried over via the URL params below) can land on an
+  // already-matching view, and so the journal can be sliced by them directly too,
+  // independent of the dashboard.
+  // Pixel widths, not percentages: under table-layout:fixed a <col>'s declared width
+  // strictly wins over any CSS min-width on its th/td, so with this many columns a
+  // percentage split would squeeze several of them narrow enough to wrap their own
+  // header one letter per line — worse than the ellipsis truncation it replaced. Fixed
+  // px widths sized for a readable 2-line header, plus the table's existing horizontal
+  // scroll for whatever doesn't fit, is what actually keeps every header legible.
   const columns = [
-    { key: 'category', label: 'קטגוריה', width: '7%', render: (r) => (TYPE_META[r.type] || {}).category || r.type },
-    { key: 'type', label: 'סוג', width: '14%', wrap: true, render: (r) => (TYPE_META[r.type] || {}).label || r.type },
-    { key: 'customerId', label: 'מספר לקוח', width: '6%', render: (r) => r.customerId || '' },
-    { key: 'customerName', label: 'לקוח', width: '9%', wrap: true, render: (r) => r.customerName || '' },
-    { key: 'entity', label: 'מוצר', width: '9%', wrap: true, render: (r) => r.productCode ? (prodName[r.productCode] || r.productCode) : '' },
-    { key: 'message', label: 'פירוט', width: '24%', wrap: true },
-    { key: 'breakdown', label: 'הנתונים מאחורי התובנה', width: '15%', html: true, wrap: true, sortable: false, filterable: false, render: (r) => renderInsightBreakdown(r.breakdown) },
-    { key: 'severity', label: 'חומרה', width: '9%', html: true, render: (r) => '<span class="pill ' + (SEV_CLASS[r.severity] || 'pill-gray') + '">' + (SEV_LABEL[r.severity] || r.severity) + '</span>', filterValue: (r) => SEV_LABEL[r.severity] || r.severity, sortValue: (r) => ({ high: 0, medium: 1, low: 2 }[r.severity] ?? 3) },
-    { key: 'metric', label: 'מדד', width: '7%' },
+    { key: 'category', label: 'קטגוריה', width: '90px', render: (r) => (TYPE_META[r.type] || {}).category || r.type },
+    { key: 'type', label: 'סוג', width: '150px', wrap: true, render: (r) => (TYPE_META[r.type] || {}).label || r.type },
+    { key: 'customerId', label: 'מספר לקוח', width: '80px', render: (r) => r.customerId || '' },
+    { key: 'customerName', label: 'לקוח', width: '110px', wrap: true, render: (r) => r.customerName || '' },
+    { key: 'city', label: 'עיר', width: '80px', wrap: true, render: (r) => (custMap[r.customerId] && custMap[r.customerId].city) || '' },
+    { key: 'centralCustomer', label: 'לקוח מרכז', width: '100px', wrap: true, render: (r) => (custMap[r.customerId] && custMap[r.customerId].centralCustomer) || '' },
+    { key: 'primaryClass', label: 'סיווג ראשי', width: '90px', wrap: true, render: (r) => (custMap[r.customerId] && custMap[r.customerId].primaryClass) || '' },
+    { key: 'customerType', label: 'סוג לקוח', width: '90px', wrap: true, render: (r) => (custMap[r.customerId] && custMap[r.customerId].customerType) || '' },
+    { key: 'entity', label: 'מוצר', width: '110px', wrap: true, render: (r) => r.productCode ? (prodName[r.productCode] || r.productCode) : '' },
+    { key: 'superType', label: 'טיפוס על', width: '90px', wrap: true, render: (r) => (r.productCode && prodMap[r.productCode] && prodMap[r.productCode].superType) || '' },
+    { key: 'department', label: 'מחלקת מוצר', width: '100px', wrap: true, render: (r) => (r.productCode && prodMap[r.productCode] && prodMap[r.productCode].department) || '' },
+    { key: 'message', label: 'פירוט', width: '260px', wrap: true },
+    { key: 'breakdown', label: 'הנתונים מאחורי התובנה', width: '190px', html: true, wrap: true, sortable: false, filterable: false, render: (r) => renderInsightBreakdown(r.breakdown) },
+    { key: 'severity', label: 'חומרה', width: '100px', html: true, render: (r) => '<span class="pill ' + (SEV_CLASS[r.severity] || 'pill-gray') + '">' + (SEV_LABEL[r.severity] || r.severity) + '</span>', filterValue: (r) => SEV_LABEL[r.severity] || r.severity,
+      // Composite score so this one column can serve as the table's default sort and
+      // reproduce the exact same "most important first" order the API itself already
+      // computes (see sortInsights in src/routes/insights.js): needsReview always
+      // last regardless of severity, then high/medium/low severity, then — within the
+      // same severity — the larger |metric| (bigger deviation) first. Kept well clear
+      // of collision: metric values seen in practice are small (percentages, day/
+      // month counts), nowhere near the 1e3/1e6 tier gaps between review and severity.
+      sortValue: (r) => ((r.breakdown && r.breakdown.needsReview) ? 1e6 : 0) + ({ high: 0, medium: 1, low: 2 }[r.severity] ?? 3) * 1e3 - Math.abs(r.metric || 0) },
+    { key: 'metric', label: 'מדד', width: '80px' },
     // General policy 8: a decline that overlaps a holiday/season is never hidden —
     // it's shown normally (with a caveat in the message itself) and just flagged here
     // for the user's own judgment, purely informational, not a severity level.
-    { key: 'needsReview', label: 'לבדיקה נוספת', width: '8%', html: true, sortable: false,
+    { key: 'needsReview', label: 'לבדיקה נוספת', width: '100px', html: true, sortable: false,
       render: (r) => (r.breakdown && r.breakdown.needsReview) ? '<span class="pill pill-review">חג/עונה — לבדיקה</span>' : '',
       filterValue: (r) => (r.breakdown && r.breakdown.needsReview) ? 'כן' : '' }
   ];
 
   // Dashboard charts deep-link here as insights.html?type=<label> so a click lands
   // already filtered to that rule's insights; the dashboard's insight-count summary
-  // tile deep-links as insights.html?customer=<id> the same way, when exactly one
-  // customer is selected there.
+  // tile deep-links the same way with a single explicit customer AND every active
+  // customer-identity filter (city/centralCustomer/primaryClass/customerType) it
+  // resolved — see resolveInsightCustomerIds in dashboard-top-insights.js — so
+  // clicking through from a filtered dashboard lands on an already-matching view
+  // here too, not just an unfiltered journal.
   const urlParams = new URLSearchParams(window.location.search);
-  const urlType = urlParams.get('type');
-  const urlCustomer = urlParams.get('customer');
-  const initialFilters = Object.assign({}, urlType ? { type: urlType } : null, urlCustomer ? { customerId: urlCustomer } : null);
+  const paramFilter = (param, col) => { const v = urlParams.get(param); return v ? { [col]: v } : null; };
+  const initialFilters = Object.assign({},
+    paramFilter('type', 'type'),
+    paramFilter('customer', 'customerId'),
+    paramFilter('city', 'city'),
+    paramFilter('centralCustomer', 'centralCustomer'),
+    paramFilter('primaryClass', 'primaryClass'),
+    paramFilter('customerType', 'customerType')
+  );
 
   const table = createDataTable(document.getElementById('tableContainer'), columns, insights, {
     exportUrl: '/api/insights/export',
     onRowClick: (r) => { if (r.customerId) window.location.href = 'reports-full-sales.html?customerNumber=' + encodeURIComponent(r.customerId); },
     tableKey: 'insights',
-    initialFilters: Object.keys(initialFilters).length ? initialFilters : undefined
+    initialFilters: Object.keys(initialFilters).length ? initialFilters : undefined,
+    // Most important first by default (see the severity column's composite
+    // sortValue above) — the API already returns rows in this exact order, but
+    // without an active sortCol no column showed the sort indicator, and any
+    // subsequent filtering/interaction had nothing keeping it visibly in this order.
+    defaultSortCol: 'severity',
+    defaultSortDir: 'asc'
   });
 
   const statusLine = document.getElementById('insightsGenStatus');

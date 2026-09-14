@@ -87,33 +87,56 @@ function renderDashboardTopInsights(filters) {
   // window.refreshDashboardTopInsights on every cycle, so these tiles never
   // accumulate across re-renders. The compare tile only appears when the compare
   // grid itself is currently shown (insights themselves aren't period/comparison-
-  // scoped, so this is the same count shown both times). Deep-links to
-  // insights.html scoped the same way as everywhere else (by the one selected
-  // customer, when there's exactly one — the journal's per-column filter can't
-  // express an arbitrary multi-customer OR, so a multi-customer dashboard
-  // selection just links to the full unfiltered journal).
-  // A resolved set of exactly one customer still deep-links straight to that
-  // customer in the journal (its per-column filter can't express an arbitrary
-  // multi-customer OR, so anything broader — a segment filter matching several
-  // customers, or no restriction at all — just links to the full journal instead).
-  function tileHtml(dot, cls, ids, isScoped, count) {
+  // scoped, so this is the same count shown both times).
+  //
+  // Deep-links to insights.html carry through the SAME identity filters that
+  // resolved this side's count — not just an explicit customer, but city/
+  // centralCustomer/primaryClass/customerType too (see insights-page.js, which reads
+  // these same param names) — so clicking through from a filtered dashboard lands on
+  // an already-matching journal view instead of the unfiltered one. Segment filters
+  // win over an explicit customer, same precedence as everywhere else; a dimension
+  // with more than one value picked is left out of the link (the journal's per-
+  // column filter is a plain substring match, not an arbitrary multi-value OR), so
+  // a single-value dimension deep-links while a multi-value one just falls back to
+  // whatever's already unfiltered on that column.
+  function insightsHref(bundle) {
+    const one = (arr) => (arr && arr.length === 1) ? arr[0] : null;
+    const primaryClass = one(bundle.primaryClass), customerType = one(bundle.customerType),
+      city = one(bundle.city), centralCustomer = one(bundle.centralCustomer);
+    const params = new URLSearchParams();
+    if (primaryClass || customerType || city || centralCustomer) {
+      if (primaryClass) params.set('primaryClass', primaryClass);
+      if (customerType) params.set('customerType', customerType);
+      if (city) params.set('city', city);
+      if (centralCustomer) params.set('centralCustomer', centralCustomer);
+    } else {
+      const customer = one(bundle.customer);
+      if (customer) params.set('customer', customer);
+    }
+    const qs = params.toString();
+    return qs ? ('insights.html?' + qs) : 'insights.html';
+  }
+  function tileHtml(dot, cls, bundle, ids, isScoped, count) {
     const idsArr = ids ? Array.from(ids) : [];
-    const href = idsArr.length === 1 ? 'insights.html?customer=' + encodeURIComponent(idsArr[0]) : 'insights.html';
     const desc = !isScoped ? 'תובנות פתוחות בסך הכול'
       : (idsArr.length === 1 ? 'תובנות פתוחות עבור הלקוח הנבחר' : 'תובנות פתוחות עבור הסינון הנבחר');
-    return '<a class="kpi-card" href="' + href + '">' +
+    return '<a class="kpi-card" href="' + insightsHref(bundle) + '">' +
       '<div class="kpi-blob" style="background:var(--' + dot + '-dot);"></div>' +
       '<div class="kpi-blob b2" style="background:var(--' + dot + ');"></div>' +
       '<div class="kpi-value ' + cls + '">' + count.toLocaleString('he-IL') + '</div>' +
       '<div class="kpi-desc">' + desc + '</div>' +
       '</a>';
   }
+  const primaryBundle = { customer: filters.customer, primaryClass: filters.primaryClass, customerType: filters.customerType, city: filters.city, centralCustomer: filters.centralCustomer };
+  const compareBundle = hasCompareIdentity
+    ? { customer: filters.compareCustomer, primaryClass: filters.comparePrimaryClass, customerType: filters.compareCustomerType, city: filters.compareCity, centralCustomer: filters.compareCentralCustomer }
+    : primaryBundle;
   const primaryGrid = document.getElementById('salesSummaryKpiGrid');
   const compareGrid = document.getElementById('salesSummaryCompareKpiGrid');
   if (primaryGrid) {
-    primaryGrid.insertAdjacentHTML('beforeend', tileHtml('blue', 'v-blue', primaryIds, isPrimaryScoped, filtered.length));
+    primaryGrid.insertAdjacentHTML('beforeend', tileHtml('blue', 'v-blue', primaryBundle, primaryIds, isPrimaryScoped, filtered.length));
     if (compareGrid && compareGrid.style.display !== 'none' && compareGrid.children.length) {
-      compareGrid.insertAdjacentHTML('beforeend', tileHtml('purple', 'v-purple', compareIds, compareIds !== null, compareFiltered.length));
+      compareGrid.insertAdjacentHTML('beforeend', tileHtml('purple', 'v-purple', compareBundle, compareIds, compareIds !== null, compareFiltered.length));
     }
   }
 

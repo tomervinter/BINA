@@ -163,8 +163,18 @@ table.table-fixed{table-layout:fixed;}
 table.table-fixed td.td-wrap{max-width:none;}
 table.table-fixed td:not(.td-wrap){overflow:hidden;text-overflow:ellipsis;}
 table.table-fixed th{overflow:hidden;}
-table.table-fixed th .th-inner{display:flex;min-width:0;overflow:hidden;}
-table.table-fixed th .th-label{overflow:hidden;text-overflow:ellipsis;min-width:0;}
+/* Header labels wrap onto a second line instead of truncating with an ellipsis — a
+   narrow fixed-width column (see insights.html's "הנתונים מאחורי התובנה" etc.) was
+   otherwise cutting off most of its own header text with no way to read the rest of
+   it. Only the header (.th-label) changes here; body cells keep their own existing
+   per-column wrap/ellipsis behavior (td.td-wrap vs table.table-fixed td:not(.td-wrap)
+   above) untouched. Note: under table-layout:fixed, a <col>'s own declared width
+   strictly wins over any min-width set on th/td here — a column given too few
+   percent still wraps one letter per line no matter what this rule says, so the
+   actual fix for that is a wide-enough <col> width where the columns are defined
+   (e.g. insights-page.js), not a CSS floor here. */
+table.table-fixed th .th-inner{display:flex;min-width:0;align-items:flex-start;}
+table.table-fixed th .th-label{white-space:normal;overflow-wrap:break-word;min-width:0;}
 th{font-weight:800;color:var(--text);}
 .th-inner{display:inline-flex;align-items:center;gap:5px;cursor:pointer;user-select:none;}
 .th-label{unicode-bidi:isolate;}
@@ -370,10 +380,10 @@ select{background:var(--surface-2);border:1px solid var(--border);border-radius:
 /* ---------- Relevance matrix ---------- */
 .rel-matrix-scroll{overflow:auto;max-height:70vh;}
 .rel-matrix{border-collapse:separate;border-spacing:0;}
-.rel-matrix th,.rel-matrix td{border-bottom:1px solid var(--border);border-left:1px solid var(--border);white-space:nowrap;}
+.rel-matrix th,.rel-matrix td{border-bottom:1px solid var(--border);border-left:1px solid var(--border);white-space:nowrap;padding:4px 10px;}
 .rel-matrix thead th{position:sticky;top:0;background:var(--surface-2);z-index:1;}
 .rel-matrix td.rel-product-name{position:sticky;right:0;background:var(--surface);font-weight:700;z-index:1;text-align:right;}
-.rel-cell{text-align:center;padding:6px;}
+.rel-cell{text-align:center;padding:3px 6px;}
 .rel-cell-btn{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border);background:var(--surface-2);color:var(--text-muted);font-size:12px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;}
 .rel-dot-unknown{border-style:dashed;color:var(--text-faint);}
 .rel-dot-suggest{background:rgba(139,92,246,.12);border-color:var(--purple-seg);border-style:dashed;color:var(--purple-seg);}
