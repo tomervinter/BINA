@@ -414,8 +414,15 @@ tr.rel-row-unclassified td.rel-product-name{background:var(--red-soft);}
 .inline-edit-table{max-width:900px;}
 .inline-edit-table table{font-size:14px;}
 .inline-edit-table th{font-size:13.5px;}
-.inline-edit-table td{padding:4px 8px;}
-.inline-edit-table input{width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font-size:14px;font-family:inherit;background:var(--surface);text-align:center;}
+.inline-edit-table td{padding:2px 8px;}
+.inline-edit-table input{width:100%;padding:3px 8px;border:1px solid var(--border);border-radius:7px;font-size:14px;font-family:inherit;background:var(--surface);text-align:center;}
+/* text-align:center alone doesn't visually center a number input's value — the
+   native up/down spinner arrows occupy one side of the box, throwing the text off
+   center even though it's centered within the (smaller) remaining content area.
+   Hidden here since typing a value directly is the normal way to edit these anyway. */
+.inline-edit-table input[type="number"]{-moz-appearance:textfield;}
+.inline-edit-table input[type="number"]::-webkit-outer-spin-button,
+.inline-edit-table input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 /* Each row's own background (a soft tint per unique name — see colorForName in
    inline-edit-table.js) needs to stay visible on hover, so the hover rule is
    overridden here to let it show through instead of the generic gray highlight. */

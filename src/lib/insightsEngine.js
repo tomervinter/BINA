@@ -640,7 +640,7 @@ async function computeInsights(organizationId) {
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `ב${monthKeysLabel(curMonthKeys)} הכמות שהלקוח קונה מ${label} ירדה ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${winMonths} החודשים שקדמו.` + (seasonalityExplained ? SEASONALITY_CAVEAT : ''),
+        message: `בממוצע ב-${winMonths} החודשים האחרונים (${monthKeysLabel(curMonthKeys)}) הכמות שהלקוח קונה מ${label} ירדה ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${winMonths} החודשים שקדמו (${monthKeysLabel(prevMonthKeys)}).` + (seasonalityExplained ? SEASONALITY_CAVEAT : ''),
         metric: Math.round(delta * 100),
         breakdown: {
           rows: [{ label: 'כמות אחרונה', value: Math.round(curQty) }, { label: 'כמות קודמת', value: Math.round(prevQty) }],
