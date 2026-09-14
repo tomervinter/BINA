@@ -98,6 +98,7 @@ const DEFAULT_PARAMS = {
   monthly_pctThreshold: 30, monthly_highPct: 50, monthly_minBaseRevenue: 100,
   trend_windowMonths: 4, trend_pctThreshold: 15, trend_highPct: 30, trend_minBaseRevenue: 200, trend_recoveryTolerancePct: 15,
   trend_slowWindowMonths: 7, trend_slowMaxUpSteps: 1,
+  peakDrop_windowMonths: 6, peakDrop_pctThreshold: 10, peakDrop_highPct: 25, peakDrop_minBaseRevenue: 200,
   cumulativeYoy_pctThreshold: 5, cumulativeYoy_highPct: 15, cumulativeYoy_minBaseRevenue: 100,
   quarterlyDecline_pctThreshold: 20, quarterlyDecline_highPct: 35, quarterlyDecline_minBaseRevenue: 100,
   productQty_windowMonths: 3, productQty_pctThreshold: 40, productQty_highPct: 60, productQty_minPriorQty: 5,
@@ -283,8 +284,10 @@ async function computeInsights(organizationId) {
 
   // Rule 1d — consistent month-over-month decline trend: revenue trending down and
   // STAYING down, not just one bad month with otherwise stable neighbors (rule 1a)
-  // or one bad quarter (rule 1b). Two independent ways to qualify, since a decline
-  // can look very different depending on how it unfolds:
+  // or one bad quarter (rule 1b). Three independent ways to qualify, since a decline
+  // can look very different depending on how it unfolds — checked in this order,
+  // each only evaluated if an earlier one didn't already qualify the customer, since
+  // (a) is the most urgent/specific signal and (c)/(b) are progressively broader:
   //  (a) a SHARP recent shift — the last trend_windowMonths months (split into an
   //      earlier half and a later half) with the later half's average down
   //      trend_pctThreshold%+ vs the earlier half's, allowing at most one
@@ -296,8 +299,18 @@ async function computeInsights(organizationId) {
   //      threshold within a short window. Qualifies when at most
   //      trend_slowMaxUpSteps of the window's month-over-month steps are net
   //      increases, AND the window's last month is still below its first (a real net
-  //      decline, not a wash) — (a) is checked first and takes priority when both
-  //      would independently qualify, since it's the more urgent/specific signal.
+  //      decline, not a wash).
+  //  (c) a sharp DROP FROM A RECENT PEAK that never recovered — different in
+  //      character from (a)/(b), which both compare consecutive windows/steps to
+  //      each other and so miss this once the drop itself is further back than
+  //      trend_windowMonths/trend_slowWindowMonths: by then the post-drop months
+  //      look flat/stable relative to EACH OTHER, even though they're still well
+  //      below what the customer was doing right before the drop. Finds the highest
+  //      single month within the earlier half of a peakDrop_windowMonths window and
+  //      compares it to the later half's average; qualifies when that average is
+  //      down peakDrop_pctThreshold%+ from the peak. Checked between (a) and (b)
+  //      since a real peak-and-drop is a more specific, notable story than generic
+  //      erosion but less urgent than an ongoing sharp slide.
   // Computed into a map keyed by customer, NOT pushed directly — rule 1c below folds
   // a customer's trend result into ONE combined insight when that customer also has
   // a cumulative-YoY decline, and pushes any leftover trend-only customers itself
@@ -348,7 +361,39 @@ async function computeInsights(organizationId) {
           }
         };
       }
-      if (trendByCustomer[cid]) return; // (a) already found something for this customer — it takes priority over (b)
+      if (trendByCustomer[cid]) return; // (a) already found something for this customer — it takes priority over (b)/(c)
+
+      // (c) sharp drop from a recent peak, without recovery. No seasonality note —
+      // the window is wide enough (peakDrop_windowMonths, default 6) that it's
+      // always above SEASONALITY_NOTE_MAX_MONTHS in practice, so the check would
+      // short-circuit to false anyway; left out explicitly rather than computed and
+      // discarded.
+      peakDrop: {
+        const winM = params.peakDrop_windowMonths;
+        const half2 = Math.floor(winM / 2);
+        const { monthKeys, byMonth } = monthlyRevSeries(events, winM);
+        const firstHalfKeys = monthKeys.slice(0, half2);
+        const secondHalfKeys = monthKeys.slice(winM - half2);
+        const firstHalfVals = byMonth.slice(0, half2);
+        const secondHalfVals = byMonth.slice(winM - half2);
+        const peakValue = Math.max.apply(null, firstHalfVals);
+        if (peakValue < params.peakDrop_minBaseRevenue) break peakDrop;
+        const peakMonthKey = firstHalfKeys[firstHalfVals.indexOf(peakValue)];
+        const recentAvg = secondHalfVals.reduce((a, v) => a + v, 0) / secondHalfVals.length;
+        const delta = (recentAvg - peakValue) / peakValue;
+        if (delta > -params.peakDrop_pctThreshold / 100) break peakDrop; // only a decline counts — see general policy 7
+        const isHighSeverity = Math.abs(delta) >= params.peakDrop_highPct / 100;
+        trendByCustomer[cid] = {
+          delta, isHighSeverity, seasonalityExplained: false,
+          message: `מחזור הלקוח הגיע לשיא ב${fmtMonthYearKey(peakMonthKey)} (${fmtMoneyHe(peakValue)}), ומאז — ${monthKeysLabel(secondHalfKeys)} — עומד בממוצע על ${fmtMoneyHe(recentAvg)}: ירידה של ${Math.round(Math.abs(delta) * 100)}% מהשיא, ללא חזרה לרמה ההיא.`,
+          breakdown: {
+            rows: monthKeys.map((mk, i) => ({ label: fmtMonthYearKey(mk), value: Math.round(byMonth[i]) })),
+            dashFilter: { periodMonths: secondHalfKeys, compareMonths: [peakMonthKey] },
+            needsReview: false
+          }
+        };
+      }
+      if (trendByCustomer[cid]) return; // (c) took it — skip (b)
 
       // (b) slow, steady erosion. No seasonality suppression here unlike (a) — that
       // check asks whether the whole window overlaps a holiday/season, which is a
