@@ -150,17 +150,22 @@ async function computeInsights(organizationId) {
 
   // Some source ERPs export a full customer×product×month grid rather than a sparse
   // transaction log — meaning a month with no actual purchase can still show up as a
-  // real Sale row with revenue=0 and quantity=0, not as an absent row. Every SUM-based
-  // rule (revenue/quantity totals) is naturally immune to these — a zero contributes
+  // real Sale row, not as an absent one, with a "zero" quantity/revenue represented
+  // several different ways: a literal 0, a blank cell (null/undefined/empty string),
+  // or a negative number (e.g. a return/correction row) — all three are normalized to
+  // 0 here, uniformly, before anything downstream ever sees them. Every SUM-based rule
+  // (revenue/quantity totals) is naturally immune to a true 0 — it contributes
   // nothing — but any rule that asks "did an event happen in month X" or "does the
   // customer have this product at all" (distinct-month counting, family-presence sets)
   // would wrongly treat a zero-value placeholder as a real purchase, masking exactly
-  // the kind of drop-off/stoppage these rules exist to catch. Dropped here, once, so
-  // every rule downstream sees only real purchase activity — kept to qty!==0 OR
-  // rev!==0 (not qty>0 AND rev>0) so a legitimate edge case with a value in only one
-  // field (e.g. a free sample: qty>0, rev=0) still counts as a real event.
+  // the kind of drop-off/stoppage these rules exist to catch — so rows left at 0 in
+  // both fields after normalization are dropped here, once, so every rule downstream
+  // sees only real purchase activity. Kept to qty!==0 OR rev!==0 (not AND) so a
+  // legitimate edge case with a value in only one field (e.g. a free sample: qty>0,
+  // rev=0) still counts as a real event.
+  const zeroSafe = (v) => Math.max(0, Number(v) || 0);
   const s = sales
-    .map((r) => ({ cid: r.customerNumber, pid: r.productCode, t: new Date(r.date).getTime(), qty: r.quantity, rev: r.revenue }))
+    .map((r) => ({ cid: r.customerNumber, pid: r.productCode, t: new Date(r.date).getTime(), qty: zeroSafe(r.quantity), rev: zeroSafe(r.revenue) }))
     .filter((e) => e.qty !== 0 || e.rev !== 0);
   const byCustomer = groupBy(s, (x) => x.cid);
 
