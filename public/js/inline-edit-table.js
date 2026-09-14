@@ -27,12 +27,12 @@ async function initInlineEditTable(config) {
   ];
   const nameColors = {};
   function colorForName(name) {
-    const key = name || '';
-    if (!(key in nameColors)) {
+    if (!name) return null; // no name yet (e.g. a just-added row) — no color to assign
+    if (!(name in nameColors)) {
       const order = Object.keys(nameColors).length;
-      nameColors[key] = PALETTE[order % PALETTE.length];
+      nameColors[name] = PALETTE[order % PALETTE.length];
     }
-    return nameColors[key];
+    return nameColors[name];
   }
 
   async function load() {
@@ -121,7 +121,7 @@ async function initInlineEditTable(config) {
     });
     html += '<td></td></tr></thead><tbody>';
     rows.forEach((row) => {
-      html += '<tr data-id="' + row.id + '" style="background:' + colorForName(row[nameField]) + ';">';
+      html += '<tr data-id="' + row.id + '" style="background:' + (colorForName(row[nameField]) || 'transparent') + ';">';
       columns.forEach((f) => { html += '<td>' + inputHtml(f, row[f.key]) + '</td>'; });
       html += '<td><button class="icon-btn js-deleteRow" type="button" title="מחיקה">✕</button></td></tr>';
     });
@@ -135,6 +135,18 @@ async function initInlineEditTable(config) {
         const id = tr.getAttribute('data-id');
         const payload = {};
         tr.querySelectorAll('input[data-field]').forEach((inp) => { payload[inp.getAttribute('data-field')] = inp.value; });
+        // Keep the in-memory row in sync with what was just typed. Without this, state.rows
+        // still held the pre-edit values, so the next render() — triggered by sorting,
+        // filtering, reordering columns, or adding another row — rebuilt the table from
+        // stale data and made the just-typed value appear lost, even though the PUT below
+        // had already saved it server-side.
+        const row = state.rows.find((r) => String(r.id) === id);
+        if (row) {
+          Object.assign(row, payload);
+          if (input.getAttribute('data-field') === nameField) {
+            tr.style.background = colorForName(row[nameField]) || 'transparent';
+          }
+        }
         await fetch(config.apiBase + '/' + id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
       });
     });
