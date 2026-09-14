@@ -318,7 +318,12 @@ async function computeInsights(organizationId) {
   //      compares it to the later half's average; qualifies when that average is
   //      down peakDrop_pctThreshold%+ from the peak. Checked between (a) and (b)
   //      since a real peak-and-drop is a more specific, notable story than generic
-  //      erosion but less urgent than an ongoing sharp slide.
+  //      erosion but less urgent than an ongoing sharp slide. Unlike (a)/(b), this
+  //      DOES get a seasonality check — narrowly, against just the single peak
+  //      month (well within SEASONALITY_NOTE_MAX_MONTHS), not the whole wide
+  //      window: a peak driven by a holiday/season rush (a pre-Passover stocking
+  //      surge, say) makes "decline from peak" structurally misleading, since the
+  //      peak itself was never a sustainable baseline to begin with.
   // Computed into a map keyed by customer, NOT pushed directly — rule 1c below folds
   // a customer's trend result into ONE combined insight when that customer also has
   // a cumulative-YoY decline, and pushes any leftover trend-only customers itself
@@ -371,11 +376,13 @@ async function computeInsights(organizationId) {
       }
       if (trendByCustomer[cid]) return; // (a) already found something for this customer — it takes priority over (b)/(c)
 
-      // (c) sharp drop from a recent peak, without recovery. No seasonality note —
-      // the window is wide enough (peakDrop_windowMonths, default 6) that it's
-      // always above SEASONALITY_NOTE_MAX_MONTHS in practice, so the check would
-      // short-circuit to false anyway; left out explicitly rather than computed and
-      // discarded.
+      // (c) sharp drop from a recent peak, without recovery. Seasonality IS checked
+      // here — unlike (a)/(b) — but only against the single peak month itself
+      // (well within SEASONALITY_NOTE_MAX_MONTHS), not the whole peakDrop_windowMonths
+      // window, which would be wide enough to almost always overlap SOME holiday
+      // and make the check meaningless. A peak that coincides with a holiday/season
+      // rush (e.g. pre-Passover stocking) isn't a real sustainable baseline, so
+      // measuring "decline from peak" against it would otherwise be misleading.
       peakDrop: {
         const winM = params.peakDrop_windowMonths;
         const half2 = Math.floor(winM / 2);
@@ -391,13 +398,15 @@ async function computeInsights(organizationId) {
         const delta = (recentAvg - peakValue) / peakValue;
         if (delta > -params.peakDrop_pctThreshold / 100) break peakDrop; // only a decline counts — see general policy 7
         const isHighSeverity = Math.abs(delta) >= params.peakDrop_highPct / 100;
+        const [peakMStart, peakMEnd] = monthRangeMs(peakMonthKey);
+        const seasonalityExplained = isExplainedBySeasonality(peakMStart, peakMEnd, pids);
         trendByCustomer[cid] = {
-          delta, isHighSeverity, seasonalityExplained: false,
+          delta, isHighSeverity, seasonalityExplained,
           message: `מחזור הלקוח הגיע לשיא ב${fmtMonthYearKey(peakMonthKey)} (${fmtMoneyHe(peakValue)}), ומאז — ${monthKeysLabel(secondHalfKeys)} — עומד בממוצע על ${fmtMoneyHe(recentAvg)}: ירידה של ${Math.round(Math.abs(delta) * 100)}% מהשיא, ללא חזרה לרמה ההיא.`,
           breakdown: {
             rows: monthKeys.map((mk, i) => ({ label: fmtMonthYearKey(mk), value: Math.round(byMonth[i]) })),
             dashFilter: { periodMonths: secondHalfKeys, compareMonths: [peakMonthKey] },
-            needsReview: false
+            needsReview: seasonalityExplained
           }
         };
       }
