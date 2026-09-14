@@ -24,6 +24,20 @@ function upsertChart(canvasId, config) {
   dashCharts[canvasId] = new Chart(document.getElementById(canvasId), config);
 }
 
+// A bar chart of revenue across similar months often has every bar within a narrow
+// band near the top of a 0-based axis, making real month-to-month variation hard to
+// see. Starting the axis just below the data's own minimum (not at 0) trades away
+// the "how big is this vs. nothing" framing — not needed here, since each bar's own
+// value is already printed on/above it — for "how did this month compare to the
+// others", which is what these monthly trend charts exist to show.
+function dashYAxisMin(values) {
+  const nums = (values || []).filter((v) => typeof v === 'number' && isFinite(v));
+  if (!nums.length) return undefined;
+  const min = Math.min.apply(null, nums);
+  if (min <= 0) return 0;
+  return Math.floor(min * 0.9);
+}
+
 function fmtMoneyShort(n) { return Math.round(n || 0).toLocaleString('he-IL') + ' ₪'; }
 
 function reportUrl(params) {
@@ -430,7 +444,7 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(ptYoyEntries, 0) } }
         },
-        scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+        scales: { y: { min: dashYAxisMin(pt.periodData), ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
           const m = pt.periodMonths[elements[0].index];
@@ -450,7 +464,7 @@ async function loadDashboardSalesSummary(filters) {
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+          scales: { y: { min: dashYAxisMin(pt.compareData), ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
           onClick: function (evt, elements) {
             if (!elements.length) return;
             const m = pt.compareMonths[elements[0].index];
@@ -505,7 +519,7 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(activeYoyEntries, 0) } }
         },
-        scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+        scales: { y: { min: dashYAxisMin(mt.data), ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
         onClick: function (evt, elements) {
           if (!elements.length || !window.applyDashboardPeriodFilter) return;
           const m = monthMeta[elements[0].index];
@@ -523,7 +537,7 @@ async function loadDashboardSalesSummary(filters) {
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+          scales: { y: { min: dashYAxisMin(mt.compareData), ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
           onClick: function (evt, elements) {
             if (!elements.length || !window.applyDashboardPeriodFilter) return;
             const m = monthMeta[elements[0].index];
