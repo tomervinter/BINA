@@ -8,12 +8,22 @@ const router = express.Router();
 router.use(requireAuth);
 
 const sevRank = { high: 0, medium: 1, low: 2 };
+// A needsReview insight (its decline overlaps a holiday/season — see general policy
+// 8 in insightsEngine.js) always sorts after every non-flagged insight of the same
+// type, regardless of severity, so it only fills a dashboard's limited top-N slots
+// when there's genuinely nothing else to show — it's still real information, just
+// lower-confidence, not something that should crowd out a clean signal.
 function sortInsights(rows) {
-  return rows.slice().sort((a, b) => sevRank[a.severity] - sevRank[b.severity] || Math.abs(b.metric) - Math.abs(a.metric));
+  return rows.slice().sort((a, b) => {
+    const aReview = (a.breakdown && a.breakdown.needsReview) ? 1 : 0;
+    const bReview = (b.breakdown && b.breakdown.needsReview) ? 1 : 0;
+    return aReview - bReview || sevRank[a.severity] - sevRank[b.severity] || Math.abs(b.metric) - Math.abs(a.metric);
+  });
 }
 
 // Insights are a generated snapshot, not a live computation — see the Insight model's
-// comment. GET just reads whatever the last "יצירת תובנות" run produced.
+// comment. GET just reads whatever the last "יצירת תובנות" run produced. Breakdown is
+// parsed BEFORE sorting since sortInsights needs to read needsReview out of it.
 function parseBreakdown(row) {
   if (!row.breakdown) return { ...row, breakdown: null };
   try { return { ...row, breakdown: JSON.parse(row.breakdown) }; } catch (err) { return { ...row, breakdown: null }; }
@@ -21,7 +31,7 @@ function parseBreakdown(row) {
 
 router.get('/', async (req, res) => {
   const rows = await prisma.insight.findMany({ where: { organizationId: req.user.organizationId } });
-  res.json(sortInsights(rows).map(parseBreakdown));
+  res.json(sortInsights(rows.map(parseBreakdown)));
 });
 
 router.post('/generate', async (req, res) => {
@@ -58,12 +68,13 @@ const EXPORT_COLUMNS = [
   { key: 'productCode', label: 'קוד פריט' },
   { key: 'message', label: 'תיאור התובנה' },
   { key: 'severity', label: 'חומרה' },
-  { key: 'metric', label: 'מדד' }
+  { key: 'metric', label: 'מדד' },
+  { key: 'needsReview', label: 'לבדיקה נוספת', value: (r) => (r.breakdown && r.breakdown.needsReview) ? 'כן' : '' }
 ];
 
 router.get('/export', async (req, res) => {
   const rows = await prisma.insight.findMany({ where: { organizationId: req.user.organizationId } });
-  const buffer = rowsToXlsxBuffer(EXPORT_COLUMNS, sortInsights(rows));
+  const buffer = rowsToXlsxBuffer(EXPORT_COLUMNS, sortInsights(rows.map(parseBreakdown)));
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="insights.xlsx"');
   res.send(buffer);

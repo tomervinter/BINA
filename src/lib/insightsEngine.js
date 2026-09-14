@@ -211,10 +211,13 @@ async function computeInsights(organizationId) {
     }
     return overlaps(relCtx.holidays, 'holiday') || overlaps(relCtx.seasons, 'season');
   }
-  // A decline explained by seasonality is fully suppressed UNLESS it's severe enough
-  // to be flagged 'high' on its own terms — a high-severity decline is worth a
-  // human's attention even when a holiday/season could account for part of it, so
-  // it's shown with a caveat instead of hidden outright (general policy 8).
+  // A decline explained by seasonality is never suppressed — it's shown with a
+  // caveat and flagged breakdown.needsReview:true regardless of severity, purely as
+  // informational context for the user to judge for themselves, rather than the
+  // engine silently deciding a medium-severity decline isn't worth seeing at all
+  // (general policy 8). needsReview insights still sort after non-flagged ones of
+  // the same type (see sortInsights in src/routes/insights.js), so they only occupy
+  // a dashboard's limited top-5 slots when there's nothing else to show.
   const SEASONALITY_CAVEAT = ' שימו לב: התקופה חופפת לחג/עונה המשויכים למוצר — ייתכן שהשינוי מוסבר בכך, ומומלץ לוודא את הנתון בפועל.';
 
   // Rule 1a — monthly revenue shift (bidirectional: flags a meaningful jump in
@@ -241,7 +244,6 @@ async function computeInsights(organizationId) {
     const [curMStart, curMEnd] = monthRangeMs(curMK);
     const isHighSeverity = Math.abs(delta) >= monthlyHighPct;
     const seasonalityExplained = isExplainedBySeasonality(curMStart, curMEnd, Array.from(new Set(events.map((e) => e.pid))));
-    if (seasonalityExplained && !isHighSeverity) return;
 
     const curByPid = {}, prevByPid = {};
     curEvents.forEach((e) => { curByPid[e.pid] = (curByPid[e.pid] || 0) + e.rev; });
@@ -263,7 +265,8 @@ async function computeInsights(organizationId) {
       metric: Math.round(delta * 100),
       breakdown: {
         rows: [{ label: fmtMonthYearKey(curMK), value: Math.round(curRev) }, { label: fmtMonthYearKey(prevMK), value: Math.round(prevRev) }],
-        dashFilter: { periodMonths: [curMK], compareMonths: [prevMK] }
+        dashFilter: { periodMonths: [curMK], compareMonths: [prevMK] },
+        needsReview: seasonalityExplained
       }
     });
   });
@@ -325,13 +328,13 @@ async function computeInsights(organizationId) {
         const trendWindowStart = monthRangeMs(monthKeys[0])[0];
         const trendWindowEnd = monthRangeMs(monthKeys[monthKeys.length - 1])[1];
         const seasonalityExplained = isExplainedBySeasonality(trendWindowStart, trendWindowEnd, pids);
-        if (seasonalityExplained && !isHighSeverity) break sharp;
         trendByCustomer[cid] = {
           delta, isHighSeverity, seasonalityExplained,
           message: `מחזור הלקוח במגמת ירידה עקבית: ${monthKeysLabel(secondHalfKeys)} נמוכים ב-${Math.round(Math.abs(delta) * 100)}% בממוצע לעומת ${monthKeysLabel(firstHalfKeys)}, ללא סימני התאוששות.`,
           breakdown: {
             rows: monthKeys.map((mk, i) => ({ label: fmtMonthYearKey(mk), value: Math.round(byMonth[i]) })),
-            dashFilter: { periodMonths: secondHalfKeys, compareMonths: firstHalfKeys }
+            dashFilter: { periodMonths: secondHalfKeys, compareMonths: firstHalfKeys },
+            needsReview: seasonalityExplained
           }
         };
       }
@@ -359,7 +362,8 @@ async function computeInsights(organizationId) {
           message: `מחזור הלקוח נשחק בהדרגה — ${monthKeysLabel([monthKeys[monthKeys.length - 1]])} נמוך ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${monthKeysLabel([monthKeys[0]])}, ברוב חודשי התקופה ירידה מול החודש הקודם.`,
           breakdown: {
             rows: monthKeys.map((mk, i) => ({ label: fmtMonthYearKey(mk), value: Math.round(byMonth[i]) })),
-            dashFilter: { periodMonths: [monthKeys[monthKeys.length - 1]], compareMonths: [monthKeys[0]] }
+            dashFilter: { periodMonths: [monthKeys[monthKeys.length - 1]], compareMonths: [monthKeys[0]] },
+            needsReview: false
           }
         };
       }
@@ -411,7 +415,10 @@ async function computeInsights(organizationId) {
 
       let message = `מחזור הלקוח ב${rangeLabel} ${year} ירד ב-${Math.round(Math.abs(delta) * 100)}% לעומת אותה תקופה אשתקד` +
         (driverLabel ? `, בעיקר עקב הירידה ב${driverLabel}` : '') + '.';
-      if (trend) message += ' ' + trend.message;
+      if (trend) {
+        message += ' ' + trend.message;
+        if (trend.seasonalityExplained) message += SEASONALITY_CAVEAT;
+      }
 
       insights.push({
         type: 'salesPattern',
@@ -422,7 +429,8 @@ async function computeInsights(organizationId) {
         metric: Math.round(delta * 100),
         breakdown: {
           rows: [{ label: rangeLabel + ' ' + year, value: Math.round(thisRev) }, { label: rangeLabel + ' ' + (year - 1), value: Math.round(lastRev) }],
-          dashFilter: { periodMonths: yearMonthRange(year, 1, lastCompletedMonth), compareMonths: yearMonthRange(year - 1, 1, lastCompletedMonth) }
+          dashFilter: { periodMonths: yearMonthRange(year, 1, lastCompletedMonth), compareMonths: yearMonthRange(year - 1, 1, lastCompletedMonth) },
+          needsReview: !!(trend && trend.seasonalityExplained)
         }
       });
     });
@@ -522,7 +530,6 @@ async function computeInsights(organizationId) {
       if (delta > -params.productQty_pctThreshold / 100) return; // only a decline counts — see general policy 7
       const isHighSeverity = Math.abs(delta) >= params.productQty_highPct / 100;
       const seasonalityExplained = isExplainedBySeasonality(curWindowStart, curWindowEnd, Array.from(familyMembers[famKey(pid)] || [pid]));
-      if (seasonalityExplained && !isHighSeverity) return;
       const label = familyLabel(pid);
       insights.push({
         type: 'purchasePattern',
@@ -534,7 +541,8 @@ async function computeInsights(organizationId) {
         metric: Math.round(delta * 100),
         breakdown: {
           rows: [{ label: 'כמות אחרונה', value: Math.round(curQty) }, { label: 'כמות קודמת', value: Math.round(prevQty) }],
-          dashFilter: { periodMonths: curMonthKeys, compareMonths: prevMonthKeys }
+          dashFilter: { periodMonths: curMonthKeys, compareMonths: prevMonthKeys },
+          needsReview: seasonalityExplained
         }
       });
     });

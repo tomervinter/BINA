@@ -191,6 +191,11 @@ tr.row-clickable:hover td{background:var(--accent-soft);}
 .pill-red{background:var(--red-soft);color:var(--red);}
 .pill-gray{background:var(--gray-soft);color:var(--text-muted);}
 .pill-orange{background:rgba(224,138,60,.16);color:#B96A1E;}
+/* Soft, dashed-border pill for "needsReview" insights (general policy 8) — a decline
+   that overlaps a holiday/season, shown for the user's own judgment rather than
+   suppressed. Deliberately calmer than the severity pills (no solid fill) since it's
+   informational, not a severity level. */
+.pill-review{background:transparent;border:1px dashed var(--border);color:var(--text-muted);}
 
 footer{margin-top:30px;padding-top:14px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;}
 

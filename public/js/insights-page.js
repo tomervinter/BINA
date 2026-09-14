@@ -20,7 +20,13 @@ async function initInsightsPage() {
     { key: 'message', label: 'פירוט', width: '24%', wrap: true },
     { key: 'breakdown', label: 'הנתונים מאחורי התובנה', width: '15%', html: true, wrap: true, sortable: false, filterable: false, render: (r) => renderInsightBreakdown(r.breakdown) },
     { key: 'severity', label: 'חומרה', width: '9%', html: true, render: (r) => '<span class="pill ' + (SEV_CLASS[r.severity] || 'pill-gray') + '">' + (SEV_LABEL[r.severity] || r.severity) + '</span>', filterValue: (r) => SEV_LABEL[r.severity] || r.severity, sortValue: (r) => ({ high: 0, medium: 1, low: 2 }[r.severity] ?? 3) },
-    { key: 'metric', label: 'מדד', width: '7%' }
+    { key: 'metric', label: 'מדד', width: '7%' },
+    // General policy 8: a decline that overlaps a holiday/season is never hidden —
+    // it's shown normally (with a caveat in the message itself) and just flagged here
+    // for the user's own judgment, purely informational, not a severity level.
+    { key: 'needsReview', label: 'לבדיקה נוספת', width: '8%', html: true, sortable: false,
+      render: (r) => (r.breakdown && r.breakdown.needsReview) ? '<span class="pill pill-review">חג/עונה — לבדיקה</span>' : '',
+      filterValue: (r) => (r.breakdown && r.breakdown.needsReview) ? 'כן' : '' }
   ];
 
   // Dashboard charts deep-link here as insights.html?type=<label> so a click lands

@@ -62,8 +62,10 @@ function renderDashboardTopInsights(filters) {
     const rowsHtml = top.length ? top.map((i) => {
       const idx = shown.length;
       shown.push(i);
+      const needsReview = i.breakdown && i.breakdown.needsReview;
       return '<div class="dash-insight-row' + (i.customerId ? ' row-clickable' : '') + '" data-idx="' + idx + '">' +
         '<span class="pill ' + (SEV_CLASS[i.severity] || 'pill-gray') + '">' + (SEV_LABEL[i.severity] || i.severity) + '</span>' +
+        (needsReview ? '<span class="pill pill-review">חג/עונה</span>' : '') +
         '<div class="dash-insight-body">' + (i.customerName ? '<div class="dash-insight-entity">' + Layout.escapeHtml(i.customerName) + '</div>' : '') +
         '<div class="dash-insight-msg">' + Layout.escapeHtml(i.message) + '</div></div>' +
         '</div>';
