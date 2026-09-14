@@ -238,6 +238,13 @@ async function computeInsights(organizationId) {
   // returning an almost-always-true result.
   const SEASONALITY_NOTE_MAX_MONTHS = 2;
   const SEASONALITY_CAVEAT = ' שימו לב: התקופה חופפת לחג/עונה המשויכים למוצר — ייתכן שהשינוי מוסבר בכך, ומומלץ לוודא את הנתון בפועל.';
+  // For the couple of rules whose window is wide enough (7-8 months) that an actual
+  // overlap check would be almost meaningless — over that many months, some holiday
+  // or other overlaps almost by certainty regardless of whether it has anything to
+  // do with the pattern — a real per-month check is skipped (as documented at each
+  // site), but the user still isn't left with no signal at all: this lighter,
+  // generic note says the window wasn't checked and points at where to check by hand.
+  const WIDE_WINDOW_NOTE = ' התקופה הנבדקת רחבה מכדי שהמערכת תבדוק אוטומטית חפיפה לחג/עונה — אם רלוונטי, מומלץ לבדוק ידנית בטבלאות ניהול החגים / ניהול עונתיות ובמסך שיוך חג ועונה למוצר.';
 
   // Rule 1a — monthly revenue shift (bidirectional: flags a meaningful jump in
   // either direction, not just a decline), with the specific products driving it.
@@ -412,12 +419,14 @@ async function computeInsights(organizationId) {
       }
       if (trendByCustomer[cid]) return; // (c) took it — skip (b)
 
-      // (b) slow, steady erosion. No seasonality suppression here unlike (a) — that
-      // check asks whether the whole window overlaps a holiday/season, which is a
-      // reasonable "maybe this explains it" question over a short 4-month span, but
-      // over a 7-month span it's nearly guaranteed to overlap SOME holiday somewhere
-      // in Israeli retail regardless of whether that holiday has anything to do with
-      // a genuine sustained erosion — applying it here silently killed real cases.
+      // (b) slow, steady erosion. No real seasonality CHECK here unlike (a) — asking
+      // whether the whole window overlaps a holiday/season is a reasonable "maybe
+      // this explains it" question over a short 4-month span, but over a 7-month
+      // span it's nearly guaranteed to overlap SOME holiday somewhere in Israeli
+      // retail regardless of whether that holiday has anything to do with a genuine
+      // sustained erosion — a real check would just always fire and say nothing.
+      // The lighter WIDE_WINDOW_NOTE below still tells the user this wasn't checked,
+      // rather than silently implying it was.
       {
         const { monthKeys, byMonth } = monthlyRevSeries(events, slowWinMonths);
         if (byMonth[0] < params.trend_minBaseRevenue) return;
@@ -431,7 +440,7 @@ async function computeInsights(organizationId) {
         const isHighSeverity = Math.abs(delta) >= params.trend_highPct / 100;
         trendByCustomer[cid] = {
           delta, isHighSeverity, seasonalityExplained: false,
-          message: `מחזור הלקוח נשחק בהדרגה — ${monthKeysLabel([monthKeys[monthKeys.length - 1]])} נמוך ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${monthKeysLabel([monthKeys[0]])}, ברוב חודשי התקופה ירידה מול החודש הקודם.`,
+          message: `מחזור הלקוח נשחק בהדרגה — ${monthKeysLabel([monthKeys[monthKeys.length - 1]])} נמוך ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${monthKeysLabel([monthKeys[0]])}, ברוב חודשי התקופה ירידה מול החודש הקודם.` + WIDE_WINDOW_NOTE,
           breakdown: {
             rows: monthKeys.map((mk, i) => ({ label: fmtMonthYearKey(mk), value: Math.round(byMonth[i]) })),
             dashFilter: { periodMonths: [monthKeys[monthKeys.length - 1]], compareMonths: [monthKeys[0]] },
@@ -481,16 +490,26 @@ async function computeInsights(organizationId) {
           ? [decliningMonths[0], decliningMonths[1]] : [decliningMonths[0]])
         : [];
       const driverLabel = driverMonths.map((d) => MONTH_NAMES_HE[d.m - 1] + ' ' + year).join(' ו');
+      // Seasonality is checked narrowly against just the driver month(s) that
+      // actually caused the decline — not the whole up-to-8-month YTD window,
+      // which would almost always overlap SOME holiday regardless of relevance
+      // (same reasoning as the peak-drop rule above). Driver months can be
+      // non-contiguous (e.g. a bad February AND a bad July), so each is checked
+      // as its own single-month range and combined with OR, not one wide span.
+      const pids = Array.from(new Set(events.map((e) => e.pid)));
+      const cumulativeSeasonalityExplained = driverMonths.some((d) => {
+        const [mStart, mEnd] = monthRangeMs(monthKey(new Date(year, d.m - 1, 1).getTime()));
+        return isExplainedBySeasonality(mStart, mEnd, pids);
+      });
 
       const trend = trendByCustomer[cid];
       delete trendByCustomer[cid]; // consumed — folded into this combined insight below
 
       let message = `מחזור הלקוח ב${rangeLabel} ${year} ירד ב-${Math.round(Math.abs(delta) * 100)}% לעומת אותה תקופה אשתקד` +
         (driverLabel ? `, בעיקר עקב הירידה ב${driverLabel}` : '') + '.';
-      if (trend) {
-        message += ' ' + trend.message;
-        if (trend.seasonalityExplained) message += SEASONALITY_CAVEAT;
-      }
+      if (trend) message += ' ' + trend.message;
+      const seasonalityExplained = cumulativeSeasonalityExplained || !!(trend && trend.seasonalityExplained);
+      if (seasonalityExplained) message += SEASONALITY_CAVEAT;
 
       insights.push({
         type: 'salesPattern',
@@ -502,7 +521,7 @@ async function computeInsights(organizationId) {
         breakdown: {
           rows: [{ label: rangeLabel + ' ' + year, value: Math.round(thisRev) }, { label: rangeLabel + ' ' + (year - 1), value: Math.round(lastRev) }],
           dashFilter: { periodMonths: yearMonthRange(year, 1, lastCompletedMonth), compareMonths: yearMonthRange(year - 1, 1, lastCompletedMonth) },
-          needsReview: !!(trend && trend.seasonalityExplained)
+          needsReview: seasonalityExplained
         }
       });
     });
@@ -549,19 +568,31 @@ async function computeInsights(organizationId) {
       else return;
       const delta = (curQ - baseRev) / baseRev;
       if (delta <= -params.quarterlyDecline_pctThreshold / 100) { // only a decline counts — see general policy 7
+        // The quarter as a whole (3 months) is wider than SEASONALITY_NOTE_MAX_MONTHS,
+        // but each of its 3 months is checked individually and narrowly (same pattern
+        // as the cumulative-YoY rule's driver months above) — a real holiday/season
+        // window is typically days to ~1 week, so a month-by-month OR check stays
+        // precise even though the quarter it's built from is wider.
+        const curQMonths = quarterMonthKeys(lastCompletedQStart);
+        const pids = Array.from(new Set(events.map((e) => e.pid)));
+        const seasonalityExplained = curQMonths.some((mk) => {
+          const [mStart, mEnd] = monthRangeMs(mk);
+          return isExplainedBySeasonality(mStart, mEnd, pids);
+        });
         insights.push({
           type: 'salesPattern',
           severity: Math.abs(delta) >= params.quarterlyDecline_highPct / 100 ? 'high' : 'medium',
           customerId: cid,
           customerName: custLabel(cid),
-          message: `מחזור הלקוח ב${quarterLabel(lastCompletedQStart)} ירד ב-${Math.round(Math.abs(delta) * 100)}% ${basis}.`,
+          message: `מחזור הלקוח ב${quarterLabel(lastCompletedQStart)} ירד ב-${Math.round(Math.abs(delta) * 100)}% ${basis}.` + (seasonalityExplained ? SEASONALITY_CAVEAT : ''),
           metric: Math.round(delta * 100),
           breakdown: {
             rows: [{ label: quarterLabel(lastCompletedQStart), value: Math.round(curQ) }, { label: baseLabel, value: Math.round(baseRev) }],
             dashFilter: {
               periodMonths: quarterMonthKeys(lastCompletedQStart),
               compareMonths: quarterMonthKeys(basis === 'לרבעון המקביל אשתקד' ? yoyQStart : priorQStart)
-            }
+            },
+            needsReview: seasonalityExplained
           }
         });
       }
@@ -649,16 +680,28 @@ async function computeInsights(organizationId) {
       const dropped = Array.from(prevFamilies).filter((f) => !curFamilies.has(f));
       if (!dropped.length) return; // shrank in count but the actual set didn't narrow (e.g. swapped one family for another) — not the pattern this rule targets
       const droppedLabel = dropped.map(famLabelByKey).join(', ');
+      // Checked against the DROPPED products specifically (not the customer's whole
+      // catalog) — a customer who stops buying a holiday-only item right after that
+      // holiday ends isn't really "narrowing," they just don't need it again yet.
+      // Each current-window month is checked individually and narrowly, same pattern
+      // as the other rules above.
+      const droppedMembers = new Set();
+      dropped.forEach((f) => { (familyMembers[f] || new Set([f])).forEach((m) => droppedMembers.add(m)); });
+      const seasonalityExplained = curMonthKeys.some((mk) => {
+        const [mStart, mEnd] = monthRangeMs(mk);
+        return isExplainedBySeasonality(mStart, mEnd, Array.from(droppedMembers));
+      });
       insights.push({
         type: 'purchasePattern',
         severity: Math.abs(delta) >= params.variety_highPct / 100 ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
-        message: `מגוון המוצרים של הלקוח צומצם מ-${prevFamilies.size} ל-${curFamilies.size} מוצרים שונים ב-${winMonths} החודשים האחרונים, לעומת ${winMonths} החודשים שקדמו. הלקוח הפסיק לקנות: ${droppedLabel}.`,
+        message: `מגוון המוצרים של הלקוח צומצם מ-${prevFamilies.size} ל-${curFamilies.size} מוצרים שונים ב-${winMonths} החודשים האחרונים, לעומת ${winMonths} החודשים שקדמו. הלקוח הפסיק לקנות: ${droppedLabel}.` + (seasonalityExplained ? SEASONALITY_CAVEAT : ''),
         metric: Math.round(delta * 100),
         breakdown: {
           rows: [{ label: 'מוצרים שונים — אחרונה', value: curFamilies.size }, { label: 'מוצרים שונים — קודמת', value: prevFamilies.size }],
-          dashFilter: { periodMonths: curMonthKeys, compareMonths: prevMonthKeys }
+          dashFilter: { periodMonths: curMonthKeys, compareMonths: prevMonthKeys },
+          needsReview: seasonalityExplained
         }
       });
     });
@@ -688,17 +731,32 @@ async function computeInsights(organizationId) {
       const delta = (thisMonths.size - lastMonths.size) / lastMonths.size;
       if (delta > -params.productFreqYoy_pctThreshold / 100) return; // only a decline counts — see general policy 7
       const label = familyLabel(pid);
+      // Early in the year (lastCompletedMonth small) this window is narrow enough for
+      // a real per-month check, same as the other rules above; later in the year it's
+      // too wide to check meaningfully, so it falls back to the generic WIDE_WINDOW_NOTE.
+      let seasonalityExplained = false, seasonalityNote = '';
+      if (lastCompletedMonth <= SEASONALITY_NOTE_MAX_MONTHS) {
+        const famPids = Array.from(familyMembers[famKey(pid)] || [pid]);
+        seasonalityExplained = yearMonthRange(year, 1, lastCompletedMonth).some((mk) => {
+          const [mStart, mEnd] = monthRangeMs(mk);
+          return isExplainedBySeasonality(mStart, mEnd, famPids);
+        });
+        seasonalityNote = seasonalityExplained ? SEASONALITY_CAVEAT : '';
+      } else {
+        seasonalityNote = WIDE_WINDOW_NOTE;
+      }
       insights.push({
         type: 'purchasePattern',
         severity: Math.abs(delta) >= params.productFreqYoy_highPct / 100 ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `תדירות הרכישה של ${label} ב${rangeLabel2} ${year} ירדה לעומת אשתקד.`,
+        message: `תדירות הרכישה של ${label} ב${rangeLabel2} ${year} ירדה לעומת אשתקד.` + seasonalityNote,
         metric: Math.round(delta * 100),
         breakdown: {
           rows: [{ label: rangeLabel2 + ' ' + year, value: thisMonths.size }, { label: rangeLabel2 + ' ' + (year - 1), value: lastMonths.size }],
-          dashFilter: { periodMonths: yearMonthRange(year, 1, lastCompletedMonth), compareMonths: yearMonthRange(year - 1, 1, lastCompletedMonth) }
+          dashFilter: { periodMonths: yearMonthRange(year, 1, lastCompletedMonth), compareMonths: yearMonthRange(year - 1, 1, lastCompletedMonth) },
+          needsReview: seasonalityExplained
         }
       });
     });
@@ -752,13 +810,19 @@ async function computeInsights(organizationId) {
       const lastPurchaseMK = monthKeyFromIndex(lastPurchaseIdx);
       const dryMonthKeys = [];
       for (let i = lastPurchaseIdx + 1; i <= lastCompletedIdx; i++) dryMonthKeys.push(monthKeyFromIndex(i));
+      // Checked against just the most recent completed month — right now, in other
+      // words — for a relevant holiday/season overlap: a customer whose "overdue"
+      // point happens to land inside a holiday closure period may simply be about to
+      // reorder once it passes, not genuinely falling off their usual rhythm.
+      const [lastMStart, lastMEnd] = monthRangeMs(lastCompletedMK);
+      const seasonalityExplained = isExplainedBySeasonality(lastMStart, lastMEnd, Array.from(familyMembers[famKey(pid)] || [pid]));
       insights.push({
         type: 'purchasePattern',
         severity: isHighSeverity ? 'high' : 'medium',
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הלקוח נוהג לרכוש את ${label} בממוצע כל כ-${Math.round(avgGap * 10) / 10} חודשים (הפער הגדול ביותר עד כה: ${maxGap} חודשים), אך לא רכש מאז ${fmtMonthYearKey(lastPurchaseMK)} — ${currentGap} חודשים ללא רכישה, פער חורג מכל מה שנצפה אצלו בעבר.`,
+        message: `הלקוח נוהג לרכוש את ${label} בממוצע כל כ-${Math.round(avgGap * 10) / 10} חודשים (הפער הגדול ביותר עד כה: ${maxGap} חודשים), אך לא רכש מאז ${fmtMonthYearKey(lastPurchaseMK)} — ${currentGap} חודשים ללא רכישה, פער חורג מכל מה שנצפה אצלו בעבר.` + (seasonalityExplained ? SEASONALITY_CAVEAT : ''),
         metric: currentGap,
         breakdown: {
           rows: [
@@ -766,7 +830,8 @@ async function computeInsights(organizationId) {
             { label: 'הפער הגדול ביותר בעבר', value: maxGap },
             { label: 'פער ממוצע בין רכישות', value: Math.round(avgGap * 10) / 10 }
           ],
-          dashFilter: { periodMonths: dryMonthKeys.length ? dryMonthKeys : [lastCompletedMK] }
+          dashFilter: { periodMonths: dryMonthKeys.length ? dryMonthKeys : [lastCompletedMK] },
+          needsReview: seasonalityExplained
         }
       });
     });
@@ -810,13 +875,18 @@ async function computeInsights(organizationId) {
       const cv = Math.sqrt(variance) / mean;
       if (cv * 100 < params.irregularity_cvThreshold) return;
       const label = familyLabel(pid);
+      // Combined 12-month window (curMonthKeys + yoyMonthKeys) — too wide for a real
+      // per-month check to mean anything (see WIDE_WINDOW_NOTE above), but worth
+      // flagging anyway: a holiday-driven spike in one month is exactly the kind of
+      // thing that can look like "irregular" quantity here without being a real
+      // ordering-pattern problem.
       insights.push({
         type: 'purchasePattern',
         severity: cv * 100 >= params.irregularity_cvThreshold * 1.5 ? 'high' : 'low',
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הלקוח קונה את ${label} בכמות לא סדירה מחודש לחודש — נבדק ב${monthKeysLabel(curMonthKeys)} וכן באותם חודשים אשתקד — למרות שהוא מהווה נתח משמעותי ממחזורו.`,
+        message: `הלקוח קונה את ${label} בכמות לא סדירה מחודש לחודש — נבדק ב${monthKeysLabel(curMonthKeys)} וכן באותם חודשים אשתקד — למרות שהוא מהווה נתח משמעותי ממחזורו.` + WIDE_WINDOW_NOTE,
         metric: Math.round(cv * 100),
         breakdown: {
           rows: [{ label: 'מקדם שונות בכמות החודשית', value: Math.round(cv * 100) }, { label: 'סף', value: params.irregularity_cvThreshold }],
