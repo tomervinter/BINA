@@ -69,13 +69,15 @@ const Layout = (function () {
       '<a class="nav-cta' + (activeKey === 'dashboard' ? ' active' : '') + '" href="dashboard.html">' + navSvg('dashboard') + 'דשבורד</a>' +
       '<div class="nav-scroll">';
 
-    // Platform-level — visible only to a super-admin, who manages OTHER companies,
-    // not just their own (see "ניהול חברה" below, which every admin already has).
-    const groups = isSuperAdmin
-      ? NAV_GROUPS.concat([{ title: 'ניהול פלטפורמה', items: [
-          { key: 'organizations', href: 'organizations.html', label: 'ניהול חברות' }
-        ] }])
-      : NAV_GROUPS;
+    // "ניהול חברות" (managing OTHER companies, platform-wide) sits in the same
+    // "ניהול חברה" group as "משתמשים", right after it — not its own group — and
+    // only for a super-admin.
+    const groups = NAV_GROUPS.map((group) => {
+      if (group.title !== 'ניהול חברה' || !isSuperAdmin) return group;
+      return Object.assign({}, group, {
+        items: group.items.concat([{ key: 'organizations', href: 'organizations.html', label: 'ניהול חברות' }])
+      });
+    });
 
     groups.forEach((group) => {
       html += '<div class="nav-group"><div class="nav-group-label">' + escapeHtml(group.title) + '</div>';
