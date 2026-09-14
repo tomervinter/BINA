@@ -8,6 +8,29 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"></script>
 </head>
 <body>
+  <div id="dashLoadingOverlay" class="page-loading-overlay">
+    <img src="img/logo.gif" alt="BINA" class="page-loading-logo">
+    <div class="page-loading-text">אנא המתן, טוען את הדשבורד...</div>
+  </div>
+  <script>
+    // Hidden once all three of the dashboard's independent init flows (layout/
+    // greeting via app.js, the filter table + KPIs/charts via dashboard-filters.js,
+    // the insights columns via dashboard-top-insights.js) have each rendered their
+    // first real content — rather than on a fixed timer or window.onload, which
+    // would either flash away too early (before the data's actually in) or leave a
+    // needless extra wait once it really is.
+    window.__dashReadyCount = 0;
+    window.dashMarkReady = function () {
+      window.__dashReadyCount++;
+      if (window.__dashReadyCount >= 3) {
+        var overlay = document.getElementById('dashLoadingOverlay');
+        if (overlay) {
+          overlay.classList.add('page-loading-hide');
+          setTimeout(function () { overlay.remove(); }, 300);
+        }
+      }
+    };
+  </script>
   <div class="app-shell">
     <aside class="sidebar" id="sidebarMount"></aside>
     <main class="main-content dashboard-page">

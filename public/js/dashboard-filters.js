@@ -553,8 +553,11 @@ async function initDashboardFilters() {
   // Fires the one initial dashboard-data fetch for this whole page — loadDashboardSalesSummary
   // must never be called a second, independent time elsewhere with a narrower filter
   // set (a stale duplicate of that kind previously raced this one and silently
-  // dropped whichever filters it didn't know about).
-  apply();
+  // dropped whichever filters it didn't know about). Awaited here (only at this one,
+  // first call site — every other apply() call above is deliberately fire-and-forget
+  // on a user interaction) purely to know when to clear the page's loading overlay.
+  await apply();
+  if (window.dashMarkReady) window.dashMarkReady();
 }
 
 initDashboardFilters();

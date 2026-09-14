@@ -33,6 +33,12 @@ button,select,input{font-family:inherit;}
 h1{font-size:22px;font-weight:800;margin:0 0 4px;}
 .sub{color:var(--text-faint);font-size:13px;margin-bottom:22px;}
 
+/* ---------- Full-page "please wait" loading overlay (dashboard.html) ---------- */
+.page-loading-overlay{position:fixed;inset:0;z-index:2000;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .25s ease;}
+.page-loading-overlay.page-loading-hide{opacity:0;pointer-events:none;}
+.page-loading-logo{width:72px;height:72px;border-radius:18px;box-shadow:var(--shadow-card);}
+.page-loading-text{font-size:15px;font-weight:700;color:var(--text-muted);}
+
 /* ---------- Auth (login/signup) ---------- */
 .auth-page{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--sidebar);padding:24px;}
 .auth-card{width:100%;max-width:400px;background:var(--surface);border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,.35);padding:36px 34px;text-align:center;}

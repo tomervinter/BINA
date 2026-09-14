@@ -210,6 +210,7 @@ async function initDashboardTopInsights() {
   custRows.forEach((c) => { dashAllCustomers[c.customerNumber] = c; });
   const initialCustomer = (new URLSearchParams(window.location.search).get('customer') || '').split(',').filter(Boolean);
   renderDashboardTopInsights({ customer: initialCustomer });
+  if (window.dashMarkReady) window.dashMarkReady();
 }
 
 initDashboardTopInsights();
