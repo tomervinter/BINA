@@ -24,45 +24,34 @@ function upsertChart(canvasId, config) {
   dashCharts[canvasId] = new Chart(document.getElementById(canvasId), config);
 }
 
-// A bar chart of revenue across similar months often has every bar within a narrow
-// band near the top of a 0-based axis, making real month-to-month variation hard to
-// see. Starting the axis just below the data's own minimum (not at 0) trades away
-// the "how big is this vs. nothing" framing — not needed here, since each bar's own
-// value is already printed on/above it — for "how did this month compare to the
-// others", which is what these monthly trend charts exist to show.
-function dashYAxisMin(values) {
-  const nums = (values || []).filter((v) => typeof v === 'number' && isFinite(v));
-  if (!nums.length) return undefined;
-  const min = Math.min.apply(null, nums);
-  if (min <= 0) return 0;
-  return Math.floor(min * 0.9);
-}
-
-// The current-period and comparison-period trend charts sit side by side, each with
-// its own zoomed-in axis (dashYAxisMin above) so its own month-to-month variation
-// stays visible. Left alone, Chart.js also auto-picks each chart's tick spacing
-// independently — so a visually identical bar-height change could mean a very
-// different ₪ amount in one chart vs the other, making the two trends impossible to
-// compare honestly at a glance. This computes one tick step from whichever of the
-// given series has the WIDEST (already-zoomed) range, and applying it to both charts
-// makes one grid line worth the same ₪ delta in both — the union of the two series'
-// raw values isn't used for this, since the current/comparison periods can sit at
-// completely different revenue tiers (e.g. this year vs. last year), and a step sized
-// for that combined span would be far too coarse for either chart's own narrow range.
-function dashYAxisStep(valueArrays, targetTicks) {
-  const ranges = (valueArrays || []).map((arr) => {
-    const nums = (arr || []).filter((v) => typeof v === 'number' && isFinite(v));
-    if (!nums.length) return null;
-    return { min: dashYAxisMin(nums), max: Math.max.apply(null, nums) };
-  }).filter(Boolean);
-  if (!ranges.length) return undefined;
-  const widestRange = Math.max.apply(null, ranges.map((r) => r.max - r.min));
-  if (widestRange <= 0) return undefined;
-  const roughStep = widestRange / (targetTicks || 6);
+// The current-period and comparison-period trend charts sit side by side, and the
+// whole point of the comparison is to see not just each period's own month-to-month
+// shape but how the two periods' overall LEVELS compare — e.g. "this year is running
+// well above last year." That needs the two charts drawn on the literal same Y-axis:
+// same min, same max, same tick step. A 0-based axis would bury real month-to-month
+// variation near the top of both charts (each bar's own value is already printed
+// on/above it, so the "how big vs. nothing" framing isn't needed) — but zooming each
+// chart to its OWN data independently can make two visually identical bars represent
+// very different revenue, hiding the real gap between the periods, which defeats the
+// purpose since that gap is exactly what a viewer is trying to read off these two
+// charts. This computes one shared {min, max, step} from the COMBINED values of every
+// given series and is meant to be applied identically to every chart being compared.
+function dashYAxisSharedScale(valueArrays, targetTicks) {
+  const nums = [];
+  (valueArrays || []).forEach((arr) => (arr || []).forEach((v) => { if (typeof v === 'number' && isFinite(v)) nums.push(v); }));
+  if (!nums.length) return {};
+  const dataMin = Math.min.apply(null, nums);
+  const dataMax = Math.max.apply(null, nums);
+  const min = dataMin <= 0 ? 0 : Math.floor(dataMin * 0.9);
+  const range = dataMax - min;
+  if (range <= 0) return { min, max: dataMax || undefined };
+  const roughStep = range / (targetTicks || 6);
   const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
   const residual = roughStep / magnitude;
   const niceResidual = residual > 5 ? 10 : residual > 2 ? 5 : residual > 1 ? 2 : 1;
-  return niceResidual * magnitude;
+  const step = niceResidual * magnitude;
+  const max = Math.ceil(dataMax / step) * step;
+  return { min, max, step };
 }
 
 function fmtMoneyShort(n) { return Math.round(n || 0).toLocaleString('he-IL') + ' ₪'; }
@@ -471,7 +460,7 @@ async function loadDashboardSalesSummary(filters) {
       (i) => ({ value: pt.periodData[i], meta: pt.periodMonths[i] }),
       (i) => pt.yoyData[i]
     );
-    const ptYStep = dashYAxisStep([pt.periodData, pt.compareData]);
+    const ptScale = dashYAxisSharedScale([pt.periodData, pt.compareData]);
     upsertChart('monthlyTrendChart', {
       type: 'bar',
       data: { labels, datasets: [{ label: pt.periodLabel, data: pt.periodData, backgroundColor: DASH_BLUE, borderRadius: 4 }] },
@@ -483,7 +472,7 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(ptYoyEntries, 0) } }
         },
-        scales: { y: { min: dashYAxisMin(pt.periodData), ticks: { stepSize: ptYStep, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
+        scales: { y: { min: ptScale.min, max: ptScale.max, ticks: { stepSize: ptScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
           const m = pt.periodMonths[elements[0].index];
@@ -503,7 +492,7 @@ async function loadDashboardSalesSummary(filters) {
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { min: dashYAxisMin(pt.compareData), ticks: { stepSize: ptYStep, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
+          scales: { y: { min: ptScale.min, max: ptScale.max, ticks: { stepSize: ptScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
           onClick: function (evt, elements) {
             if (!elements.length) return;
             const m = pt.compareMonths[elements[0].index];
@@ -547,7 +536,7 @@ async function loadDashboardSalesSummary(filters) {
     // displayed alongside it, that side-by-side split is already the comparison, and
     // a dozen extra per-bar arrows on the primary chart would just add noise.
     const activeYoyEntries = mt.compareData ? [] : timelineYoyEntries;
-    const mtYStep = dashYAxisStep([mt.data, mt.compareData]);
+    const mtScale = dashYAxisSharedScale([mt.data, mt.compareData]);
     upsertChart('monthlyTrendChart', {
       type: 'bar',
       data: { labels, datasets: [{ label: 'מחזור', data: mt.data, backgroundColor: DASH_BLUE, borderRadius: 4 }] },
@@ -559,7 +548,7 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(activeYoyEntries, 0) } }
         },
-        scales: { y: { min: dashYAxisMin(mt.data), ticks: { stepSize: mtYStep, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
+        scales: { y: { min: mtScale.min, max: mtScale.max, ticks: { stepSize: mtScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
         onClick: function (evt, elements) {
           if (!elements.length || !window.applyDashboardPeriodFilter) return;
           const m = monthMeta[elements[0].index];
@@ -577,7 +566,7 @@ async function loadDashboardSalesSummary(filters) {
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { min: dashYAxisMin(mt.compareData), ticks: { stepSize: mtYStep, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
+          scales: { y: { min: mtScale.min, max: mtScale.max, ticks: { stepSize: mtScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
           onClick: function (evt, elements) {
             if (!elements.length || !window.applyDashboardPeriodFilter) return;
             const m = monthMeta[elements[0].index];
