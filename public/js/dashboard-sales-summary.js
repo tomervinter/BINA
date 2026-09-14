@@ -38,6 +38,33 @@ function dashYAxisMin(values) {
   return Math.floor(min * 0.9);
 }
 
+// The current-period and comparison-period trend charts sit side by side, each with
+// its own zoomed-in axis (dashYAxisMin above) so its own month-to-month variation
+// stays visible. Left alone, Chart.js also auto-picks each chart's tick spacing
+// independently — so a visually identical bar-height change could mean a very
+// different ₪ amount in one chart vs the other, making the two trends impossible to
+// compare honestly at a glance. This computes one tick step from whichever of the
+// given series has the WIDEST (already-zoomed) range, and applying it to both charts
+// makes one grid line worth the same ₪ delta in both — the union of the two series'
+// raw values isn't used for this, since the current/comparison periods can sit at
+// completely different revenue tiers (e.g. this year vs. last year), and a step sized
+// for that combined span would be far too coarse for either chart's own narrow range.
+function dashYAxisStep(valueArrays, targetTicks) {
+  const ranges = (valueArrays || []).map((arr) => {
+    const nums = (arr || []).filter((v) => typeof v === 'number' && isFinite(v));
+    if (!nums.length) return null;
+    return { min: dashYAxisMin(nums), max: Math.max.apply(null, nums) };
+  }).filter(Boolean);
+  if (!ranges.length) return undefined;
+  const widestRange = Math.max.apply(null, ranges.map((r) => r.max - r.min));
+  if (widestRange <= 0) return undefined;
+  const roughStep = widestRange / (targetTicks || 6);
+  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+  const residual = roughStep / magnitude;
+  const niceResidual = residual > 5 ? 10 : residual > 2 ? 5 : residual > 1 ? 2 : 1;
+  return niceResidual * magnitude;
+}
+
 function fmtMoneyShort(n) { return Math.round(n || 0).toLocaleString('he-IL') + ' ₪'; }
 
 function reportUrl(params) {
@@ -444,6 +471,7 @@ async function loadDashboardSalesSummary(filters) {
       (i) => ({ value: pt.periodData[i], meta: pt.periodMonths[i] }),
       (i) => pt.yoyData[i]
     );
+    const ptYStep = dashYAxisStep([pt.periodData, pt.compareData]);
     upsertChart('monthlyTrendChart', {
       type: 'bar',
       data: { labels, datasets: [{ label: pt.periodLabel, data: pt.periodData, backgroundColor: DASH_BLUE, borderRadius: 4 }] },
@@ -455,7 +483,7 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(ptYoyEntries, 0) } }
         },
-        scales: { y: { min: dashYAxisMin(pt.periodData), ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+        scales: { y: { min: dashYAxisMin(pt.periodData), ticks: { stepSize: ptYStep, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
           const m = pt.periodMonths[elements[0].index];
@@ -475,7 +503,7 @@ async function loadDashboardSalesSummary(filters) {
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { min: dashYAxisMin(pt.compareData), ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+          scales: { y: { min: dashYAxisMin(pt.compareData), ticks: { stepSize: ptYStep, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
           onClick: function (evt, elements) {
             if (!elements.length) return;
             const m = pt.compareMonths[elements[0].index];
@@ -519,6 +547,7 @@ async function loadDashboardSalesSummary(filters) {
     // displayed alongside it, that side-by-side split is already the comparison, and
     // a dozen extra per-bar arrows on the primary chart would just add noise.
     const activeYoyEntries = mt.compareData ? [] : timelineYoyEntries;
+    const mtYStep = dashYAxisStep([mt.data, mt.compareData]);
     upsertChart('monthlyTrendChart', {
       type: 'bar',
       data: { labels, datasets: [{ label: 'מחזור', data: mt.data, backgroundColor: DASH_BLUE, borderRadius: 4 }] },
@@ -530,7 +559,7 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(activeYoyEntries, 0) } }
         },
-        scales: { y: { min: dashYAxisMin(mt.data), ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+        scales: { y: { min: dashYAxisMin(mt.data), ticks: { stepSize: mtYStep, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
         onClick: function (evt, elements) {
           if (!elements.length || !window.applyDashboardPeriodFilter) return;
           const m = monthMeta[elements[0].index];
@@ -548,7 +577,7 @@ async function loadDashboardSalesSummary(filters) {
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { min: dashYAxisMin(mt.compareData), ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+          scales: { y: { min: dashYAxisMin(mt.compareData), ticks: { stepSize: mtYStep, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
           onClick: function (evt, elements) {
             if (!elements.length || !window.applyDashboardPeriodFilter) return;
             const m = monthMeta[elements[0].index];
