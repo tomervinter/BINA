@@ -30,11 +30,12 @@ function renderDashboardTopInsights(filters) {
   const filtered = customerIds.length ? dashAllInsights.filter((i) => customerIds.includes(i.customerId)) : dashAllInsights;
 
   // Summary KPI-card tile(s) — appended into the sales revenue/qty tiles' OWN
-  // per-side grid containers (#salesSummaryKpiGrid for primary, on the right;
-  // #salesSummaryCompareKpiGrid for compare, on the left — see dashboard-sales-
-  // summary.js, which owns and fully rebuilds both), so each insight tile lands
-  // directly below its own side's tiles rather than a separate standalone tile
-  // elsewhere on the page. Safe to append (not replace) here because apply() in
+  // per-side 3-column grid containers (#salesSummaryKpiGrid for primary, on the
+  // right; #salesSummaryCompareKpiGrid for compare, on the left — see dashboard-
+  // sales-summary.js, which owns and fully rebuilds both), so each insight tile
+  // lands as the third tile in the same row — to that side's own quantity tile's
+  // left — rather than a separate standalone tile elsewhere on the page. Safe to
+  // append (not replace) here because apply() in
   // dashboard-filters.js always calls loadDashboardSalesSummary BEFORE
   // window.refreshDashboardTopInsights on every cycle, so these tiles never
   // accumulate across re-renders. The compare tile only appears when the compare

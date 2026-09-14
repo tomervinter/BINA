@@ -401,12 +401,12 @@ async function loadDashboardSalesSummary(filters) {
       '<div class="kpi-desc">' + Layout.escapeHtml(desc) + '</div>' +
       '</a>';
   }
-  // Primary and comparison tiles render into their OWN grid containers (side by
-  // side — primary on the right, compare on the left, matching the filter table
-  // above) rather than one shared flat grid, so a tile appended later (the
-  // insight-count summary — see dashboard-top-insights.js) lands directly under
-  // its own side's tiles instead of wherever a 4-column grid's auto-flow happens
-  // to place a 5th/6th item.
+  // Primary and comparison tiles render into their OWN 3-column grid containers
+  // (side by side — primary on the right, compare on the left, matching the filter
+  // table above) rather than one shared flat grid, so a tile appended later (the
+  // insight-count summary — see dashboard-top-insights.js) always lands as the
+  // third tile in the SAME row, to that side's own left, instead of wherever a
+  // wider shared grid's auto-flow happens to place a 5th/6th item.
   document.getElementById('salesSummaryKpiGrid').innerHTML = primaryTiles.map(kpiTileHtml).join('');
   const compareGrid = document.getElementById('salesSummaryCompareKpiGrid');
   if (compareGrid) { compareGrid.innerHTML = compareTiles.map(kpiTileHtml).join(''); compareGrid.style.display = compareTiles.length ? '' : 'none'; }
