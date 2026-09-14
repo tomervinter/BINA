@@ -24,6 +24,18 @@ function upsertChart(canvasId, config) {
   dashCharts[canvasId] = new Chart(document.getElementById(canvasId), config);
 }
 
+// Chart.js auto-rotates x-axis month labels based on how many fit without
+// overlapping — a 12-month series gets rotated diagonally, an 8-month one (fewer
+// labels, more room each) stays horizontal. That's fine for either chart alone, but
+// the two trend charts sit side by side specifically to be compared, and a
+// horizontal label row is shorter than a rotated one — so whichever chart auto-picked
+// horizontal ended up with a visibly taller plot area than its neighbor, even though
+// both canvases are the same height. Forcing the SAME fixed rotation on both
+// (min===max so Chart.js can't auto-adjust per chart) keeps the label row's height —
+// and so the actual bar-plotting area — identical regardless of how many months
+// either side happens to have.
+const DASH_TREND_X_TICKS = { minRotation: 45, maxRotation: 45 };
+
 // The current-period and comparison-period trend charts sit side by side, and the
 // whole point of the comparison is to see not just each period's own month-to-month
 // shape but how the two periods' overall LEVELS compare — e.g. "this year is running
@@ -495,7 +507,7 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(ptYoyEntries, 0) } }
         },
-        scales: { y: { min: ptScale.min, max: ptScale.max, ticks: { stepSize: ptScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
+        scales: { y: { min: ptScale.min, max: ptScale.max, ticks: { stepSize: ptScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } }, x: { ticks: DASH_TREND_X_TICKS } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
           const m = pt.periodMonths[elements[0].index];
@@ -515,7 +527,7 @@ async function loadDashboardSalesSummary(filters) {
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { min: ptScale.min, max: ptScale.max, ticks: { stepSize: ptScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
+          scales: { y: { min: ptScale.min, max: ptScale.max, ticks: { stepSize: ptScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } }, x: { ticks: DASH_TREND_X_TICKS } },
           onClick: function (evt, elements) {
             if (!elements.length) return;
             const m = pt.compareMonths[elements[0].index];
@@ -571,7 +583,7 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(activeYoyEntries, 0) } }
         },
-        scales: { y: { min: mtScale.min, max: mtScale.max, ticks: { stepSize: mtScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
+        scales: { y: { min: mtScale.min, max: mtScale.max, ticks: { stepSize: mtScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } }, x: { ticks: DASH_TREND_X_TICKS } },
         onClick: function (evt, elements) {
           if (!elements.length || !window.applyDashboardPeriodFilter) return;
           const m = monthMeta[elements[0].index];
@@ -589,7 +601,7 @@ async function loadDashboardSalesSummary(filters) {
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { min: mtScale.min, max: mtScale.max, ticks: { stepSize: mtScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } } },
+          scales: { y: { min: mtScale.min, max: mtScale.max, ticks: { stepSize: mtScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } }, x: { ticks: DASH_TREND_X_TICKS } },
           onClick: function (evt, elements) {
             if (!elements.length || !window.applyDashboardPeriodFilter) return;
             const m = monthMeta[elements[0].index];
