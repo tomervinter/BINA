@@ -240,6 +240,8 @@ async function loadDashboardSalesSummary(filters) {
   setList('productCode', filters.product);
   setList('primaryClass', filters.primaryClass);
   setList('customerType', filters.customerType);
+  setList('city', filters.city);
+  setList('centralCustomer', filters.centralCustomer);
   setList('superType', filters.superType);
   setList('department', filters.department);
   setList('periodMonths', filters.periodMonths);
@@ -248,6 +250,8 @@ async function loadDashboardSalesSummary(filters) {
   setList('compareProductCode', filters.compareProduct);
   setList('comparePrimaryClass', filters.comparePrimaryClass);
   setList('compareCustomerType', filters.compareCustomerType);
+  setList('compareCity', filters.compareCity);
+  setList('compareCentralCustomer', filters.compareCentralCustomer);
   setList('compareSuperType', filters.compareSuperType);
   setList('compareDepartment', filters.compareDepartment);
   setList('boughtProducts', filters.boughtProducts);
@@ -260,10 +264,13 @@ async function loadDashboardSalesSummary(filters) {
   const productLabel = joinOrCount(s.productCodes, s.productNames, 'מוצרים');
   const primaryClassLabel = joinOrCount(s.primaryClasses, null, 'סיווגים ראשיים');
   const customerTypeLabel = joinOrCount(s.customerTypes, null, 'סוגי לקוח');
+  const cityLabel = joinOrCount(s.cities, null, 'ערים');
+  const centralCustomerLabel = joinOrCount(s.centralCustomers, null, 'לקוחות מרכז');
   const superTypeLabel = joinOrCount(s.superTypes, null, 'טיפוסי על');
   const departmentLabel = joinOrCount(s.departments, null, 'מחלקות מוצר');
   const suffix = (customerLabel ? (' — ' + customerLabel) : '') + (productLabel ? (' — ' + productLabel) : '')
     + (primaryClassLabel ? (' — ' + primaryClassLabel) : '') + (customerTypeLabel ? (' — ' + customerTypeLabel) : '')
+    + (cityLabel ? (' — ' + cityLabel) : '') + (centralCustomerLabel ? (' — ' + centralCustomerLabel) : '')
     + (superTypeLabel ? (' — ' + superTypeLabel) : '') + (departmentLabel ? (' — ' + departmentLabel) : '');
 
   // Per-chart-card filter description: every chart's own title stays generic (set
@@ -277,6 +284,8 @@ async function loadDashboardSalesSummary(filters) {
     productLabel ? ('מוצר: ' + productLabel) : null,
     primaryClassLabel ? ('סיווג ראשי: ' + primaryClassLabel) : null,
     customerTypeLabel ? ('סוג לקוח: ' + customerTypeLabel) : null,
+    cityLabel ? ('עיר: ' + cityLabel) : null,
+    centralCustomerLabel ? ('לקוח מרכז: ' + centralCustomerLabel) : null,
     superTypeLabel ? ('טיפוס על: ' + superTypeLabel) : null,
     departmentLabel ? ('מחלקת מוצר: ' + departmentLabel) : null,
     s.period ? ('תקופה: ' + s.period.label) : null,
@@ -290,10 +299,14 @@ async function loadDashboardSalesSummary(filters) {
   const compareProductLabel = joinOrCount(s.compareProductCodes, s.compareProductNames, 'מוצרים');
   const comparePrimaryClassLabel = joinOrCount(s.comparePrimaryClasses, null, 'סיווגים ראשיים');
   const compareCustomerTypeLabel = joinOrCount(s.compareCustomerTypes, null, 'סוגי לקוח');
+  const compareCityLabel = joinOrCount(s.compareCities, null, 'ערים');
+  const compareCentralCustomerLabel = joinOrCount(s.compareCentralCustomers, null, 'לקוחות מרכז');
   const compareSuperTypeLabel = joinOrCount(s.compareSuperTypes, null, 'טיפוסי על');
   const compareDepartmentLabel = joinOrCount(s.compareDepartments, null, 'מחלקות מוצר');
   const compareAxisLabel = comparePrimaryClassLabel ? ('סיווג ' + comparePrimaryClassLabel)
     : compareCustomerTypeLabel ? ('סוג לקוח ' + compareCustomerTypeLabel)
+    : compareCityLabel ? ('עיר ' + compareCityLabel)
+    : compareCentralCustomerLabel ? ('לקוח מרכז ' + compareCentralCustomerLabel)
     : compareCustomerLabel ? ('הלקוח ' + compareCustomerLabel)
     : compareProductLabel ? ('המוצר ' + compareProductLabel)
     : compareSuperTypeLabel ? ('טיפוס על ' + compareSuperTypeLabel)
@@ -303,6 +316,8 @@ async function loadDashboardSalesSummary(filters) {
   // stated no filter at all (only the comparison tiles named what they were about).
   const primaryAxisLabel = primaryClassLabel ? ('סיווג ' + primaryClassLabel)
     : customerTypeLabel ? ('סוג לקוח ' + customerTypeLabel)
+    : cityLabel ? ('עיר ' + cityLabel)
+    : centralCustomerLabel ? ('לקוח מרכז ' + centralCustomerLabel)
     : customerLabel ? ('הלקוח ' + customerLabel)
     : productLabel ? ('המוצר ' + productLabel)
     : superTypeLabel ? ('טיפוס על ' + superTypeLabel)
@@ -313,6 +328,8 @@ async function loadDashboardSalesSummary(filters) {
     compareProductLabel ? ('מוצר: ' + compareProductLabel) : null,
     comparePrimaryClassLabel ? ('סיווג ראשי: ' + comparePrimaryClassLabel) : null,
     compareCustomerTypeLabel ? ('סוג לקוח: ' + compareCustomerTypeLabel) : null,
+    compareCityLabel ? ('עיר: ' + compareCityLabel) : null,
+    compareCentralCustomerLabel ? ('לקוח מרכז: ' + compareCentralCustomerLabel) : null,
     compareSuperTypeLabel ? ('טיפוס על: ' + compareSuperTypeLabel) : null,
     compareDepartmentLabel ? ('מחלקת מוצר: ' + compareDepartmentLabel) : null,
     s.comparePeriod ? ('תקופה: ' + s.comparePeriod.label) : null
@@ -322,7 +339,9 @@ async function loadDashboardSalesSummary(filters) {
     singleOrNull(s.customerNumbers) && { customerNumber: singleOrNull(s.customerNumbers) },
     singleOrNull(s.productCodes) && { productCode: singleOrNull(s.productCodes) },
     singleOrNull(s.primaryClasses) && { primaryClass: singleOrNull(s.primaryClasses) },
-    singleOrNull(s.customerTypes) && { customerType: singleOrNull(s.customerTypes) }
+    singleOrNull(s.customerTypes) && { customerType: singleOrNull(s.customerTypes) },
+    singleOrNull(s.cities) && { city: singleOrNull(s.cities) },
+    singleOrNull(s.centralCustomers) && { centralCustomer: singleOrNull(s.centralCustomers) }
   );
   const hasCustomerFilter = !!(s.customerNumbers && s.customerNumbers.length);
   const ct = s.compareTotals;
@@ -376,15 +395,19 @@ async function loadDashboardSalesSummary(filters) {
   // the backend's own fallback logic exactly (see buildEntityWhere in
   // dashboardSalesSummary.js). The product dimension falls back independently. Each
   // is still single-value-only for the report link, same degrade rule as above.
-  const hasCompareIdentity = !!((s.compareCustomerNumbers && s.compareCustomerNumbers.length) || (s.comparePrimaryClasses && s.comparePrimaryClasses.length) || (s.compareCustomerTypes && s.compareCustomerTypes.length));
+  const hasCompareIdentity = !!((s.compareCustomerNumbers && s.compareCustomerNumbers.length) || (s.comparePrimaryClasses && s.comparePrimaryClasses.length) || (s.compareCustomerTypes && s.compareCustomerTypes.length) || (s.compareCities && s.compareCities.length) || (s.compareCentralCustomers && s.compareCentralCustomers.length));
   const compareBaseReportParams = {};
   if (hasCompareIdentity) {
     if (singleOrNull(s.comparePrimaryClasses)) compareBaseReportParams.primaryClass = singleOrNull(s.comparePrimaryClasses);
     if (singleOrNull(s.compareCustomerTypes)) compareBaseReportParams.customerType = singleOrNull(s.compareCustomerTypes);
+    if (singleOrNull(s.compareCities)) compareBaseReportParams.city = singleOrNull(s.compareCities);
+    if (singleOrNull(s.compareCentralCustomers)) compareBaseReportParams.centralCustomer = singleOrNull(s.compareCentralCustomers);
     if (singleOrNull(s.compareCustomerNumbers)) compareBaseReportParams.customerNumber = singleOrNull(s.compareCustomerNumbers);
   } else {
     if (singleOrNull(s.primaryClasses)) compareBaseReportParams.primaryClass = singleOrNull(s.primaryClasses);
     if (singleOrNull(s.customerTypes)) compareBaseReportParams.customerType = singleOrNull(s.customerTypes);
+    if (singleOrNull(s.cities)) compareBaseReportParams.city = singleOrNull(s.cities);
+    if (singleOrNull(s.centralCustomers)) compareBaseReportParams.centralCustomer = singleOrNull(s.centralCustomers);
     if (singleOrNull(s.customerNumbers)) compareBaseReportParams.customerNumber = singleOrNull(s.customerNumbers);
   }
   const cmpProductSingle = singleOrNull(s.compareProductCodes) || singleOrNull(s.productCodes);

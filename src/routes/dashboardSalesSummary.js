@@ -60,12 +60,13 @@ function parseCsv(str) {
 // was, becomes the customer set outright) — used for the purchase-based cohort
 // filter (customers who bought/didn't buy certain products), which only ever applies
 // to the primary side.
-async function buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, superTypes, departments, restrictToCustomers }) {
+async function buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, cities, centralCustomers, superTypes, departments, restrictToCustomers }) {
   const where = { organizationId };
   let resolvedCustomers = null;
-  if (primaryClasses.length || customerTypes.length) {
+  if (primaryClasses.length || customerTypes.length || (cities && cities.length) || (centralCustomers && centralCustomers.length)) {
     const segCustomers = await prisma.customer.findMany({
-      where: Object.assign({ organizationId }, primaryClasses.length && { primaryClass: { in: primaryClasses } }, customerTypes.length && { customerType: { in: customerTypes } }),
+      where: Object.assign({ organizationId }, primaryClasses.length && { primaryClass: { in: primaryClasses } }, customerTypes.length && { customerType: { in: customerTypes } },
+        cities && cities.length && { city: { in: cities } }, centralCustomers && centralCustomers.length && { centralCustomer: { in: centralCustomers } }),
       select: { customerNumber: true }
     });
     resolvedCustomers = segCustomers.map((c) => c.customerNumber);
@@ -154,12 +155,16 @@ router.get('/', async (req, res) => {
   const productCodes = parseCsv(req.query.productCode);
   const primaryClasses = parseCsv(req.query.primaryClass);
   const customerTypes = parseCsv(req.query.customerType);
+  const cities = parseCsv(req.query.city);
+  const centralCustomers = parseCsv(req.query.centralCustomer);
   const superTypes = parseCsv(req.query.superType);
   const departments = parseCsv(req.query.department);
   const compareCustomerNumbers = parseCsv(req.query.compareCustomerNumber);
   const compareProductCodes = parseCsv(req.query.compareProductCode);
   const comparePrimaryClasses = parseCsv(req.query.comparePrimaryClass);
   const compareCustomerTypes = parseCsv(req.query.compareCustomerType);
+  const compareCities = parseCsv(req.query.compareCity);
+  const compareCentralCustomers = parseCsv(req.query.compareCentralCustomer);
   const compareSuperTypes = parseCsv(req.query.compareSuperType);
   const compareDepartments = parseCsv(req.query.compareDepartment);
   const boughtProducts = parseCsv(req.query.boughtProducts);
@@ -169,13 +174,13 @@ router.get('/', async (req, res) => {
   // "Bought X" / "didn't buy Y" is scoped to the selected period, same as every other
   // number on the dashboard — not "ever bought", unless no period filter is active.
   const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts, period);
-  const hasEntityFilter = !!(customerNumbers.length || productCodes.length || primaryClasses.length || customerTypes.length || superTypes.length || departments.length || purchaseCohort);
+  const hasEntityFilter = !!(customerNumbers.length || productCodes.length || primaryClasses.length || customerTypes.length || cities.length || centralCustomers.length || superTypes.length || departments.length || purchaseCohort);
   const baseWhere = hasEntityFilter
-    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, superTypes, departments, restrictToCustomers: purchaseCohort })
+    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, cities, centralCustomers, superTypes, departments, restrictToCustomers: purchaseCohort })
     : { organizationId };
 
   const compare = period ? parseMonthList(req.query.compareMonths) : null;
-  const hasCompareIdentity = !!(compareCustomerNumbers.length || comparePrimaryClasses.length || compareCustomerTypes.length);
+  const hasCompareIdentity = !!(compareCustomerNumbers.length || comparePrimaryClasses.length || compareCustomerTypes.length || compareCities.length || compareCentralCustomers.length);
   const hasEntityCompare = hasCompareIdentity || !!compareProductCodes.length || !!compareSuperTypes.length || !!compareDepartments.length;
   const effectiveCompareProducts = compareProductCodes.length ? compareProductCodes : productCodes;
   // superType/department fall back independently too, exactly like productCode above
@@ -186,8 +191,8 @@ router.get('/', async (req, res) => {
   let compareBaseWhere = null;
   if (hasEntityCompare || compare) {
     compareBaseWhere = await buildEntityWhere(organizationId, hasCompareIdentity
-      ? { customerNumbers: compareCustomerNumbers, primaryClasses: comparePrimaryClasses, customerTypes: compareCustomerTypes, productCodes: effectiveCompareProducts, superTypes: effectiveCompareSuperTypes, departments: effectiveCompareDepartments }
-      : { customerNumbers, primaryClasses, customerTypes, productCodes: effectiveCompareProducts, superTypes: effectiveCompareSuperTypes, departments: effectiveCompareDepartments });
+      ? { customerNumbers: compareCustomerNumbers, primaryClasses: comparePrimaryClasses, customerTypes: compareCustomerTypes, cities: compareCities, centralCustomers: compareCentralCustomers, productCodes: effectiveCompareProducts, superTypes: effectiveCompareSuperTypes, departments: effectiveCompareDepartments }
+      : { customerNumbers, primaryClasses, customerTypes, cities, centralCustomers, productCodes: effectiveCompareProducts, superTypes: effectiveCompareSuperTypes, departments: effectiveCompareDepartments });
   }
 
   const where = period ? { AND: [baseWhere, monthsWhereClause(period)] } : baseWhere;
@@ -316,6 +321,8 @@ router.get('/', async (req, res) => {
     productNames: productCodes.map((p) => nameOf(prodMap, p)),
     primaryClasses,
     customerTypes,
+    cities,
+    centralCustomers,
     superTypes,
     departments,
     boughtProducts,
@@ -331,6 +338,8 @@ router.get('/', async (req, res) => {
     compareProductNames: compareProductCodes.map((p) => nameOf(prodMap, p)),
     comparePrimaryClasses,
     compareCustomerTypes,
+    compareCities,
+    compareCentralCustomers,
     compareSuperTypes: effectiveCompareSuperTypes,
     compareDepartments: effectiveCompareDepartments,
     totalRevenue: totalAgg._sum.revenue || 0,
