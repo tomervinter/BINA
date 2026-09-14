@@ -29,6 +29,23 @@ function renderDashboardTopInsights(filters) {
   const customerIds = filters.customer || []; // array — the dashboard's customer filter is a multi-select
   const filtered = customerIds.length ? dashAllInsights.filter((i) => customerIds.includes(i.customerId)) : dashAllInsights;
 
+  // Summary KPI-card tile above the columns — same visual component as the sales
+  // KPI tiles (kpi-card/kpi-blob), showing how many insights are counted below and
+  // deep-linking to insights.html scoped the same way (by the one selected customer,
+  // when there's exactly one — the journal's per-column filter can't express an
+  // arbitrary multi-customer OR, so a multi-customer dashboard selection just links
+  // to the full unfiltered journal instead of guessing).
+  const summaryTile = document.getElementById('dashInsightsSummaryTile');
+  if (summaryTile) {
+    const href = customerIds.length === 1 ? 'insights.html?customer=' + encodeURIComponent(customerIds[0]) : 'insights.html';
+    summaryTile.innerHTML = '<a class="kpi-card" href="' + href + '">' +
+      '<div class="kpi-blob" style="background:var(--blue-dot);"></div>' +
+      '<div class="kpi-blob b2" style="background:var(--blue);"></div>' +
+      '<div class="kpi-value v-blue">' + filtered.length.toLocaleString('he-IL') + '</div>' +
+      '<div class="kpi-desc">' + (customerIds.length ? 'תובנות פתוחות עבור הלקוח הנבחר' : 'תובנות פתוחות בסך הכול') + '</div>' +
+      '</a>';
+  }
+
   if (!filtered.length) {
     container.style.gridTemplateColumns = '1fr';
     container.innerHTML = '<div class="dash-insight-empty">' + (customerIds.length

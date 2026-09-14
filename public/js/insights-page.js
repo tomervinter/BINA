@@ -24,14 +24,19 @@ async function initInsightsPage() {
   ];
 
   // Dashboard charts deep-link here as insights.html?type=<label> so a click lands
-  // already filtered to that rule's insights.
-  const urlType = new URLSearchParams(window.location.search).get('type');
+  // already filtered to that rule's insights; the dashboard's insight-count summary
+  // tile deep-links as insights.html?customer=<id> the same way, when exactly one
+  // customer is selected there.
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlType = urlParams.get('type');
+  const urlCustomer = urlParams.get('customer');
+  const initialFilters = Object.assign({}, urlType ? { type: urlType } : null, urlCustomer ? { customerId: urlCustomer } : null);
 
   const table = createDataTable(document.getElementById('tableContainer'), columns, insights, {
     exportUrl: '/api/insights/export',
     onRowClick: (r) => { if (r.customerId) window.location.href = 'reports-full-sales.html?customerNumber=' + encodeURIComponent(r.customerId); },
     tableKey: 'insights',
-    initialFilters: urlType ? { type: urlType } : undefined
+    initialFilters: Object.keys(initialFilters).length ? initialFilters : undefined
   });
 
   const statusLine = document.getElementById('insightsGenStatus');
