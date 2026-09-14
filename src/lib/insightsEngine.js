@@ -96,6 +96,7 @@ function buildProductFamilies(substitutes) {
 // type was removed.
 const DEFAULT_PARAMS = {
   monthly_pctThreshold: 30, monthly_highPct: 50, monthly_minBaseRevenue: 100,
+  trend_windowMonths: 4, trend_pctThreshold: 15, trend_highPct: 30, trend_minBaseRevenue: 200, trend_recoveryTolerancePct: 15,
   cumulativeYoy_pctThreshold: 5, cumulativeYoy_highPct: 15, cumulativeYoy_minBaseRevenue: 100,
   quarterlyDecline_pctThreshold: 20, quarterlyDecline_highPct: 35, quarterlyDecline_minBaseRevenue: 100,
   productQty_windowMonths: 3, productQty_pctThreshold: 40, productQty_highPct: 60, productQty_minPriorQty: 5,
@@ -250,9 +251,63 @@ async function computeInsights(organizationId) {
     });
   });
 
+  // Rule 1d — consistent month-over-month decline trend: revenue across the last
+  // trend_windowMonths fully completed months (split into an earlier half and a
+  // later half) trending down and STAYING down, not just one bad month with
+  // otherwise stable neighbors (rule 1a) or one bad quarter (rule 1b). "Doesn't
+  // recover" is judged quantitatively as the later half's average being down
+  // trend_pctThreshold%+ vs the earlier half's, allowing at most one step-over-step
+  // uptick beyond trend_recoveryTolerancePct along the way (a single blip on an
+  // otherwise declining trajectory shouldn't disqualify it). Computed into a map
+  // keyed by customer, NOT pushed directly — rule 1c below folds a customer's trend
+  // result into ONE combined insight when that customer also has a cumulative-YoY
+  // decline, and pushes any leftover trend-only customers itself afterward.
+  const trendByCustomer = {};
+  {
+    const winMonths = params.trend_windowMonths;
+    const half = Math.floor(winMonths / 2);
+    const monthKeys = [];
+    for (let m = winMonths; m >= 1; m--) monthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
+    const firstHalfKeys = monthKeys.slice(0, half);
+    const secondHalfKeys = monthKeys.slice(winMonths - half);
+    const trendWindowStart = monthRangeMs(monthKeys[0])[0];
+    const trendWindowEnd = monthRangeMs(monthKeys[monthKeys.length - 1])[1];
+    Object.keys(byCustomer).forEach((cid) => {
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const events = byCustomer[cid];
+      const byMonth = monthKeys.map((mk) => events.filter((e) => monthKey(e.t) === mk).reduce((a, e) => a + e.rev, 0));
+      const firstHalfAvg = byMonth.slice(0, half).reduce((a, v) => a + v, 0) / half;
+      const secondHalfAvg = byMonth.slice(winMonths - half).reduce((a, v) => a + v, 0) / half;
+      if (firstHalfAvg < params.trend_minBaseRevenue) return;
+      const delta = (secondHalfAvg - firstHalfAvg) / firstHalfAvg;
+      if (delta > -params.trend_pctThreshold / 100) return; // only a decline counts — see general policy 7
+      let recoveries = 0;
+      for (let i = 1; i < byMonth.length; i++) {
+        if (byMonth[i - 1] > 0 && byMonth[i] > byMonth[i - 1] * (1 + params.trend_recoveryTolerancePct / 100)) recoveries++;
+      }
+      if (recoveries > 1) return;
+      const isHighSeverity = Math.abs(delta) >= params.trend_highPct / 100;
+      const seasonalityExplained = isExplainedBySeasonality(trendWindowStart, trendWindowEnd, Array.from(new Set(events.map((e) => e.pid))));
+      if (seasonalityExplained && !isHighSeverity) return;
+      trendByCustomer[cid] = {
+        delta, isHighSeverity, seasonalityExplained,
+        message: `מחזור הלקוח במגמת ירידה עקבית: ${monthKeysLabel(secondHalfKeys)} נמוכים ב-${Math.round(Math.abs(delta) * 100)}% בממוצע לעומת ${monthKeysLabel(firstHalfKeys)}, ללא סימני התאוששות.`,
+        breakdown: {
+          rows: monthKeys.map((mk, i) => ({ label: fmtMonthYearKey(mk), value: Math.round(byMonth[i]) })),
+          dashFilter: { periodMonths: secondHalfKeys, compareMonths: firstHalfKeys }
+        }
+      };
+    });
+  }
+
   // Rule 1c — cumulative revenue this year (Jan through the last fully completed
   // month) vs the same period last year, per customer — bidirectional, and a more
-  // sensitive, earlier-warning companion to the monthly and quarterly rules.
+  // sensitive, earlier-warning companion to the monthly and quarterly rules. Also
+  // decomposes the YTD delta into its monthly YoY components to name the 1-2
+  // months that actually drove the decline, rather than leaving the customer to
+  // guess where in an 8-month range the problem is, and folds in rule 1d's trend
+  // result (see above) into one combined insight when a customer trips both.
   {
     const year = nowDate.getFullYear();
     const lastCompletedMonth = Math.max(1, nowDate.getMonth());
@@ -269,20 +324,57 @@ async function computeInsights(organizationId) {
       const lastRev = events.filter((e) => e.t >= startLast && e.t < endLast).reduce((a, e) => a + e.rev, 0);
       if (lastRev < params.cumulativeYoy_minBaseRevenue) return;
       const delta = (thisRev - lastRev) / lastRev;
-      if (delta <= -params.cumulativeYoy_pctThreshold / 100) { // only a decline counts — see general policy 7
-        insights.push({
-          type: 'salesPattern',
-          severity: Math.abs(delta) >= params.cumulativeYoy_highPct / 100 ? 'high' : 'medium',
-          customerId: cid,
-          customerName: custLabel(cid),
-          message: `מחזור הלקוח ב${rangeLabel} ${year} ירד ב-${Math.round(Math.abs(delta) * 100)}% לעומת אותה תקופה אשתקד.`,
-          metric: Math.round(delta * 100),
-          breakdown: {
-            rows: [{ label: rangeLabel + ' ' + year, value: Math.round(thisRev) }, { label: rangeLabel + ' ' + (year - 1), value: Math.round(lastRev) }],
-            dashFilter: { periodMonths: yearMonthRange(year, 1, lastCompletedMonth), compareMonths: yearMonthRange(year - 1, 1, lastCompletedMonth) }
-          }
-        });
+      if (delta > -params.cumulativeYoy_pctThreshold / 100) return; // only a decline counts — see general policy 7
+
+      const monthlyDeltas = [];
+      for (let m = 1; m <= lastCompletedMonth; m++) {
+        const [mStart, mEnd] = monthRangeMs(monthKey(new Date(year, m - 1, 1).getTime()));
+        const [mLastStart, mLastEnd] = monthRangeMs(monthKey(new Date(year - 1, m - 1, 1).getTime()));
+        const thisM = events.filter((e) => e.t >= mStart && e.t < mEnd).reduce((a, e) => a + e.rev, 0);
+        const lastM = events.filter((e) => e.t >= mLastStart && e.t < mLastEnd).reduce((a, e) => a + e.rev, 0);
+        monthlyDeltas.push({ m, diff: thisM - lastM });
       }
+      const decliningMonths = monthlyDeltas.filter((d) => d.diff < 0).sort((a, b) => a.diff - b.diff);
+      const driverMonths = decliningMonths.length
+        ? (decliningMonths.length > 1 && Math.abs(decliningMonths[1].diff) >= Math.abs(decliningMonths[0].diff) * 0.5
+          ? [decliningMonths[0], decliningMonths[1]] : [decliningMonths[0]])
+        : [];
+      const driverLabel = driverMonths.map((d) => MONTH_NAMES_HE[d.m - 1] + ' ' + year).join(' ו');
+
+      const trend = trendByCustomer[cid];
+      delete trendByCustomer[cid]; // consumed — folded into this combined insight below
+
+      let message = `מחזור הלקוח ב${rangeLabel} ${year} ירד ב-${Math.round(Math.abs(delta) * 100)}% לעומת אותה תקופה אשתקד` +
+        (driverLabel ? `, בעיקר עקב הירידה ב${driverLabel}` : '') + '.';
+      if (trend) message += ' ' + trend.message;
+
+      insights.push({
+        type: 'salesPattern',
+        severity: (Math.abs(delta) >= params.cumulativeYoy_highPct / 100 || (trend && trend.isHighSeverity)) ? 'high' : 'medium',
+        customerId: cid,
+        customerName: custLabel(cid),
+        message,
+        metric: Math.round(delta * 100),
+        breakdown: {
+          rows: [{ label: rangeLabel + ' ' + year, value: Math.round(thisRev) }, { label: rangeLabel + ' ' + (year - 1), value: Math.round(lastRev) }],
+          dashFilter: { periodMonths: yearMonthRange(year, 1, lastCompletedMonth), compareMonths: yearMonthRange(year - 1, 1, lastCompletedMonth) }
+        }
+      });
+    });
+
+    // Trend-only customers (didn't also trip the cumulative-YoY rule above) still
+    // get their own standalone insight.
+    Object.keys(trendByCustomer).forEach((cid) => {
+      const t = trendByCustomer[cid];
+      insights.push({
+        type: 'salesPattern',
+        severity: t.isHighSeverity ? 'high' : 'medium',
+        customerId: cid,
+        customerName: custLabel(cid),
+        message: t.message + (t.seasonalityExplained ? SEASONALITY_CAVEAT : ''),
+        metric: Math.round(t.delta * 100),
+        breakdown: t.breakdown
+      });
     });
   }
 
