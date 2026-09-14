@@ -56,16 +56,17 @@ async function initDashboardFilters() {
   const purchaseCohortSubtitle = document.getElementById('dashPurchaseCohortSubtitle');
 
   // Five less-commonly-used filter rows (superType/department/product/primaryClass/
-  // customerType) start collapsed to keep the table short — a button expands them,
-  // and updateUi() below auto-expands (never auto-collapses) the moment any of them
-  // already has a value, so a filter set via URL/insight-click is never hidden from
-  // the user without explanation.
+  // customerType) start collapsed to keep the table short — a small icon button in
+  // the table's corner header cell (rotates via CSS on expand, no row of its own)
+  // expands them, and updateUi() below auto-expands (never auto-collapses) the
+  // moment any of them already has a value, so a filter set via URL/insight-click is
+  // never hidden from the user without explanation.
   const filterTableEl = document.querySelector('.dash-filter-table');
   const moreFiltersToggle = document.getElementById('dashMoreFiltersToggle');
   function setFiltersExpanded(expanded) {
     if (!filterTableEl) return;
     filterTableEl.classList.toggle('dft-expanded', expanded);
-    if (moreFiltersToggle) moreFiltersToggle.textContent = expanded ? 'הסתר פילטרים ▴' : 'הצג עוד פילטרים ▾';
+    if (moreFiltersToggle) moreFiltersToggle.title = expanded ? 'הסתר פילטרים' : 'הצג עוד פילטרים';
   }
   if (moreFiltersToggle) {
     moreFiltersToggle.addEventListener('click', () => {
