@@ -17,13 +17,15 @@ async function initRelevancePage() {
   // and a clickable, sortable header (same th-inner/sorted-asc/sorted-desc pattern
   // table.js uses elsewhere), independent of both the global search box above and
   // the toggle-cell holiday/season columns, which stay as they were.
-  const SIMPLE_COLUMNS = [
+  const RELEVANCE_TABLE_KEY = 'relevance';
+  const originalColumns = [
     { key: 'productCode', label: 'קוד פריט' },
     { key: 'productName', label: 'שם פריט', cls: 'rel-product-name' },
     { key: 'superType', label: 'טיפוס על' },
     { key: 'type', label: 'טיפוס' },
     { key: 'department', label: 'מחלקה' }
   ];
+  let columns = originalColumns.slice();
   const state = { sortCol: 'productName', sortDir: 'asc', filters: {}, focusedCol: null };
 
   function cellControl(row, cell) {
@@ -58,7 +60,7 @@ async function initRelevancePage() {
     const term = searchTerm.trim().toLowerCase();
     if (term) rows = rows.filter((r) => (r.productName || '').toLowerCase().includes(term) || (r.productCode || '').toLowerCase().includes(term));
     if (onlyUnclassified) rows = rows.filter((r) => unknownCount(r) > 0);
-    SIMPLE_COLUMNS.forEach((col) => {
+    columns.forEach((col) => {
       const f = (state.filters[col.key] || '').trim().toLowerCase();
       if (!f) return;
       rows = rows.filter((r) => String(r[col.key] || '').toLowerCase().indexOf(f) !== -1);
@@ -102,6 +104,17 @@ async function initRelevancePage() {
     await load();
   }
 
+  function reorderColumns(newCols) {
+    columns = newCols;
+    saveColumnOrder(RELEVANCE_TABLE_KEY, columns);
+    render();
+  }
+
+  function simpleCellValue(col, row) {
+    if (col.key === 'productName') return row.productName || row.productCode;
+    return row[col.key] || '';
+  }
+
   function render() {
     const events = payload.events;
     if (!events.length) {
@@ -129,20 +142,21 @@ async function initRelevancePage() {
     if (hasHolidays) html += '<button class="btn btn-ghost btn-sm js-relBulkIrrelevantHolidays" type="button">סמן נבחרים כלא רלוונטיים לכל החגים</button>';
     if (hasSeasons) html += '<button class="btn btn-ghost btn-sm js-relBulkIrrelevantSeasons" type="button">סמן נבחרים כלא רלוונטיים לכל העונות</button>';
     if (selected.size) html += '<button class="btn btn-ghost btn-sm js-relClearSelection" type="button">נקה בחירה</button>';
+    html += '<button class="btn btn-ghost btn-sm js-resetColOrder" type="button">איפוס סדר עמודות</button>';
     html += '<span class="spacer"></span>' +
       '<input type="text" class="filter-input js-relSearch" placeholder="חיפוש לפי שם מוצר / קוד פריט..." style="max-width:220px;" value="' + Layout.escapeHtml(searchTerm) + '">' +
       '</div>';
 
     html += '<div class="rel-matrix-scroll"><table class="rel-matrix"><thead><tr><th><input type="checkbox" class="js-relSelectAll"' + (allVisibleSelected ? ' checked' : '') + '></th>';
-    SIMPLE_COLUMNS.forEach((col) => {
+    columns.forEach((col) => {
       const sortCls = state.sortCol === col.key ? (' sorted-' + state.sortDir) : '';
-      html += '<th' + (col.cls ? ' class="' + col.cls + '"' : '') + '><span class="th-inner js-relSortBtn' + sortCls + '" data-col="' + col.key + '"><span class="th-label">' + Layout.escapeHtml(col.label) + '</span>' +
+      html += '<th class="js-relSimpleTh' + (col.cls ? ' ' + col.cls : '') + '"><span class="th-inner js-relSortBtn' + sortCls + '" data-col="' + col.key + '"><span class="th-label">' + Layout.escapeHtml(col.label) + '</span>' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 10l5 5 5-5"/></svg></span></th>';
     });
     html += '<th>סטטוס</th>';
     events.forEach((ev) => { html += '<th>' + Layout.escapeHtml(ev.name) + '<br><span style="font-weight:400;color:var(--text-faint);">(' + (ev.source === 'holiday' ? 'חג' : 'עונה') + ')</span></th>'; });
     html += '</tr><tr class="filter-row"><td></td>';
-    SIMPLE_COLUMNS.forEach((col) => {
+    columns.forEach((col) => {
       html += '<td><input class="filter-input js-relFilterInput" data-col="' + col.key + '" placeholder="סנן..." value="' + Layout.escapeHtml(state.filters[col.key] || '') + '"></td>';
     });
     html += '<td></td>';
@@ -157,13 +171,11 @@ async function initRelevancePage() {
           ? '<span class="pill pill-red">⚠ ' + unknown + ' לא מסווג' + (unknown > 1 ? 'ים' : '') + '</span>'
           : '<span class="pill pill-green">✓ מסווג</span>';
         html += '<tr' + (unknown > 0 ? ' class="rel-row-unclassified"' : '') + '>' +
-          '<td><input type="checkbox" class="js-relRowCheck" data-product="' + Layout.escapeHtml(row.productCode) + '"' + (selected.has(row.productCode) ? ' checked' : '') + '></td>' +
-          '<td>' + Layout.escapeHtml(row.productCode) + '</td>' +
-          '<td class="rel-product-name">' + Layout.escapeHtml(row.productName || row.productCode) + '</td>' +
-          '<td>' + Layout.escapeHtml(row.superType || '') + '</td>' +
-          '<td>' + Layout.escapeHtml(row.type || '') + '</td>' +
-          '<td>' + Layout.escapeHtml(row.department || '') + '</td>' +
-          '<td>' + statusHtml + '</td>';
+          '<td><input type="checkbox" class="js-relRowCheck" data-product="' + Layout.escapeHtml(row.productCode) + '"' + (selected.has(row.productCode) ? ' checked' : '') + '></td>';
+        columns.forEach((col) => {
+          html += '<td' + (col.cls ? ' class="' + col.cls + '"' : '') + '>' + Layout.escapeHtml(simpleCellValue(col, row)) + '</td>';
+        });
+        html += '<td>' + statusHtml + '</td>';
         row.cells.forEach((cell) => { html += '<td class="rel-cell">' + cellControl(row, cell) + '</td>'; });
         html += '</tr>';
       });
@@ -171,6 +183,16 @@ async function initRelevancePage() {
     html += '</tbody></table></div>';
     container.innerHTML = html;
 
+    // Only the plain text/categorical columns are reorderable — the leading checkbox
+    // column, the status column, and the per-holiday/season toggle columns stay fixed,
+    // so drag-reorder is wired on just those <th> elements (matched via .js-relSimpleTh)
+    // rather than the whole header row.
+    wireColumnDragReorder({ children: Array.from(container.querySelectorAll('.js-relSimpleTh')) }, columns, reorderColumns);
+    container.querySelector('.js-resetColOrder').addEventListener('click', async () => {
+      await resetColumnOrder(RELEVANCE_TABLE_KEY);
+      columns = applyColumnOrder(originalColumns, await loadColumnOrder(RELEVANCE_TABLE_KEY));
+      render();
+    });
     container.querySelector('.js-relOnlyUnclassified').addEventListener('click', () => { onlyUnclassified = !onlyUnclassified; render(); });
     container.querySelector('.js-relSearch').addEventListener('input', (e) => { searchTerm = e.target.value; render(); });
     container.querySelectorAll('.js-relSortBtn').forEach((el) => {
@@ -238,5 +260,6 @@ async function initRelevancePage() {
     }
   }
 
+  columns = applyColumnOrder(originalColumns, await loadColumnOrder(RELEVANCE_TABLE_KEY));
   await load();
 }
