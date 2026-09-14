@@ -32,8 +32,8 @@ const INSIGHT_RULES = [
         rule: '{concentration_pctThreshold}%+ ממחזור הלקוח מגיעים מ-{concentration_topN} מוצרים בלבד.',
         detail: 'נדרש מחזור לקוח כולל של {concentration_minRevenue}₪ לפחות. חומרה גבוהה מעל 85% ריכוזיות.' },
       { title: 'קצב רכישה לא סדיר',
-        rule: 'מוצר שמהווה {irregularity_minRevenueShare}%+ ממחזור הלקוח, אך נרכש במרווחי זמן לא עקביים (מקדם שונות מעל {irregularity_cvThreshold}%).',
-        detail: 'נדרשות {irregularity_minPurchases}+ רכישות היסטוריות למוצר כדי לחשב את סדירות הרכישה. הזדמנות להציע ללקוח לעבור להזמנה קבועה של המוצר.' }
+        rule: 'מוצר שמהווה {irregularity_minRevenueShare}%+ ממחזור הלקוח ב-{irregularity_windowMonths} החודשים הקלנדריים האחרונים שהסתיימו במלואם ובאותם חודשים אשתקד גם יחד, אך נרכש בכמות לא עקבית מחודש לחודש באותה תקופה משולבת (מקדם שונות בכמות החודשית מעל {irregularity_cvThreshold}%).',
+        detail: 'נדרשים {irregularity_minActiveMonths}+ חודשים עם רכישה מתוך שני החלונות יחד כדי שמקדם השונות ייחשב מבוסס. מוצר עם תחליף מוגדר נספר יחד עם התחליף שלו כיחידה אחת. הבדיקה כמותית (כמות חודשית), לא לפי מספר הימים בין רכישות. הזדמנות להציע ללקוח לעבור להזמנה קבועה של המוצר.' }
     ] },
   { type: 'peerGap', title: 'פער רכישה מול לקוחות דומים — תובנה 3',
     subrules: [

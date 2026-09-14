@@ -101,7 +101,7 @@ const DEFAULT_PARAMS = {
   productQty_windowMonths: 3, productQty_pctThreshold: 40, productQty_highPct: 60, productQty_minPriorQty: 5,
   variety_windowMonths: 3, variety_pctThreshold: 30, variety_highPct: 50, variety_minPriorCount: 3,
   productFreqYoy_pctThreshold: 40, productFreqYoy_highPct: 60, productFreqYoy_minPriorMonths: 2,
-  irregularity_minPurchases: 4, irregularity_cvThreshold: 70, irregularity_minRevenueShare: 5,
+  irregularity_windowMonths: 6, irregularity_minActiveMonths: 4, irregularity_cvThreshold: 70, irregularity_minRevenueShare: 5,
   concentration_topN: 2, concentration_pctThreshold: 70, concentration_minRevenue: 500,
   peerGap_windowMonths: 6, peerGap_pctThreshold: 50, peerGap_highPct: 80, peerGap_minGroupSize: 2
 };
@@ -469,25 +469,40 @@ async function computeInsights(organizationId) {
 
   // Rule 2c — inconsistent purchase pattern for a product that's a meaningful
   // share of the customer's revenue: an opportunity to establish a steadier order.
+  // Measured quantitatively as the coefficient of variation of MONTHLY QUANTITY
+  // across two comparable windows — the last irregularity_windowMonths fully
+  // completed months, plus the same calendar months a year earlier — rather than
+  // the raw time gaps between individual purchase events, so a customer who buys
+  // wildly different amounts month to month (even on an otherwise regular cadence)
+  // is caught, and the two windows can drive the dashboard's own period filters
+  // the same way every other rule here does. Revenue share is scoped to this same
+  // 12-month combined window, not all-time, to stay consistent with everything
+  // else the rule now measures within it.
   {
+    const winMonths = params.irregularity_windowMonths;
+    const curMonthKeys = [];
+    for (let m = 1; m <= winMonths; m++) curMonthKeys.push(monthKey(new Date(nowDate.getFullYear(), nowDate.getMonth() - m, 1).getTime()));
+    const yoyMonthKeys = [];
+    for (let m = 1; m <= winMonths; m++) yoyMonthKeys.push(monthKey(new Date(nowDate.getFullYear() - 1, nowDate.getMonth() - m, 1).getTime()));
+    const allMonthKeys = curMonthKeys.concat(yoyMonthKeys);
     Object.keys(byCustomerFamily).forEach((key) => {
       const idx = key.indexOf('|');
       const cid = key.slice(0, idx);
       const cust = custIndex[cid];
       if (isInactive(cust)) return;
-      const events = byCustomerFamily[key].slice().sort((a, b) => a.t - b.t);
-      if (events.length < params.irregularity_minPurchases) return;
-      const pid = events[events.length - 1].pid;
+      const pid = byCustomerFamily[key][byCustomerFamily[key].length - 1].pid;
       if (!isFamilyEligible(pid)) return;
-      const totalRev = (byCustomer[cid] || []).reduce((a, e) => a + e.rev, 0);
-      const famRev = events.reduce((a, e) => a + e.rev, 0);
+      const windowEvents = byCustomerFamily[key].filter((e) => allMonthKeys.includes(monthKey(e.t)));
+      const totalRev = (byCustomer[cid] || []).filter((e) => allMonthKeys.includes(monthKey(e.t))).reduce((a, e) => a + e.rev, 0);
+      const famRev = windowEvents.reduce((a, e) => a + e.rev, 0);
       if (totalRev <= 0 || (famRev / totalRev) * 100 < params.irregularity_minRevenueShare) return;
-      const gaps = [];
-      for (let i = 1; i < events.length; i++) gaps.push((events[i].t - events[i - 1].t) / DAY_MS);
-      const meanGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-      if (meanGap <= 0) return;
-      const variance = gaps.reduce((a, g) => a + Math.pow(g - meanGap, 2), 0) / gaps.length;
-      const cv = Math.sqrt(variance) / meanGap;
+      const monthlyQty = allMonthKeys.map((mk) => windowEvents.filter((e) => monthKey(e.t) === mk).reduce((a, e) => a + e.qty, 0));
+      const activeMonths = monthlyQty.filter((q) => q > 0).length;
+      if (activeMonths < params.irregularity_minActiveMonths) return;
+      const mean = monthlyQty.reduce((a, q) => a + q, 0) / monthlyQty.length;
+      if (mean <= 0) return;
+      const variance = monthlyQty.reduce((a, q) => a + Math.pow(q - mean, 2), 0) / monthlyQty.length;
+      const cv = Math.sqrt(variance) / mean;
       if (cv * 100 < params.irregularity_cvThreshold) return;
       const label = familyLabel(pid);
       insights.push({
@@ -496,9 +511,12 @@ async function computeInsights(organizationId) {
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הלקוח קונה את ${label} בקצב לא סדיר, למרות שהוא מהווה נתח משמעותי ממחזורו.`,
+        message: `הלקוח קונה את ${label} בכמות לא סדירה מחודש לחודש — נבדק ב${monthKeysLabel(curMonthKeys)} וכן באותם חודשים אשתקד — למרות שהוא מהווה נתח משמעותי ממחזורו.`,
         metric: Math.round(cv * 100),
-        breakdown: { rows: [{ label: 'מקדם שונות', value: Math.round(cv * 100) }, { label: 'סף', value: params.irregularity_cvThreshold }] }
+        breakdown: {
+          rows: [{ label: 'מקדם שונות בכמות החודשית', value: Math.round(cv * 100) }, { label: 'סף', value: params.irregularity_cvThreshold }],
+          dashFilter: { periodMonths: curMonthKeys, compareMonths: yoyMonthKeys }
+        }
       });
     });
   }
