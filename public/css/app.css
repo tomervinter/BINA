@@ -282,6 +282,9 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
    column and a comparison column side by side, equal width, each subtly tinted so
    the two are easy to tell apart at a glance without being visually loud. ---------- */
 .dash-filter-table{table-layout:fixed;width:auto;max-width:560px;}
+.dash-filter-table tr.dft-collapsible{display:none;}
+.dash-filter-table.dft-expanded tr.dft-collapsible{display:table-row;}
+#dashMoreFiltersRow td{border-bottom:1px solid var(--border);}
 .dash-filter-table td{text-align:right;white-space:normal;border-bottom:1px solid var(--border);}
 .dash-filter-table thead th{position:static;background:transparent;font-size:11.5px;color:var(--text-faint);font-weight:700;padding:0 10px 6px;text-align:center;border-bottom:none;}
 .dash-filter-table thead th.dft-primary,.dash-filter-table thead th.dft-compare{font-size:15px;font-weight:800;padding:8px 10px;border-radius:8px 8px 0 0;}

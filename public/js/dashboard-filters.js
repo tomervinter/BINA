@@ -55,6 +55,24 @@ async function initDashboardFilters() {
   };
   const purchaseCohortSubtitle = document.getElementById('dashPurchaseCohortSubtitle');
 
+  // Five less-commonly-used filter rows (superType/department/product/primaryClass/
+  // customerType) start collapsed to keep the table short — a button expands them,
+  // and updateUi() below auto-expands (never auto-collapses) the moment any of them
+  // already has a value, so a filter set via URL/insight-click is never hidden from
+  // the user without explanation.
+  const filterTableEl = document.querySelector('.dash-filter-table');
+  const moreFiltersToggle = document.getElementById('dashMoreFiltersToggle');
+  function setFiltersExpanded(expanded) {
+    if (!filterTableEl) return;
+    filterTableEl.classList.toggle('dft-expanded', expanded);
+    if (moreFiltersToggle) moreFiltersToggle.textContent = expanded ? 'הסתר פילטרים ▴' : 'הצג עוד פילטרים ▾';
+  }
+  if (moreFiltersToggle) {
+    moreFiltersToggle.addEventListener('click', () => {
+      setFiltersExpanded(!filterTableEl.classList.contains('dft-expanded'));
+    });
+  }
+
   const [custRes, prodRes] = await Promise.all([
     fetch('/api/customers?pageSize=all', { credentials: 'include' }),
     fetch('/api/products?pageSize=all', { credentials: 'include' })
@@ -170,6 +188,9 @@ async function initDashboardFilters() {
 
   function updateUi() {
     const periodActive = state.periodMonths.length > 0;
+    if (state.superType.length || state.compareSuperType.length || state.department.length || state.compareDepartment.length ||
+        state.product.length || state.compareProduct.length || state.primaryClass.length || state.comparePrimaryClass.length ||
+        state.customerType.length || state.compareCustomerType.length) setFiltersExpanded(true);
     cellClearBtns.customer.style.display = state.customer.length ? '' : 'none';
     cellClearBtns.compareCustomer.style.display = state.compareCustomer.length ? '' : 'none';
     cellClearBtns.year.style.display = state.periodYears.length ? '' : 'none';
