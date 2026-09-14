@@ -148,9 +148,20 @@ async function computeInsights(organizationId) {
   const prodIndex = {};
   products.forEach((p) => { prodIndex[p.itemCode] = p; });
 
-  const s = sales.map((r) => ({
-    cid: r.customerNumber, pid: r.productCode, t: new Date(r.date).getTime(), qty: r.quantity, rev: r.revenue
-  }));
+  // Some source ERPs export a full customer×product×month grid rather than a sparse
+  // transaction log — meaning a month with no actual purchase can still show up as a
+  // real Sale row with revenue=0 and quantity=0, not as an absent row. Every SUM-based
+  // rule (revenue/quantity totals) is naturally immune to these — a zero contributes
+  // nothing — but any rule that asks "did an event happen in month X" or "does the
+  // customer have this product at all" (distinct-month counting, family-presence sets)
+  // would wrongly treat a zero-value placeholder as a real purchase, masking exactly
+  // the kind of drop-off/stoppage these rules exist to catch. Dropped here, once, so
+  // every rule downstream sees only real purchase activity — kept to qty!==0 OR
+  // rev!==0 (not qty>0 AND rev>0) so a legitimate edge case with a value in only one
+  // field (e.g. a free sample: qty>0, rev=0) still counts as a real event.
+  const s = sales
+    .map((r) => ({ cid: r.customerNumber, pid: r.productCode, t: new Date(r.date).getTime(), qty: r.quantity, rev: r.revenue }))
+    .filter((e) => e.qty !== 0 || e.rev !== 0);
   const byCustomer = groupBy(s, (x) => x.cid);
 
   const insights = [];
