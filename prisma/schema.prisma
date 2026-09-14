@@ -34,6 +34,12 @@ model User {
   role           String       @default("admin")
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
+  // A platform-level operator who can create new organizations and manage users
+  // across ALL of them — separate from `role`, which only ever governs admin/member
+  // permissions WITHIN this user's own organizationId. Not settable through normal
+  // signup; granted either by an existing super-admin or via the one-time
+  // bootstrap-superadmin route (only usable while none exists yet).
+  isSuperAdmin   Boolean      @default(false)
   createdAt      DateTime     @default(now())
   columnOrders   ColumnOrder[]
 }

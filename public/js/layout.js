@@ -16,7 +16,8 @@ const NAV_ICONS = {
   users: '<circle cx="9" cy="8" r="3.1"></circle><path d="M3.5 19.5c.6-3.4 2.9-5.3 5.5-5.3s4.9 1.9 5.5 5.3"></path><circle cx="17" cy="9" r="2.3"></circle>',
   'reports-yoy': '<path d="M4 19.5h16"></path><path d="M7 19.5v-6M12 19.5v-10M17 19.5v-3.5"></path>',
   'reports-full-sales': '<rect x="3.5" y="4" width="17" height="16" rx="1.6"></rect><path d="M3.5 9.5h17M3.5 14.5h17M9 4v16"></path>',
-  'product-substitutes': '<path d="M7 7h11l-2.5-2.5"></path><path d="M17 17H6l2.5 2.5"></path>'
+  'product-substitutes': '<path d="M7 7h11l-2.5-2.5"></path><path d="M17 17H6l2.5 2.5"></path>',
+  organizations: '<rect x="4" y="10" width="7" height="10.5" rx="1"></rect><rect x="13" y="4" width="7" height="16.5" rx="1"></rect><path d="M7 13.5h1M7 17h1M16 7.5h1M16 11h1M16 14.5h1"></path>'
 };
 
 function navSvg(key) {
@@ -50,7 +51,8 @@ const PAGE_LABELS = {
   dashboard: 'בית', sales: 'טעינת קובץ מכירות', customers: 'טעינת לקוחות', products: 'טעינת מוצרים',
   inventory: 'טעינת מלאי', holidays: 'ניהול חגים', seasons: 'ניהול עונתיות', relevance: 'שיוך חג ועונה למוצר',
   insights: 'יומן תובנות', 'rule-engine': 'מנוע התובנות', users: 'משתמשים',
-  'reports-yoy': 'דוח שנה מול שנה', 'product-substitutes': 'מוצרים תחליפיים', 'reports-full-sales': 'דוח מכירות מלא'
+  'reports-yoy': 'דוח שנה מול שנה', 'product-substitutes': 'מוצרים תחליפיים', 'reports-full-sales': 'דוח מכירות מלא',
+  organizations: 'ניהול חברות'
 };
 
 const Layout = (function () {
@@ -58,7 +60,7 @@ const Layout = (function () {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  function renderSidebar(activeKey, counts) {
+  function renderSidebar(activeKey, counts, isSuperAdmin) {
     let html =
       '<div class="brand-row">' +
       '<div class="brand-icon"><img src="img/logo.gif" alt="BINA"></div>' +
@@ -67,7 +69,15 @@ const Layout = (function () {
       '<a class="nav-cta' + (activeKey === 'dashboard' ? ' active' : '') + '" href="dashboard.html">' + navSvg('dashboard') + 'דשבורד</a>' +
       '<div class="nav-scroll">';
 
-    NAV_GROUPS.forEach((group) => {
+    // Platform-level — visible only to a super-admin, who manages OTHER companies,
+    // not just their own (see "ניהול חברה" below, which every admin already has).
+    const groups = isSuperAdmin
+      ? NAV_GROUPS.concat([{ title: 'ניהול פלטפורמה', items: [
+          { key: 'organizations', href: 'organizations.html', label: 'ניהול חברות' }
+        ] }])
+      : NAV_GROUPS;
+
+    groups.forEach((group) => {
       html += '<div class="nav-group"><div class="nav-group-label">' + escapeHtml(group.title) + '</div>';
       group.items.forEach((item) => {
         const count = item.countKey && counts ? counts[item.countKey] : null;
@@ -126,7 +136,7 @@ const Layout = (function () {
     const sidebarMount = document.getElementById('sidebarMount');
     const topbarMount = document.getElementById('topbarMount');
     if (sidebarMount) {
-      sidebarMount.innerHTML = renderSidebar(pageKey, counts) + renderSidebarFooter(data.user);
+      sidebarMount.innerHTML = renderSidebar(pageKey, counts, !!data.user.isSuperAdmin) + renderSidebarFooter(data.user);
       const logoutBtn = document.getElementById('logoutBtn');
       if (logoutBtn) logoutBtn.addEventListener('click', async () => {
         await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });

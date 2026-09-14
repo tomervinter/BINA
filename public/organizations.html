@@ -1,0 +1,51 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ניהול חברות — BINA</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="page-title">ניהול חברות</div>
+      <div class="page-subtitle">כל חברה (ארגון) מקבלת נתונים מבודדים לחלוטין משאר החברות באותו דטה-בייס — לקוחות, מוצרים, מכירות, תובנות וכל השאר. מסך זה זמין רק למנהלי-על.</div>
+
+      <div id="deniedNotice" class="card" style="display:none;">
+        <p class="card-text">מסך זה זמין רק למנהלי-על של המערכת.</p>
+      </div>
+
+      <div id="orgsContent" style="display:none;">
+        <div class="card" id="createCard">
+          <div class="card-title">הקמת חברה חדשה</div>
+          <form id="createOrgForm">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+              <div style="flex:1;min-width:220px;">
+                <label>שם החברה</label>
+                <input type="text" id="orgName" required>
+              </div>
+              <button class="btn" type="submit">הקמת חברה</button>
+            </div>
+          </form>
+          <div class="status-line" id="createStatus" style="display:none;"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">חברות קיימות</div>
+          <div id="orgsTable"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/column-order.js"></script>
+  <script src="js/table.js"></script>
+  <script src="js/organizations-page.js"></script>
+  <script>initOrganizationsPage();</script>
+</body>
+</html>

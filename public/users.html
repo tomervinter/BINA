@@ -13,7 +13,14 @@
       <div class="topbar" id="topbarMount"></div>
 
       <div class="page-title">משתמשים</div>
-      <div class="page-subtitle">ניהול חברי הצוות של החברה וההרשאות שלהם.</div>
+      <div class="page-subtitle" id="pageSubtitle">ניהול חברי הצוות של החברה וההרשאות שלהם.</div>
+
+      <div class="card" id="bootstrapCard" style="display:none;">
+        <div class="card-title">הפיכה למנהל-על</div>
+        <p class="card-text">טרם הוגדר מנהל-על במערכת. מנהל-על יכול להקים חברות (ארגונים) נוספות ולהוסיף להן משתמשים — ראו מסך "ניהול חברות". ניתן להפוך רק פעם אחת, כל עוד לא קיים מנהל-על אחר.</p>
+        <button class="btn" id="bootstrapBtn" type="button">הפוך אותי למנהל-על</button>
+        <div class="status-line" id="bootstrapStatus" style="display:none;"></div>
+      </div>
 
       <div class="card" id="inviteCard">
         <div class="card-title">הוספת משתמש לחברה</div>
@@ -35,6 +42,10 @@
               <label>תפקיד</label>
               <select id="inviteRole"><option value="member">חבר צוות</option><option value="admin">מנהל</option></select>
             </div>
+            <div style="min-width:180px;display:none;" id="inviteOrgField">
+              <label>חברה</label>
+              <select id="inviteOrg"></select>
+            </div>
           </div>
           <button class="btn" type="submit">הוספת משתמש</button>
         </form>
@@ -42,7 +53,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">משתמשי החברה</div>
+        <div class="card-title" id="usersCardTitle">משתמשי החברה</div>
         <div id="usersTable"></div>
       </div>
     </main>
