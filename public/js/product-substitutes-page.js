@@ -57,8 +57,8 @@ async function initProductSubstitutesPage() {
     const res = await fetch('/api/product-substitutes', { credentials: 'include' });
     const rows = res.ok ? await res.json() : [];
     createDataTable(document.getElementById('subsTable'), [
-      { key: 'productName', label: 'מוצר' },
-      { key: 'substituteName', label: 'מוצר תחליפי' },
+      { key: 'productName', label: 'מוצר', render: (r) => r.productCode + ' — ' + r.productName, filterValue: (r) => r.productCode + ' ' + r.productName },
+      { key: 'substituteName', label: 'מוצר תחליפי', render: (r) => r.substituteCode + ' — ' + r.substituteName, filterValue: (r) => r.substituteCode + ' ' + r.substituteName },
       { key: 'actions', label: '', html: true, sortable: false, filterable: false, render: (r) => '<button class="icon-btn js-deleteSub" data-id="' + r.id + '" type="button" title="מחיקה">✕</button>' }
     ], rows, { exportFilename: 'product-substitutes', tableKey: 'product-substitutes' });
   }
