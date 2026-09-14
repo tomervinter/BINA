@@ -201,7 +201,10 @@
           <a href="reports-full-sales.html" class="btn btn-ghost btn-sm" id="salesSummaryFullReportLink">לצפייה בדוח המלא</a>
         </div>
       </div>
-      <div class="kpi-grid" id="salesSummaryKpiGrid" style="margin-bottom:22px;"></div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:22px;">
+        <div class="kpi-grid" id="salesSummaryKpiGrid" style="flex:1;min-width:280px;grid-template-columns:repeat(2,1fr);"></div>
+        <div class="kpi-grid" id="salesSummaryCompareKpiGrid" style="flex:1;min-width:280px;grid-template-columns:repeat(2,1fr);"></div>
+      </div>
 
       <div class="table-head-row" style="margin-top:6px;">
         <div class="table-head-right">

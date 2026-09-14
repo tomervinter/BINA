@@ -29,21 +29,24 @@ function renderDashboardTopInsights(filters) {
   const customerIds = filters.customer || []; // array — the dashboard's customer filter is a multi-select
   const filtered = customerIds.length ? dashAllInsights.filter((i) => customerIds.includes(i.customerId)) : dashAllInsights;
 
-  // Summary KPI-card tile(s) — appended into the SAME grid as the sales revenue/qty
-  // tiles (#salesSummaryKpiGrid), one per side, rather than a separate standalone
-  // tile elsewhere on the page. Safe to append (not replace) here because apply()
-  // in dashboard-filters.js always calls loadDashboardSalesSummary (which fully
-  // rebuilds that grid's innerHTML) BEFORE window.refreshDashboardTopInsights on
-  // every cycle, so these two tiles never accumulate across re-renders. The compare
-  // tile only appears when the sales grid itself currently has a compare side (no
-  // direct cross-file plumbing for that — just checking whether a .v-purple tile is
-  // already there, since insights themselves aren't period/comparison-scoped, this
-  // is the same count shown both times). Deep-links to insights.html scoped the same
-  // way as everywhere else (by the one selected customer, when there's exactly one —
-  // the journal's per-column filter can't express an arbitrary multi-customer OR, so
-  // a multi-customer dashboard selection just links to the full unfiltered journal).
-  const salesGrid = document.getElementById('salesSummaryKpiGrid');
-  if (salesGrid) {
+  // Summary KPI-card tile(s) — appended into the sales revenue/qty tiles' OWN
+  // per-side grid containers (#salesSummaryKpiGrid for primary, on the right;
+  // #salesSummaryCompareKpiGrid for compare, on the left — see dashboard-sales-
+  // summary.js, which owns and fully rebuilds both), so each insight tile lands
+  // directly below its own side's tiles rather than a separate standalone tile
+  // elsewhere on the page. Safe to append (not replace) here because apply() in
+  // dashboard-filters.js always calls loadDashboardSalesSummary BEFORE
+  // window.refreshDashboardTopInsights on every cycle, so these tiles never
+  // accumulate across re-renders. The compare tile only appears when the compare
+  // grid itself is currently shown (insights themselves aren't period/comparison-
+  // scoped, so this is the same count shown both times). Deep-links to
+  // insights.html scoped the same way as everywhere else (by the one selected
+  // customer, when there's exactly one — the journal's per-column filter can't
+  // express an arbitrary multi-customer OR, so a multi-customer dashboard
+  // selection just links to the full unfiltered journal).
+  const primaryGrid = document.getElementById('salesSummaryKpiGrid');
+  const compareGrid = document.getElementById('salesSummaryCompareKpiGrid');
+  if (primaryGrid) {
     const href = customerIds.length === 1 ? 'insights.html?customer=' + encodeURIComponent(customerIds[0]) : 'insights.html';
     const desc = customerIds.length ? 'תובנות פתוחות עבור הלקוח הנבחר' : 'תובנות פתוחות בסך הכול';
     const tile = (dot, cls) => '<a class="kpi-card" href="' + href + '">' +
@@ -52,9 +55,10 @@ function renderDashboardTopInsights(filters) {
       '<div class="kpi-value ' + cls + '">' + filtered.length.toLocaleString('he-IL') + '</div>' +
       '<div class="kpi-desc">' + desc + '</div>' +
       '</a>';
-    const hasCompare = !!salesGrid.querySelector('.v-purple');
-    salesGrid.insertAdjacentHTML('beforeend', tile('blue', 'v-blue'));
-    if (hasCompare) salesGrid.insertAdjacentHTML('beforeend', tile('purple', 'v-purple'));
+    primaryGrid.insertAdjacentHTML('beforeend', tile('blue', 'v-blue'));
+    if (compareGrid && compareGrid.style.display !== 'none' && compareGrid.children.length) {
+      compareGrid.insertAdjacentHTML('beforeend', tile('purple', 'v-purple'));
+    }
   }
 
   if (!filtered.length) {

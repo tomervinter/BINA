@@ -380,26 +380,36 @@ async function loadDashboardSalesSummary(filters) {
   // visually distinct groups at a glance (matching the same blue/purple split used on
   // the filter table above).
   const primSuffix = primaryAxisLabel ? (' — ' + primaryAxisLabel) : '';
-  const kpiTiles = [
+  const primaryTiles = [
     ['blue', 'v-blue', fmtMoneyShort(s.totalRevenue), (s.period ? 'מכירות תקופה נוכחית' : 'מכירות') + primSuffix + ' (ש"ח)', reportUrl(curReportParams)],
     ['blue', 'v-blue', s.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו' + (s.period ? ' בתקופה נוכחית' : '') + primSuffix, reportUrl(curReportParams)]
   ];
+  const compareTiles = [];
   if (ct) {
     const cmpSuffix = compareAxisLabel ? (' — ' + compareAxisLabel) : '';
-    kpiTiles.push(
+    compareTiles.push(
       ['purple', 'v-purple', fmtMoneyShort(ct.totalRevenue), 'מכירות להשוואה' + cmpSuffix + ' (ש"ח)', reportUrl(compareReportParams)],
       ['purple', 'v-purple', ct.activeProductCount.toLocaleString('he-IL'), 'כמות מוצרים שנמכרו להשוואה' + cmpSuffix, reportUrl(compareReportParams)]
     );
   }
 
-  document.getElementById('salesSummaryKpiGrid').innerHTML = kpiTiles.map(([dot, cls, value, desc, href]) => (
-    '<a class="kpi-card" href="' + href + '">' +
-    '<div class="kpi-blob" style="background:var(--' + dot + '-dot);"></div>' +
-    '<div class="kpi-blob b2" style="background:var(--' + dot + ');"></div>' +
-    '<div class="kpi-value ' + cls + '">' + Layout.escapeHtml(String(value)) + '</div>' +
-    '<div class="kpi-desc">' + Layout.escapeHtml(desc) + '</div>' +
-    '</a>'
-  )).join('');
+  function kpiTileHtml([dot, cls, value, desc, href]) {
+    return '<a class="kpi-card" href="' + href + '">' +
+      '<div class="kpi-blob" style="background:var(--' + dot + '-dot);"></div>' +
+      '<div class="kpi-blob b2" style="background:var(--' + dot + ');"></div>' +
+      '<div class="kpi-value ' + cls + '">' + Layout.escapeHtml(String(value)) + '</div>' +
+      '<div class="kpi-desc">' + Layout.escapeHtml(desc) + '</div>' +
+      '</a>';
+  }
+  // Primary and comparison tiles render into their OWN grid containers (side by
+  // side — primary on the right, compare on the left, matching the filter table
+  // above) rather than one shared flat grid, so a tile appended later (the
+  // insight-count summary — see dashboard-top-insights.js) lands directly under
+  // its own side's tiles instead of wherever a 4-column grid's auto-flow happens
+  // to place a 5th/6th item.
+  document.getElementById('salesSummaryKpiGrid').innerHTML = primaryTiles.map(kpiTileHtml).join('');
+  const compareGrid = document.getElementById('salesSummaryCompareKpiGrid');
+  if (compareGrid) { compareGrid.innerHTML = compareTiles.map(kpiTileHtml).join(''); compareGrid.style.display = compareTiles.length ? '' : 'none'; }
 
   // Shows/hides a chart row's second (comparison) card and widens/narrows the row
   // accordingly — one full-width chart when only primary filters are set, two
