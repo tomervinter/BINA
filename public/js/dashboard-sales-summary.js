@@ -136,10 +136,11 @@ function yoyDrawPlugin(entries, dsIndices) {
         ctx.fillText(pctText, textStartX, pctBaselineY);
         ctx.restore();
 
-        // Row 1 (above row 2): the ₪ delta, smaller and muted. Same trailing-sign,
-        // explicit-LTR approach as the percentage above, and "שח" spelled out rather
-        // than the ₪ symbol (per explicit request for this indicator specifically).
-        const moneyText = Math.abs(e.moneyDiff).toLocaleString('he-IL') + (e.moneyDiff >= 0 ? '+' : '-') + ' שח';
+        // Row 1 (above row 2): the money delta, smaller and muted. Same trailing-sign,
+        // explicit-LTR approach as the percentage above. No currency word/symbol
+        // (per explicit request) — the ₪-figure context is already established by
+        // the chart's own axis and the KPI tiles around it.
+        const moneyText = Math.abs(e.moneyDiff).toLocaleString('he-IL') + (e.moneyDiff >= 0 ? '+' : '-');
         ctx.save();
         ctx.direction = 'ltr';
         ctx.textAlign = 'center';
@@ -164,7 +165,7 @@ function yoyTooltipAfterLabel(entries, onlyDsIndex) {
     const e = byIndex[tooltipItem.dataIndex];
     if (!e) return undefined;
     const sign = e.up ? '+' : '-';
-    return 'לעומת אותו חודש אשתקד: ' + Math.abs(e.pct) + '%' + sign + ' (' + Math.abs(e.moneyDiff).toLocaleString('he-IL') + sign + ' שח)';
+    return 'לעומת אותו חודש אשתקד: ' + Math.abs(e.pct) + '%' + sign + ' (' + Math.abs(e.moneyDiff).toLocaleString('he-IL') + sign + ')';
   };
 }
 
