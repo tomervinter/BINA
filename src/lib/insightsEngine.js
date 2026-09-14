@@ -337,7 +337,12 @@ async function computeInsights(organizationId) {
       }
       if (trendByCustomer[cid]) return; // (a) already found something for this customer — it takes priority over (b)
 
-      // (b) slow, steady erosion
+      // (b) slow, steady erosion. No seasonality suppression here unlike (a) — that
+      // check asks whether the whole window overlaps a holiday/season, which is a
+      // reasonable "maybe this explains it" question over a short 4-month span, but
+      // over a 7-month span it's nearly guaranteed to overlap SOME holiday somewhere
+      // in Israeli retail regardless of whether that holiday has anything to do with
+      // a genuine sustained erosion — applying it here silently killed real cases.
       {
         const { monthKeys, byMonth } = monthlyRevSeries(events, slowWinMonths);
         if (byMonth[0] < params.trend_minBaseRevenue) return;
@@ -349,12 +354,8 @@ async function computeInsights(organizationId) {
         const delta = (byMonth[byMonth.length - 1] - byMonth[0]) / byMonth[0];
         if (delta >= 0) return; // no net decline over the window — see general policy 7
         const isHighSeverity = Math.abs(delta) >= params.trend_highPct / 100;
-        const trendWindowStart = monthRangeMs(monthKeys[0])[0];
-        const trendWindowEnd = monthRangeMs(monthKeys[monthKeys.length - 1])[1];
-        const seasonalityExplained = isExplainedBySeasonality(trendWindowStart, trendWindowEnd, pids);
-        if (seasonalityExplained && !isHighSeverity) return;
         trendByCustomer[cid] = {
-          delta, isHighSeverity, seasonalityExplained,
+          delta, isHighSeverity, seasonalityExplained: false,
           message: `מחזור הלקוח נשחק בהדרגה — ${monthKeysLabel([monthKeys[monthKeys.length - 1]])} נמוך ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${monthKeysLabel([monthKeys[0]])}, ברוב חודשי התקופה ירידה מול החודש הקודם.`,
           breakdown: {
             rows: monthKeys.map((mk, i) => ({ label: fmtMonthYearKey(mk), value: Math.round(byMonth[i]) })),
