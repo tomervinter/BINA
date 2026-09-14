@@ -218,6 +218,16 @@ async function computeInsights(organizationId) {
   // (general policy 8). needsReview insights still sort after non-flagged ones of
   // the same type (see sortInsights in src/routes/insights.js), so they only occupy
   // a dashboard's limited top-5 slots when there's nothing else to show.
+  //
+  // The check itself is only meaningful over a SHORT window: a holiday/season
+  // genuinely might explain a specific month's dip, but over a long multi-month
+  // window (a cumulative or wide-trend insight) some holiday or other overlaps it
+  // almost by certainty, regardless of whether it has anything to do with the
+  // decline — flagging every such insight would just be noise. So the check only
+  // runs at all when the insight's own window is SEASONALITY_NOTE_MAX_MONTHS or
+  // narrower; wider windows skip it entirely (no caveat, no flag) rather than
+  // returning an almost-always-true result.
+  const SEASONALITY_NOTE_MAX_MONTHS = 2;
   const SEASONALITY_CAVEAT = ' שימו לב: התקופה חופפת לחג/עונה המשויכים למוצר — ייתכן שהשינוי מוסבר בכך, ומומלץ לוודא את הנתון בפועל.';
 
   // Rule 1a — monthly revenue shift (bidirectional: flags a meaningful jump in
@@ -327,7 +337,7 @@ async function computeInsights(organizationId) {
         const isHighSeverity = Math.abs(delta) >= params.trend_highPct / 100;
         const trendWindowStart = monthRangeMs(monthKeys[0])[0];
         const trendWindowEnd = monthRangeMs(monthKeys[monthKeys.length - 1])[1];
-        const seasonalityExplained = isExplainedBySeasonality(trendWindowStart, trendWindowEnd, pids);
+        const seasonalityExplained = winMonths <= SEASONALITY_NOTE_MAX_MONTHS && isExplainedBySeasonality(trendWindowStart, trendWindowEnd, pids);
         trendByCustomer[cid] = {
           delta, isHighSeverity, seasonalityExplained,
           message: `מחזור הלקוח במגמת ירידה עקבית: ${monthKeysLabel(secondHalfKeys)} נמוכים ב-${Math.round(Math.abs(delta) * 100)}% בממוצע לעומת ${monthKeysLabel(firstHalfKeys)}, ללא סימני התאוששות.`,
@@ -529,7 +539,7 @@ async function computeInsights(organizationId) {
       const delta = (curQty - prevQty) / prevQty;
       if (delta > -params.productQty_pctThreshold / 100) return; // only a decline counts — see general policy 7
       const isHighSeverity = Math.abs(delta) >= params.productQty_highPct / 100;
-      const seasonalityExplained = isExplainedBySeasonality(curWindowStart, curWindowEnd, Array.from(familyMembers[famKey(pid)] || [pid]));
+      const seasonalityExplained = winMonths <= SEASONALITY_NOTE_MAX_MONTHS && isExplainedBySeasonality(curWindowStart, curWindowEnd, Array.from(familyMembers[famKey(pid)] || [pid]));
       const label = familyLabel(pid);
       insights.push({
         type: 'purchasePattern',
