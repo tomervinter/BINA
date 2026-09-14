@@ -50,6 +50,12 @@ function prevMonthKeyOf(mk) {
   if (m < 1) { m = 12; y -= 1; }
   return y + '-' + (m < 10 ? '0' + m : m);
 }
+// A "YYYY-MM" key as a single comparable integer (year*12+month) — the gap between
+// two months, in months, is just the difference of their indices. Used by the
+// overdue-reorder rule below to measure inter-purchase gaps without repeated
+// month-by-month date-arithmetic loops.
+function monthIndexOf(mk) { const [y, m] = mk.split('-').map(Number); return y * 12 + m; }
+function monthKeyFromIndex(idx) { const y = Math.floor((idx - 1) / 12); const m = idx - y * 12; return y + '-' + (m < 10 ? '0' + m : m); }
 function quarterOf(d) { return Math.floor(d.getMonth() / 3); }
 // "YYYY-MM" keys for months `fromMonth`..`toMonth` (1-indexed, inclusive) of one year —
 // matches the dashboard's own periodMonths/compareMonths format exactly, so an insight
@@ -104,6 +110,8 @@ const DEFAULT_PARAMS = {
   productQty_windowMonths: 3, productQty_pctThreshold: 40, productQty_highPct: 60, productQty_minPriorQty: 5,
   variety_windowMonths: 3, variety_pctThreshold: 30, variety_highPct: 50, variety_minPriorCount: 3,
   productFreqYoy_pctThreshold: 40, productFreqYoy_highPct: 60, productFreqYoy_minPriorMonths: 2,
+  overdueReorder_lookbackMonths: 24, overdueReorder_minPurchaseMonths: 3, overdueReorder_minAvgGapMonths: 2,
+  overdueReorder_extraMonths: 1, overdueReorder_highExtraMonths: 3,
   irregularity_windowMonths: 6, irregularity_minActiveMonths: 4, irregularity_cvThreshold: 70, irregularity_minRevenueShare: 5,
   concentration_topN: 2, concentration_pctThreshold: 70, concentration_minRevenue: 500,
   peerGap_windowMonths: 6, peerGap_pctThreshold: 50, peerGap_highPct: 80, peerGap_minGroupSize: 2
@@ -682,6 +690,74 @@ async function computeInsights(organizationId) {
         breakdown: {
           rows: [{ label: rangeLabel2 + ' ' + year, value: thisMonths.size }, { label: rangeLabel2 + ' ' + (year - 1), value: lastMonths.size }],
           dashFilter: { periodMonths: yearMonthRange(year, 1, lastCompletedMonth), compareMonths: yearMonthRange(year - 1, 1, lastCompletedMonth) }
+        }
+      });
+    });
+  }
+
+  // Rule 2g — overdue expected reorder: for a customer×product(-family) with a
+  // clearly PERIODIC, sparse purchase pattern (buys occasionally — every few
+  // months, not every month; general policy 5 applies, substitutes count as the
+  // same family), is the customer now overdue relative to their OWN historical
+  // rhythm? Different from rule 2e above, which compares purchase-month counts
+  // within a fixed Jan-to-date calendar window and is a noisy signal for someone
+  // who only buys 2-3x/year total (one purchase landing on either side of the
+  // window swings the count by 50-100%), and from rule 2c below, which measures
+  // variance in QUANTITY across active months but says nothing about how long a
+  // gap has run. This instead looks at the customer's own historical
+  // inter-purchase gaps (in months) over a bounded lookback window, and flags
+  // when the gap since their last purchase already exceeds the longest gap
+  // they've ever had before — going quiet for longer than they ever have,
+  // even for an occasional buyer for whom months-long gaps are otherwise normal.
+  {
+    const lookbackMonths = params.overdueReorder_lookbackMonths;
+    const lastCompletedMK = prevMonthKeyOf(monthKey(now));
+    const lastCompletedIdx = monthIndexOf(lastCompletedMK);
+    const lookbackStartIdx = lastCompletedIdx - lookbackMonths + 1;
+    Object.keys(byCustomerFamily).forEach((key) => {
+      const idx = key.indexOf('|');
+      const cid = key.slice(0, idx);
+      const cust = custIndex[cid];
+      if (isInactive(cust)) return;
+      const events = byCustomerFamily[key];
+      const pid = events[events.length - 1].pid;
+      if (!isFamilyEligible(pid)) return;
+      const purchaseMonthIdxs = Array.from(new Set(events.map((e) => monthKey(e.t))))
+        .map(monthIndexOf)
+        .filter((i) => i >= lookbackStartIdx && i <= lastCompletedIdx)
+        .sort((a, b) => a - b);
+      if (purchaseMonthIdxs.length < params.overdueReorder_minPurchaseMonths) return;
+      const gaps = [];
+      for (let i = 1; i < purchaseMonthIdxs.length; i++) gaps.push(purchaseMonthIdxs[i] - purchaseMonthIdxs[i - 1]);
+      const avgGap = gaps.reduce((a, g) => a + g, 0) / gaps.length;
+      // A near-monthly regular buyer isn't this rule's target — a missed month for
+      // them is already caught by the revenue/quantity decline rules above, and
+      // treating a 1-month gap as "overdue" here would just be noise on top of that.
+      if (avgGap < params.overdueReorder_minAvgGapMonths) return;
+      const maxGap = Math.max.apply(null, gaps);
+      const lastPurchaseIdx = purchaseMonthIdxs[purchaseMonthIdxs.length - 1];
+      const currentGap = lastCompletedIdx - lastPurchaseIdx;
+      if (currentGap < maxGap + params.overdueReorder_extraMonths) return;
+      const isHighSeverity = currentGap >= maxGap + params.overdueReorder_highExtraMonths;
+      const label = familyLabel(pid);
+      const lastPurchaseMK = monthKeyFromIndex(lastPurchaseIdx);
+      const dryMonthKeys = [];
+      for (let i = lastPurchaseIdx + 1; i <= lastCompletedIdx; i++) dryMonthKeys.push(monthKeyFromIndex(i));
+      insights.push({
+        type: 'purchasePattern',
+        severity: isHighSeverity ? 'high' : 'medium',
+        customerId: cid,
+        customerName: custLabel(cid),
+        productCode: pid,
+        message: `הלקוח נוהג לרכוש את ${label} בממוצע כל כ-${Math.round(avgGap * 10) / 10} חודשים (הפער הגדול ביותר עד כה: ${maxGap} חודשים), אך לא רכש מאז ${fmtMonthYearKey(lastPurchaseMK)} — ${currentGap} חודשים ללא רכישה, פער חורג מכל מה שנצפה אצלו בעבר.`,
+        metric: currentGap,
+        breakdown: {
+          rows: [
+            { label: 'חודשים מאז הרכישה האחרונה', value: currentGap },
+            { label: 'הפער הגדול ביותר בעבר', value: maxGap },
+            { label: 'פער ממוצע בין רכישות', value: Math.round(avgGap * 10) / 10 }
+          ],
+          dashFilter: { periodMonths: dryMonthKeys.length ? dryMonthKeys : [lastCompletedMK] }
         }
       });
     });
