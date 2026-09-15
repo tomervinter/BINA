@@ -59,6 +59,8 @@
         var anyOpen = window.__dashPanels.some(function (p) { return document.getElementById(p.boxId).style.display !== 'none'; });
         var content = document.getElementById('dashPanelContent');
         if (content) content.classList.toggle('dash-panel-content-open', anyOpen);
+        var region = document.querySelector('.dash-panel-region');
+        if (region) region.classList.toggle('dash-panel-region-open', anyOpen);
       });
     };
   </script>
@@ -257,14 +259,14 @@
         <div class="dash-panel-box" id="dashCohortPanelBox" style="display:none;">
           <div class="page-subtitle" id="dashPurchaseCohortSubtitle" style="margin-bottom:10px;">מצמצם ללקוחות שקנו ו/או לא קנו מוצר מסוים.</div>
           <div style="display:flex;gap:16px;flex-wrap:wrap;">
-            <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:220px;">
+            <div style="display:flex;align-items:center;gap:6px;flex:0 1 auto;min-width:0;">
               <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">קנו מוצר/ים:</span>
-              <div id="dashBoughtProductsPicker" style="flex:1;"></div>
+              <div id="dashBoughtProductsPicker" style="width:170px;flex:none;"></div>
               <button class="dft-cell-clear" id="dashClearBoughtProducts" type="button" title="נקה" style="display:none;">✕</button>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:220px;">
+            <div style="display:flex;align-items:center;gap:6px;flex:0 1 auto;min-width:0;">
               <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">לא קנו מוצר/ים:</span>
-              <div id="dashNotBoughtProductsPicker" style="flex:1;"></div>
+              <div id="dashNotBoughtProductsPicker" style="width:170px;flex:none;"></div>
               <button class="dft-cell-clear" id="dashClearNotBoughtProducts" type="button" title="נקה" style="display:none;">✕</button>
             </div>
           </div>

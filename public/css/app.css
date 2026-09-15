@@ -400,11 +400,13 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
    toggleable, since three tables' worth of content open side by side was the
    original problem this whole thing replaced. */
 .dash-panel-region-wrap{flex:1 1 400px;min-width:0;}
-/* The outer region itself has no box of its own — only the button column
-   gets a permanent, always-visible soft-green box (border/background/shadow),
-   regardless of whether a panel is open. The revealed content beside it stays
-   plain/unboxed. */
-.dash-panel-region{display:flex;gap:16px;align-items:flex-start;width:100%;box-sizing:border-box;}
+/* The button column always has its own permanent soft-green box, regardless
+   of whether a panel is open. The outer region additionally gets its OWN
+   green frame wrapping everything (buttons + revealed content together) —
+   but only once a panel is actually open, so nothing outside the button
+   column looks boxed while there's nothing to show inside it. */
+.dash-panel-region{display:flex;gap:16px;align-items:flex-start;width:100%;box-sizing:border-box;border-radius:10px;}
+.dash-panel-region.dash-panel-region-open{border:1px solid var(--green);padding:16px;background:var(--green-soft);box-shadow:var(--shadow-card);}
 .dash-panel-toggles-vertical{display:flex;flex-direction:column;gap:6px;width:280px;flex:none;border:1px solid var(--green);border-radius:10px;padding:12px;background:var(--green-soft);box-shadow:var(--shadow-card);box-sizing:border-box;}
 .dash-panel-toggle{width:100%;justify-content:flex-start;text-align:right;white-space:normal;line-height:1.3;}
 .dash-panel-toggle.active{background:var(--green-btn);border-color:var(--green-btn);color:#fff;}
