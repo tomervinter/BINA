@@ -88,7 +88,7 @@ html{zoom:max(.65,min(1,calc(100vw / 1600px)));}
 
 /* ---------- App shell ---------- */
 .app-shell{display:grid;grid-template-columns:272px 1fr;min-height:100vh;background:var(--bg);}
-.main-content{padding:22px 30px 46px;max-width:1500px;width:100%;min-width:0;}
+.main-content{padding:22px 30px 46px;max-width:1900px;width:100%;min-width:0;}
 .main-content.full-width{max-width:none;}
 
 /* ---------- Sidebar ---------- */
@@ -129,6 +129,35 @@ html{zoom:max(.65,min(1,calc(100vw / 1600px)));}
 .logout-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:transparent;border:1px solid rgba(255,255,255,.16);color:var(--sidebar-text);border-radius:9px;padding:7px;font-size:12.5px;font-weight:700;cursor:pointer;}
 .logout-btn:hover{background:rgba(255,255,255,.06);color:#fff;}
 .logout-btn svg{width:14px;height:14px;}
+
+/* Sidebar's height:100vh (needed so it stays pinned full-height while the much
+   taller main content scrolls) does NOT get any smaller help from the zoom-based
+   scaling above — 100vh and the px-sized nav content it holds shrink together
+   under zoom, so the ratio between them (whether it overflows) never changes no
+   matter the zoom level (verified directly: forcing overflow and changing zoom
+   from 0.96 to 0.5 left the overflow amount unchanged). A short laptop window
+   (limited vertical space, not just narrow) needs its OWN fix: actually reduce
+   the sidebar's real padding/gaps/font-size as available height shrinks, so its
+   content genuinely needs less height — not just render smaller within the same
+   space. overflow-y:auto on .sidebar stays as a last-resort safety net below this.*/
+@media (max-height:760px){
+  .sidebar{padding:8px 14px 6px;gap:6px;}
+  .brand-row{padding:2px 4px 6px;}
+  .nav-cta{padding:6px 13px;}
+  .nav-scroll{gap:5px;}
+  .nav-group{gap:0;}
+  .nav-group-label{margin-bottom:0;}
+  .nav-item{padding:4px 10px;}
+  .sidebar-footer{padding-top:5px;gap:4px;}
+}
+@media (max-height:620px){
+  .sidebar{padding:6px 14px 5px;gap:4px;}
+  .brand-icon{width:26px;height:26px;}
+  .nav-cta{padding:5px 13px;font-size:13px;}
+  .nav-item{padding:3px 10px;font-size:12.5px;}
+  .avatar{width:26px;height:26px;}
+  .logout-btn{padding:5px;}
+}
 
 @media (max-width:820px){
   html{zoom:1;}

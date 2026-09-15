@@ -568,7 +568,7 @@ async function loadDashboardSalesSummary(filters) {
     const labels = mt.months.map((mk) => {
       const [y, m] = mk.split('-');
       const base = s.monthNames[+m - 1] + ' ' + y;
-      return mk === mt.inProgressMonth ? [base, '(החודש טרם הסתיים)'] : base;
+      return mk === mt.inProgressMonth ? [base, '(טרם הסתיים)'] : base;
     });
     const monthMeta = mt.months.map((mk) => { const [y, m] = mk.split('-'); return { year: +y, month: +m }; });
     const inProgressIdx = mt.inProgressMonth ? mt.months.indexOf(mt.inProgressMonth) : -1;
