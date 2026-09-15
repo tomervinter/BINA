@@ -579,16 +579,24 @@ async function resolveDecliningCustomers(organizationId, minDeclinePct, entityFi
   };
 }
 
+// A plain `|| 10` fallback would also override an explicit, legitimate 0 (user
+// wants "any decline, no minimum") since parseFloat('0') is falsy in JS — only
+// fall back to the default when the param is actually missing/unparseable.
+function parseMinDeclinePct(raw) {
+  const parsed = parseFloat(raw);
+  return Math.max(0, isNaN(parsed) ? 10 : parsed);
+}
+
 router.get('/declining-customers', async (req, res) => {
   const organizationId = req.user.organizationId;
-  const minDeclinePct = Math.max(0, parseFloat(req.query.minDeclinePct) || 0);
+  const minDeclinePct = parseMinDeclinePct(req.query.minDeclinePct);
   const { yearLabel, priorYearLabel, lastCompletedMonthLabel, matches } = await resolveDecliningCustomers(organizationId, minDeclinePct, parseLapsedEntityFilters(req));
   res.json({ minDeclinePct, yearLabel, priorYearLabel, lastCompletedMonthLabel, customers: matches });
 });
 
 router.get('/declining-customers/export', async (req, res) => {
   const organizationId = req.user.organizationId;
-  const minDeclinePct = Math.max(0, parseFloat(req.query.minDeclinePct) || 0);
+  const minDeclinePct = parseMinDeclinePct(req.query.minDeclinePct);
   const { matches } = await resolveDecliningCustomers(organizationId, minDeclinePct, parseLapsedEntityFilters(req));
   const buffer = rowsToXlsxBuffer([
     { key: 'customerNumber', label: 'מספר לקוח' },
