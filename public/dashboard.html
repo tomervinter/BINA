@@ -59,8 +59,6 @@
         var anyOpen = window.__dashPanels.some(function (p) { return document.getElementById(p.boxId).style.display !== 'none'; });
         var content = document.getElementById('dashPanelContent');
         if (content) content.classList.toggle('dash-panel-content-open', anyOpen);
-        var region = document.querySelector('.dash-panel-region');
-        if (region) region.classList.toggle('dash-panel-region-open', anyOpen);
       });
     };
   </script>
