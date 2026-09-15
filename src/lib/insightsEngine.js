@@ -56,6 +56,23 @@ function prevMonthKeyOf(mk) {
 // month-by-month date-arithmetic loops.
 function monthIndexOf(mk) { const [y, m] = mk.split('-').map(Number); return y * 12 + m; }
 function monthKeyFromIndex(idx) { const y = Math.floor((idx - 1) / 12); const m = idx - y * 12; return y + '-' + (m < 10 ? '0' + m : m); }
+// Gives the reader a baseline to judge a decline/gap against — how often this
+// customer normally buys, from their own FULL purchase history (not the insight's
+// own window). Counted by distinct calendar month with any purchase, not order
+// count, so several orders landing in the same month don't read as "frequent."
+// Skipped below FREQUENCY_NOTE_MIN_MONTHS — an "average" from only 1-2 data points
+// would mislead more than it'd help (same reasoning as the other rules' minPrior*/
+// minBase* gates elsewhere in this file).
+const FREQUENCY_NOTE_MIN_MONTHS = 3;
+function customerFrequencyNote(events) {
+  const monthIdxs = Array.from(new Set(events.map((e) => monthKey(e.t)))).map(monthIndexOf).sort((a, b) => a - b);
+  if (monthIdxs.length < FREQUENCY_NOTE_MIN_MONTHS) return '';
+  const spanMonths = monthIdxs[monthIdxs.length - 1] - monthIdxs[0];
+  if (spanMonths <= 0) return '';
+  const avgGap = spanMonths / (monthIdxs.length - 1);
+  const timesPerYear = 12 / avgGap;
+  return ` לשם השוואה: הלקוח קונה אצלנו (בכל המוצרים) בממוצע כל כ-${Math.round(avgGap * 10) / 10} חודשים (כ-${Math.round(timesPerYear * 10) / 10} פעמים בשנה).`;
+}
 function quarterOf(d) { return Math.floor(d.getMonth() / 3); }
 // "YYYY-MM" keys for months `fromMonth`..`toMonth` (1-indexed, inclusive) of one year —
 // matches the dashboard's own periodMonths/compareMonths format exactly, so an insight
@@ -409,7 +426,7 @@ async function computeInsights(organizationId) {
         const seasonalityExplained = isExplainedBySeasonality(peakMStart, peakMEnd, pids);
         trendByCustomer[cid] = {
           delta, isHighSeverity, seasonalityExplained,
-          message: `מחזור הלקוח הגיע לשיא ב${fmtMonthYearKey(peakMonthKey)} (${fmtMoneyHe(peakValue)}), ומאז — ${monthKeysLabel(secondHalfKeys)} — עומד בממוצע על ${fmtMoneyHe(recentAvg)}: ירידה של ${Math.round(Math.abs(delta) * 100)}% מהשיא, ללא חזרה לרמה ההיא.`,
+          message: `מחזור הלקוח הגיע לשיא ב${fmtMonthYearKey(peakMonthKey)} (${fmtMoneyHe(peakValue)}), ומאז — ${monthKeysLabel(secondHalfKeys)} — עומד בממוצע על ${fmtMoneyHe(recentAvg)}: ירידה של ${Math.round(Math.abs(delta) * 100)}% מהשיא, ללא חזרה לרמה ההיא.` + customerFrequencyNote(events),
           breakdown: {
             rows: monthKeys.map((mk, i) => ({ label: fmtMonthYearKey(mk), value: Math.round(byMonth[i]) })),
             dashFilter: { periodMonths: secondHalfKeys, compareMonths: [peakMonthKey] },
