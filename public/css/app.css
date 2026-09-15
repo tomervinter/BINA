@@ -400,18 +400,20 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
    toggleable, since three tables' worth of content open side by side was the
    original problem this whole thing replaced. */
 .dash-panel-region-wrap{flex:1 1 400px;min-width:0;}
-.dash-panel-region{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--green);border-radius:10px;padding:16px;background:var(--green-soft);box-shadow:var(--shadow-card);width:100%;box-sizing:border-box;}
+/* No border/background/padding at all by default — just the three plain
+   buttons, nothing green. The green "card" treatment (border, tinted
+   background, shadow, padding) only appears once a panel is actually open,
+   applied together with .dash-panel-region-open — not a fixed decoration
+   around buttons that have nothing open yet. */
+.dash-panel-region{display:flex;gap:16px;align-items:flex-start;border-radius:10px;width:100%;box-sizing:border-box;}
+.dash-panel-region.dash-panel-region-open{border:1px solid var(--green);padding:16px;background:var(--green-soft);box-shadow:var(--shadow-card);}
 .dash-panel-toggles-vertical{display:flex;flex-direction:column;gap:6px;width:280px;flex:none;}
 .dash-panel-toggle{width:100%;justify-content:flex-start;text-align:right;white-space:normal;line-height:1.3;}
 .dash-panel-toggle.active{background:var(--green-btn);border-color:var(--green-btn);color:#fff;}
-/* Collapsed to zero width by default (only the button column shows) — expands
-   open with a width+fade animation once a panel is selected, rather than
-   always reserving visible space for an empty placeholder. overflow:hidden
-   during the transition keeps the not-yet-revealed content clipped instead of
-   spilling out while max-width is still animating up from 0. */
-.dash-panel-content{flex:1;min-width:0;max-width:0;opacity:0;overflow:hidden;transition:max-width .35s ease,opacity .25s ease .1s;}
-.dash-panel-content.dash-panel-content-open{max-width:900px;opacity:1;}
-#dashPanelEmptyState{padding:24px 0;text-align:center;}
+/* Hidden by default, shown only once a panel is selected — plain display
+   toggle, no transition/animation. */
+.dash-panel-content{flex:1;min-width:0;display:none;}
+.dash-panel-content.dash-panel-content-open{display:block;}
 
 /* ---------- Panel content box, sits inside .dash-panel-content ---------- */
 .dash-panel-box{width:100%;}
