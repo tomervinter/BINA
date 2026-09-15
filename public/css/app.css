@@ -399,13 +399,18 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
    dashRegisterPanelToggle in dashboard.html) rather than each independently
    toggleable, since three tables' worth of content open side by side was the
    original problem this whole thing replaced. */
-.dash-panel-region-wrap{flex:1 1 400px;min-width:0;}
+/* flex-direction:column + the region below getting flex:1 lets the button
+   box stretch to match whatever height the filter table (its row sibling)
+   ends up at — see align-items:stretch on their shared parent row — instead
+   of the two sides ending at different heights depending on how many filter
+   rows are expanded or whether a panel here happens to be open. */
+.dash-panel-region-wrap{flex:1 1 400px;min-width:0;display:flex;flex-direction:column;}
 /* The button column always has its own permanent soft-green box, regardless
    of whether a panel is open. The outer region additionally gets its OWN
    green frame wrapping everything (buttons + revealed content together) —
    but only once a panel is actually open, so nothing outside the button
    column looks boxed while there's nothing to show inside it. */
-.dash-panel-region{display:flex;gap:16px;align-items:flex-start;width:100%;box-sizing:border-box;border-radius:10px;}
+.dash-panel-region{display:flex;gap:16px;align-items:stretch;width:100%;box-sizing:border-box;border-radius:10px;flex:1;}
 .dash-panel-region.dash-panel-region-open{border:1px solid var(--green);padding:16px;background:var(--green-soft);box-shadow:var(--shadow-card);}
 .dash-panel-toggles-vertical{display:flex;flex-direction:column;gap:6px;width:280px;flex:none;border:1px solid var(--green);border-radius:10px;padding:12px;background:var(--green-soft);box-shadow:var(--shadow-card);box-sizing:border-box;}
 .dash-panel-toggle{width:100%;justify-content:flex-start;text-align:right;white-space:normal;line-height:1.3;}
