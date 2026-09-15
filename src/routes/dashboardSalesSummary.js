@@ -400,4 +400,68 @@ router.get('/cohort-customers/export', async (req, res) => {
   res.send(buffer);
 });
 
+// Resolves the "lapsed regular buyers" panel: customers who bought in at least
+// `minMonths` DISTINCT calendar months over their full history through the last
+// FULLY completed month (the in-progress current month is never counted toward
+// this — a customer isn't "regular" because they happened to already buy once
+// this month), but have NOT bought anything yet in the current month. Two
+// separate queries rather than one grouped one: which months a customer has ever
+// bought in (to count distinct months) is a different question from whether they
+// bought in the specific current-month window (to exclude them) — trying to
+// answer both from one row set would need the same date column sliced two
+// different ways at once.
+async function resolveLapsedCustomers(organizationId, minMonths) {
+  const now = new Date();
+  const curMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const [pastSales, curMonthBuyers, customers] = await Promise.all([
+    prisma.sale.findMany({ where: { organizationId, date: { lt: curMonthStart } }, select: { customerNumber: true, date: true } }),
+    prisma.sale.findMany({ where: { organizationId, date: { gte: curMonthStart } }, select: { customerNumber: true }, distinct: ['customerNumber'] }),
+    prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, centralCustomer: true, primaryClass: true, customerType: true } })
+  ]);
+  const monthSetByCustomer = {};
+  pastSales.forEach((s) => {
+    const mk = s.date.getFullYear() + '-' + String(s.date.getMonth() + 1).padStart(2, '0');
+    (monthSetByCustomer[s.customerNumber] = monthSetByCustomer[s.customerNumber] || new Set()).add(mk);
+  });
+  const boughtThisMonth = new Set(curMonthBuyers.map((s) => s.customerNumber));
+  const custMap = {};
+  customers.forEach((c) => { custMap[c.customerNumber] = c; });
+  const matches = Object.keys(monthSetByCustomer)
+    .filter((cn) => monthSetByCustomer[cn].size >= minMonths && !boughtThisMonth.has(cn))
+    .map((cn) => ({
+      customerNumber: cn,
+      name: (custMap[cn] && custMap[cn].name) || cn,
+      centralCustomer: (custMap[cn] && custMap[cn].centralCustomer) || null,
+      primaryClass: (custMap[cn] && custMap[cn].primaryClass) || null,
+      customerType: (custMap[cn] && custMap[cn].customerType) || null,
+      activeMonths: monthSetByCustomer[cn].size
+    }))
+    .sort((a, b) => b.activeMonths - a.activeMonths);
+  return { currentMonthLabel: MONTH_NAMES[now.getMonth()] + ' ' + now.getFullYear(), matches };
+}
+
+router.get('/lapsed-customers', async (req, res) => {
+  const organizationId = req.user.organizationId;
+  const minMonths = Math.max(1, parseInt(req.query.minMonths, 10) || 3);
+  const { currentMonthLabel, matches } = await resolveLapsedCustomers(organizationId, minMonths);
+  res.json({ minMonths, currentMonthLabel, customers: matches });
+});
+
+router.get('/lapsed-customers/export', async (req, res) => {
+  const organizationId = req.user.organizationId;
+  const minMonths = Math.max(1, parseInt(req.query.minMonths, 10) || 3);
+  const { matches } = await resolveLapsedCustomers(organizationId, minMonths);
+  const buffer = rowsToXlsxBuffer([
+    { key: 'customerNumber', label: 'מספר לקוח' },
+    { key: 'name', label: 'שם לקוח' },
+    { key: 'centralCustomer', label: 'לקוח מרכז' },
+    { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
+    { key: 'customerType', label: 'סוג לקוח' },
+    { key: 'activeMonths', label: 'חודשי רכישה' }
+  ], matches);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="lapsed-customers.xlsx"');
+  res.send(buffer);
+});
+
 module.exports = router;

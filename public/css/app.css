@@ -345,6 +345,14 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .cohort-customers-table th:nth-child(3),.cohort-customers-table td:nth-child(3){width:22%;}
 .cohort-customers-table th:nth-child(4),.cohort-customers-table td:nth-child(4){width:18%;}
 .cohort-customers-table th:nth-child(5),.cohort-customers-table td:nth-child(5){width:16%;}
+/* Lapsed-customers panel's table has a 6th column (active-months count), so its
+   own widths replace the 5-column set above rather than adding to it. */
+.lapsed-customers-table th:nth-child(1),.lapsed-customers-table td:nth-child(1){width:15%;}
+.lapsed-customers-table th:nth-child(2),.lapsed-customers-table td:nth-child(2){width:23%;}
+.lapsed-customers-table th:nth-child(3),.lapsed-customers-table td:nth-child(3){width:19%;}
+.lapsed-customers-table th:nth-child(4),.lapsed-customers-table td:nth-child(4){width:15%;}
+.lapsed-customers-table th:nth-child(5),.lapsed-customers-table td:nth-child(5){width:14%;}
+.lapsed-customers-table th:nth-child(6),.lapsed-customers-table td:nth-child(6){width:14%;}
 
 /* ---------- Month multi-select dropdown ---------- */
 .mms{position:relative;display:inline-block;}
