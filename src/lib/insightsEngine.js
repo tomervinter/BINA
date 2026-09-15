@@ -255,13 +255,15 @@ async function computeInsights(organizationId) {
   // returning an almost-always-true result.
   const SEASONALITY_NOTE_MAX_MONTHS = 2;
   const SEASONALITY_CAVEAT = ' שימו לב: התקופה חופפת לחג/עונה המשויכים למוצר — ייתכן שהשינוי מוסבר בכך, ומומלץ לוודא את הנתון בפועל.';
-  // For the couple of rules whose window is wide enough (7-8 months) that an actual
+  // For the couple of rules whose window is wide enough (7-8+ months) that an actual
   // overlap check would be almost meaningless — over that many months, some holiday
   // or other overlaps almost by certainty regardless of whether it has anything to
-  // do with the pattern — a real per-month check is skipped (as documented at each
-  // site), but the user still isn't left with no signal at all: this lighter,
-  // generic note says the window wasn't checked and points at where to check by hand.
-  const WIDE_WINDOW_NOTE = ' התקופה הנבדקת רחבה מכדי שהמערכת תבדוק אוטומטית חפיפה לחג/עונה — אם רלוונטי, מומלץ לבדוק ידנית בטבלאות ניהול החגים / ניהול עונתיות ובמסך שיוך חג ועונה למוצר.';
+  // do with the pattern — no seasonality check AND no note at all (not even a generic
+  // "wasn't checked, verify manually" disclaimer): on a window this wide the note
+  // itself is noise, since it would apply to virtually every insight of that type
+  // regardless of merit. A holiday/season note only ever earns its place when the
+  // window is narrow enough (<= SEASONALITY_NOTE_MAX_MONTHS) for an overlap to be a
+  // specific, meaningful signal rather than a near-certainty.
 
   // Rule 1a — monthly revenue shift (bidirectional: flags a meaningful jump in
   // either direction, not just a decline), with the specific products driving it.
@@ -436,14 +438,16 @@ async function computeInsights(organizationId) {
       }
       if (trendByCustomer[cid]) return; // (c) took it — skip (b)
 
-      // (b) slow, steady erosion. No real seasonality CHECK here unlike (a) — asking
-      // whether the whole window overlaps a holiday/season is a reasonable "maybe
-      // this explains it" question over a short 4-month span, but over a 7-month
-      // span it's nearly guaranteed to overlap SOME holiday somewhere in Israeli
-      // retail regardless of whether that holiday has anything to do with a genuine
-      // sustained erosion — a real check would just always fire and say nothing.
-      // The lighter WIDE_WINDOW_NOTE below still tells the user this wasn't checked,
-      // rather than silently implying it was.
+      // (b) slow, steady erosion. No seasonality check or note here unlike (a) —
+      // asking whether the whole window overlaps a holiday/season is a reasonable
+      // "maybe this explains it" question over a short 4-month span, but over a
+      // 7-month span it's nearly guaranteed to overlap SOME holiday somewhere in
+      // Israeli retail regardless of whether that holiday has anything to do with a
+      // genuine sustained erosion — a real check would just always fire and say
+      // nothing, and even a generic "wasn't checked" disclaimer is just noise on a
+      // window this wide (general policy: only worth a holiday/season note at all
+      // when the window is narrow enough — up to ~2 months — for an overlap to be a
+      // real, specific signal rather than near-certain regardless of content).
       {
         const { monthKeys, byMonth } = monthlyRevSeries(events, slowWinMonths);
         if (byMonth[0] < params.trend_minBaseRevenue) return;
@@ -457,7 +461,7 @@ async function computeInsights(organizationId) {
         const isHighSeverity = Math.abs(delta) >= params.trend_highPct / 100;
         trendByCustomer[cid] = {
           delta, isHighSeverity, seasonalityExplained: false,
-          message: `מחזור הלקוח נשחק בהדרגה — ${monthKeysLabel([monthKeys[monthKeys.length - 1]])} נמוך ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${monthKeysLabel([monthKeys[0]])}, ברוב חודשי התקופה ירידה מול החודש הקודם.` + WIDE_WINDOW_NOTE,
+          message: `מחזור הלקוח נשחק בהדרגה — ${monthKeysLabel([monthKeys[monthKeys.length - 1]])} נמוך ב-${Math.round(Math.abs(delta) * 100)}% לעומת ${monthKeysLabel([monthKeys[0]])}, ברוב חודשי התקופה ירידה מול החודש הקודם.`,
           breakdown: {
             rows: monthKeys.map((mk, i) => ({ label: fmtMonthYearKey(mk), value: Math.round(byMonth[i]) })),
             dashFilter: { periodMonths: [monthKeys[monthKeys.length - 1]], compareMonths: [monthKeys[0]] },
@@ -750,7 +754,8 @@ async function computeInsights(organizationId) {
       const label = familyLabel(pid);
       // Early in the year (lastCompletedMonth small) this window is narrow enough for
       // a real per-month check, same as the other rules above; later in the year it's
-      // too wide to check meaningfully, so it falls back to the generic WIDE_WINDOW_NOTE.
+      // too wide to check meaningfully OR to say anything useful about (near-certain
+      // to overlap some holiday regardless of relevance) — no note at all in that case.
       let seasonalityExplained = false, seasonalityNote = '';
       if (lastCompletedMonth <= SEASONALITY_NOTE_MAX_MONTHS) {
         const famPids = Array.from(familyMembers[famKey(pid)] || [pid]);
@@ -759,8 +764,6 @@ async function computeInsights(organizationId) {
           return isExplainedBySeasonality(mStart, mEnd, famPids);
         });
         seasonalityNote = seasonalityExplained ? SEASONALITY_CAVEAT : '';
-      } else {
-        seasonalityNote = WIDE_WINDOW_NOTE;
       }
       insights.push({
         type: 'purchasePattern',
@@ -893,17 +896,16 @@ async function computeInsights(organizationId) {
       if (cv * 100 < params.irregularity_cvThreshold) return;
       const label = familyLabel(pid);
       // Combined 12-month window (curMonthKeys + yoyMonthKeys) — too wide for a real
-      // per-month check to mean anything (see WIDE_WINDOW_NOTE above), but worth
-      // flagging anyway: a holiday-driven spike in one month is exactly the kind of
-      // thing that can look like "irregular" quantity here without being a real
-      // ordering-pattern problem.
+      // per-month check, or for a generic disclaimer, to mean anything (near-certain
+      // to overlap some holiday regardless of relevance), so no seasonality note here
+      // at all — same reasoning as the other wide-window rules.
       insights.push({
         type: 'purchasePattern',
         severity: cv * 100 >= params.irregularity_cvThreshold * 1.5 ? 'high' : 'low',
         customerId: cid,
         customerName: custLabel(cid),
         productCode: pid,
-        message: `הלקוח קונה את ${label} בכמות לא סדירה מחודש לחודש — נבדק ב${monthKeysLabel(curMonthKeys)} וכן באותם חודשים אשתקד — למרות שהוא מהווה נתח משמעותי ממחזורו.` + WIDE_WINDOW_NOTE,
+        message: `הלקוח קונה את ${label} בכמות לא סדירה מחודש לחודש — נבדק ב${monthKeysLabel(curMonthKeys)} וכן באותם חודשים אשתקד — למרות שהוא מהווה נתח משמעותי ממחזורו.`,
         metric: Math.round(cv * 100),
         breakdown: {
           rows: [{ label: 'מקדם שונות בכמות החודשית', value: Math.round(cv * 100) }, { label: 'סף', value: params.irregularity_cvThreshold }],

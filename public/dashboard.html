@@ -57,8 +57,8 @@
           if (bt) { bt.setAttribute('aria-expanded', String(shouldOpen)); bt.classList.toggle('active', shouldOpen); }
         });
         var anyOpen = window.__dashPanels.some(function (p) { return document.getElementById(p.boxId).style.display !== 'none'; });
-        var empty = document.getElementById('dashPanelEmptyState');
-        if (empty) empty.style.display = anyOpen ? 'none' : '';
+        var content = document.getElementById('dashPanelContent');
+        if (content) content.classList.toggle('dash-panel-content-open', anyOpen);
       });
     };
   </script>
@@ -254,7 +254,6 @@
         </div>
 
         <div class="dash-panel-content" id="dashPanelContent">
-        <div class="page-subtitle" id="dashPanelEmptyState">בחרו אחת מהאפשרויות מימין כדי להציג את הסינון והנתונים.</div>
         <div class="dash-panel-box" id="dashCohortPanelBox" style="display:none;">
           <div class="page-subtitle" id="dashPurchaseCohortSubtitle" style="margin-bottom:10px;">מצמצם ללקוחות שקנו ו/או לא קנו מוצר מסוים.</div>
           <div style="display:flex;gap:16px;flex-wrap:wrap;">
