@@ -256,14 +256,14 @@
         <div class="page-subtitle" id="dashPanelEmptyState">בחרו אחת מהאפשרויות מימין כדי להציג את הסינון והנתונים.</div>
         <div class="dash-panel-box" id="dashCohortPanelBox" style="display:none;">
           <div class="page-subtitle" id="dashPurchaseCohortSubtitle" style="margin-bottom:10px;">מצמצם את הלקוח/ות בבדיקה הראשית למי שקנו מוצר מסוים ו/או למי שלא קנו מוצר אחר.</div>
-          <div style="display:flex;flex-direction:column;gap:10px;">
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-weight:700;font-size:12.5px;">קנו מוצר/ים:</span>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:220px;">
+              <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">קנו מוצר/ים:</span>
               <div id="dashBoughtProductsPicker" style="flex:1;"></div>
               <button class="dft-cell-clear" id="dashClearBoughtProducts" type="button" title="נקה" style="display:none;">✕</button>
             </div>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-weight:700;font-size:12.5px;">לא קנו מוצר/ים:</span>
+            <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:220px;">
+              <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">לא קנו מוצר/ים:</span>
               <div id="dashNotBoughtProductsPicker" style="flex:1;"></div>
               <button class="dft-cell-clear" id="dashClearNotBoughtProducts" type="button" title="נקה" style="display:none;">✕</button>
             </div>
@@ -284,12 +284,10 @@
 
         <div class="dash-panel-box" id="dashLapsedPanelBox" style="display:none;">
           <div class="page-subtitle" id="dashLapsedSubtitle" style="margin-bottom:10px;">לקוחות שרכשו במספר החודשים שתגדירו מתוך 12 החודשים האחרונים, אך טרם רכשו החודש.</div>
-          <div style="display:flex;align-items:center;gap:6px;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">מספר חודשי רכישה מינימלי (מתוך 12 אחרונים):</span>
             <input type="number" id="dashLapsedMinMonths" min="1" max="12" step="1" value="7" style="width:70px;">
-          </div>
-          <div style="margin-top:14px;">
-            <button class="btn btn-ghost btn-sm" id="dashLapsedShowBtn" type="button">הצג</button>
+            <button class="btn btn-success-soft btn-sm" id="dashLapsedShowBtn" type="button">הצג</button>
           </div>
           <div id="dashLapsedCustomersSection" style="display:none;margin-top:14px;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
@@ -307,12 +305,10 @@
 
         <div class="dash-panel-box" id="dashDecliningPanelBox" style="display:none;">
           <div class="page-subtitle" id="dashDecliningSubtitle" style="margin-bottom:10px;">לקוחות עם ירידה במחזור מצטבר השנה מול אשתקד, ולכל לקוח — המוצרים שירדו אצלו.</div>
-          <div style="display:flex;align-items:center;gap:6px;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">אחוז ירידה מינימלי:</span>
             <input type="number" id="dashDecliningMinPct" min="0" max="100" step="1" value="0" style="width:70px;">
-          </div>
-          <div style="margin-top:14px;">
-            <button class="btn btn-ghost btn-sm" id="dashDecliningShowBtn" type="button">הצג</button>
+            <button class="btn btn-success-soft btn-sm" id="dashDecliningShowBtn" type="button">הצג</button>
           </div>
           <div id="dashDecliningCustomersSection" style="display:none;margin-top:14px;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
