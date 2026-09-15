@@ -409,6 +409,17 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .lapsed-customers-table th:nth-child(4),.lapsed-customers-table td:nth-child(4){width:15%;}
 .lapsed-customers-table th:nth-child(5),.lapsed-customers-table td:nth-child(5){width:14%;}
 .lapsed-customers-table th:nth-child(6),.lapsed-customers-table td:nth-child(6){width:14%;}
+/* Declining-customers panel's table has a 7th column (the declined-products
+   list), so its own widths replace the 5-column set above too. The last column
+   (product list) gets the most room since it's the one genuinely variable-length
+   field — the rest stay narrow, same as every other cohort-style table here. */
+.declining-customers-table th:nth-child(1),.declining-customers-table td:nth-child(1){width:12%;}
+.declining-customers-table th:nth-child(2),.declining-customers-table td:nth-child(2){width:17%;}
+.declining-customers-table th:nth-child(3),.declining-customers-table td:nth-child(3){width:15%;}
+.declining-customers-table th:nth-child(4),.declining-customers-table td:nth-child(4){width:12%;}
+.declining-customers-table th:nth-child(5),.declining-customers-table td:nth-child(5){width:11%;}
+.declining-customers-table th:nth-child(6),.declining-customers-table td:nth-child(6){width:9%;}
+.declining-customers-table th:nth-child(7),.declining-customers-table td:nth-child(7){width:24%;}
 
 /* ---------- Month multi-select dropdown ---------- */
 .mms{position:relative;display:inline-block;}

@@ -14,17 +14,18 @@
     <div class="page-loading-text">אנא המתן<span class="page-loading-dots"><span>.</span><span>.</span><span>.</span></span></div>
   </div>
   <script>
-    // Hidden once all four of the dashboard's independent init flows (layout/
+    // Hidden once all five of the dashboard's independent init flows (layout/
     // greeting via app.js, the filter table + KPIs/charts via dashboard-filters.js,
     // the insights columns via dashboard-top-insights.js, the lapsed-customers panel
-    // via dashboard-lapsed-customers.js) have each rendered their first real content
+    // via dashboard-lapsed-customers.js, the declining-customers panel via
+    // dashboard-declining-customers.js) have each rendered their first real content
     // — rather than on a fixed timer or window.onload, which would either flash away
     // too early (before the data's actually in) or leave a needless extra wait once
     // it really is.
     window.__dashReadyCount = 0;
     window.dashMarkReady = function () {
       window.__dashReadyCount++;
-      if (window.__dashReadyCount >= 4) {
+      if (window.__dashReadyCount >= 5) {
         var overlay = document.getElementById('dashLoadingOverlay');
         if (overlay) {
           overlay.classList.add('page-loading-hide');
@@ -216,9 +217,9 @@
           </table>
         </div>
 
-        <div style="display:flex;gap:20px;flex-wrap:wrap;flex:0 1 1020px;min-width:0;">
+        <div style="display:flex;gap:20px;flex-wrap:wrap;flex:0 1 1540px;min-width:0;">
         <div class="dash-cohort-panel">
-          <div class="card-title" style="margin-bottom:2px;font-size:14px;">סינון לקוחות לפי רכישות</div>
+          <div class="card-title" style="margin-bottom:2px;font-size:14px;">לקוחות שקונים מוצר X ולא קונים מוצר Y</div>
           <div class="page-subtitle" id="dashPurchaseCohortSubtitle" style="margin-bottom:10px;">מצמצם את הלקוח/ות בבדיקה הראשית למי שקנו מוצר מסוים ו/או למי שלא קנו מוצר אחר.</div>
           <div style="display:flex;flex-direction:column;gap:10px;">
             <div style="display:flex;align-items:center;gap:6px;">
@@ -247,7 +248,7 @@
         </div>
 
         <div class="dash-cohort-panel">
-          <div class="card-title" style="margin-bottom:2px;font-size:14px;">לקוחות ותיקים שטרם רכשו החודש</div>
+          <div class="card-title" style="margin-bottom:2px;font-size:14px;">לקוחות שקונים בקביעות וטרם קנו החודש</div>
           <div class="page-subtitle" id="dashLapsedSubtitle" style="margin-bottom:10px;">לקוחות שרכשו במספר החודשים שתגדירו מתוך 12 החודשים האחרונים, אך טרם רכשו החודש.</div>
           <div style="display:flex;align-items:center;gap:6px;">
             <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">מספר חודשי רכישה מינימלי (מתוך 12 אחרונים):</span>
@@ -265,6 +266,30 @@
               <table class="cohort-customers-table lapsed-customers-table">
                 <thead><tr><th>מספר לקוח</th><th>שם לקוח</th><th>לקוח מרכז</th><th>סיווג ראשי</th><th>סוג לקוח</th><th>חודשי רכישה</th></tr></thead>
                 <tbody id="dashLapsedCustomersBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="dash-cohort-panel">
+          <div class="card-title" style="margin-bottom:2px;font-size:14px;">לקוחות שיורדים במכר</div>
+          <div class="page-subtitle" id="dashDecliningSubtitle" style="margin-bottom:10px;">לקוחות עם ירידה במחזור מצטבר השנה מול אשתקד, ולכל לקוח — המוצרים שירדו אצלו.</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">אחוז ירידה מינימלי:</span>
+            <input type="number" id="dashDecliningMinPct" min="0" max="100" step="1" value="0" style="width:70px;">
+          </div>
+          <div style="margin-top:14px;">
+            <button class="btn btn-ghost btn-sm" id="dashDecliningShowBtn" type="button">הצג</button>
+          </div>
+          <div id="dashDecliningCustomersSection" style="display:none;margin-top:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <span style="font-weight:700;font-size:12.5px;" id="dashDecliningCustomersCount"></span>
+              <a class="btn btn-success btn-sm" id="dashDecliningExportBtn" href="#" target="_blank">ייצוא לאקסל</a>
+            </div>
+            <div class="table-scroll" style="margin-top:8px;max-height:220px;overflow-y:auto;overflow-x:hidden;">
+              <table class="cohort-customers-table declining-customers-table">
+                <thead><tr><th>מספר לקוח</th><th>שם לקוח</th><th>לקוח מרכז</th><th>סיווג ראשי</th><th>סוג לקוח</th><th>ירידה (%)</th><th>מוצרים שירדו</th></tr></thead>
+                <tbody id="dashDecliningCustomersBody"></tbody>
               </table>
             </div>
           </div>
@@ -391,5 +416,7 @@
   <script src="js/dashboard-top-insights.js"></script>
   <script src="js/dashboard-lapsed-customers.js"></script>
   <script>initDashLapsedCustomersPanel();</script>
+  <script src="js/dashboard-declining-customers.js"></script>
+  <script>initDashDecliningCustomersPanel();</script>
 </body>
 </html>

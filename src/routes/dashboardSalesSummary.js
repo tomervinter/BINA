@@ -497,4 +497,111 @@ router.get('/lapsed-customers/export', async (req, res) => {
   res.send(buffer);
 });
 
+// Resolves the "declining customers" panel: for every customer, sums revenue
+// Jan-through-the-last-FULLY-completed-month of this year against the exact
+// same period last year (the in-progress current month is excluded from both
+// sides, same convention as everywhere else in this file — comparing a partial
+// current month against a full month last year would be misleading). A
+// customer qualifies when this year's cumulative total is below last year's by
+// at least `minDeclinePct`; `entityFilters` scopes both years' sales identically
+// to the active customer/product/segment filters, same as the lapsed-customers
+// panel beside it. For each qualifying customer, also lists which specific
+// products are individually down year-over-year (including a product bought
+// last year but not at all this year, i.e. a 100% drop) — not just family-level,
+// since this is a quick overview list rather than a rigorous insight.
+async function resolveDecliningCustomers(organizationId, minDeclinePct, entityFilters) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const lastCompletedMonth = Math.max(1, now.getMonth()); // count of fully-completed months, e.g. 8 in September
+  const curStart = new Date(year, 0, 1), curEnd = new Date(year, lastCompletedMonth, 1);
+  const priorStart = new Date(year - 1, 0, 1), priorEnd = new Date(year - 1, lastCompletedMonth, 1);
+  const hasEntityFilter = !!(entityFilters.customerNumbers.length || entityFilters.productCodes.length || entityFilters.primaryClasses.length ||
+    entityFilters.customerTypes.length || entityFilters.cities.length || entityFilters.centralCustomers.length || entityFilters.superTypes.length || entityFilters.departments.length);
+  const baseWhere = hasEntityFilter ? await buildEntityWhere(organizationId, entityFilters) : { organizationId };
+  const [curSales, priorSales, customers, products] = await Promise.all([
+    prisma.sale.findMany({ where: Object.assign({}, baseWhere, { date: { gte: curStart, lt: curEnd } }), select: { customerNumber: true, productCode: true, revenue: true } }),
+    prisma.sale.findMany({ where: Object.assign({}, baseWhere, { date: { gte: priorStart, lt: priorEnd } }), select: { customerNumber: true, productCode: true, revenue: true } }),
+    prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, centralCustomer: true, primaryClass: true, customerType: true } }),
+    prisma.product.findMany({ where: { organizationId }, select: { itemCode: true, name: true } })
+  ]);
+  const custMap = {}; customers.forEach((c) => { custMap[c.customerNumber] = c; });
+  const prodMap = {}; products.forEach((p) => { prodMap[p.itemCode] = p; });
+
+  function sumByCustomer(rows) {
+    const out = {};
+    rows.forEach((r) => { out[r.customerNumber] = (out[r.customerNumber] || 0) + (r.revenue || 0); });
+    return out;
+  }
+  function sumByCustomerProduct(rows) {
+    const out = {};
+    rows.forEach((r) => {
+      const key = r.customerNumber + '|' + r.productCode;
+      out[key] = (out[key] || 0) + (r.revenue || 0);
+    });
+    return out;
+  }
+  const curTotals = sumByCustomer(curSales), priorTotals = sumByCustomer(priorSales);
+  const curByProduct = sumByCustomerProduct(curSales), priorByProduct = sumByCustomerProduct(priorSales);
+
+  const matches = [];
+  Object.keys(priorTotals).forEach((cid) => {
+    const priorTotal = priorTotals[cid];
+    if (priorTotal <= 0) return;
+    const curTotal = curTotals[cid] || 0;
+    if (curTotal >= priorTotal) return; // only a real decline counts
+    const declinePct = ((priorTotal - curTotal) / priorTotal) * 100;
+    if (declinePct < minDeclinePct) return;
+    const priorProductKeys = Object.keys(priorByProduct).filter((k) => k.startsWith(cid + '|'));
+    const declinedProducts = priorProductKeys
+      .map((k) => {
+        const pid = k.slice(cid.length + 1);
+        const priorRev = priorByProduct[k];
+        const curRev = curByProduct[k] || 0;
+        return curRev < priorRev ? { pid, name: (prodMap[pid] && prodMap[pid].name) || pid, drop: priorRev - curRev } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.drop - a.drop);
+    matches.push({
+      customerNumber: cid,
+      name: (custMap[cid] && custMap[cid].name) || cid,
+      centralCustomer: (custMap[cid] && custMap[cid].centralCustomer) || null,
+      primaryClass: (custMap[cid] && custMap[cid].primaryClass) || null,
+      customerType: (custMap[cid] && custMap[cid].customerType) || null,
+      declinePct: Math.round(declinePct * 10) / 10,
+      declinedProducts: declinedProducts.map((p) => p.name)
+    });
+  });
+  matches.sort((a, b) => b.declinePct - a.declinePct);
+  return {
+    yearLabel: String(year), priorYearLabel: String(year - 1),
+    lastCompletedMonthLabel: MONTH_NAMES[lastCompletedMonth - 1] + ' ' + year,
+    matches
+  };
+}
+
+router.get('/declining-customers', async (req, res) => {
+  const organizationId = req.user.organizationId;
+  const minDeclinePct = Math.max(0, parseFloat(req.query.minDeclinePct) || 0);
+  const { yearLabel, priorYearLabel, lastCompletedMonthLabel, matches } = await resolveDecliningCustomers(organizationId, minDeclinePct, parseLapsedEntityFilters(req));
+  res.json({ minDeclinePct, yearLabel, priorYearLabel, lastCompletedMonthLabel, customers: matches });
+});
+
+router.get('/declining-customers/export', async (req, res) => {
+  const organizationId = req.user.organizationId;
+  const minDeclinePct = Math.max(0, parseFloat(req.query.minDeclinePct) || 0);
+  const { matches } = await resolveDecliningCustomers(organizationId, minDeclinePct, parseLapsedEntityFilters(req));
+  const buffer = rowsToXlsxBuffer([
+    { key: 'customerNumber', label: 'מספר לקוח' },
+    { key: 'name', label: 'שם לקוח' },
+    { key: 'centralCustomer', label: 'לקוח מרכז' },
+    { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
+    { key: 'customerType', label: 'סוג לקוח' },
+    { key: 'declinePct', label: 'ירידה מצטברת (%)' },
+    { key: 'declinedProducts', label: 'מוצרים שירדו', value: (row) => row.declinedProducts.join(', ') }
+  ], matches);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="declining-customers.xlsx"');
+  res.send(buffer);
+});
+
 module.exports = router;

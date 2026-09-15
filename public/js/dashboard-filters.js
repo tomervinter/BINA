@@ -343,6 +343,7 @@ async function initDashboardFilters() {
     renderCohortCustomers(s);
     if (window.refreshDashboardTopInsights) window.refreshDashboardTopInsights(state);
     if (window.refreshDashLapsedFilters) window.refreshDashLapsedFilters(state);
+    if (window.refreshDashDecliningFilters) window.refreshDashDecliningFilters(state);
   }
 
   const pickers = {};
