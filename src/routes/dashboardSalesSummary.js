@@ -293,15 +293,26 @@ router.get('/', async (req, res) => {
     // be plotted alongside the primary one, month for month. `yoyData` is each
     // timeline month's exact same calendar month one year earlier, for the on-chart
     // year-over-year indicator (drawn on the primary series only).
+    //
+    // The current, still-in-progress calendar month is always included as the last
+    // bar even when it has no sale rows yet (or fewer than a full month's worth) —
+    // otherwise the chart would just silently stop at last month and look like the
+    // most recent data is missing, when really the month simply isn't over. The
+    // frontend marks this specific bar as "not yet complete" (see inProgressMonth
+    // below); the YoY indicator already separately skips it on its own (see
+    // buildYoyEntries in dashboard-sales-summary.js), since a partial month isn't a
+    // meaningful like-for-like comparison against a full month last year.
+    const now = new Date();
+    const curIdx = now.getFullYear() * 12 + now.getMonth();
     const allRows = compareTrendRows ? trendRows.concat(compareTrendRows) : trendRows;
     let timelineMonths;
     if (allRows.length) {
       const monthIndices = allRows.map((r) => { const d = new Date(r.date); return d.getFullYear() * 12 + d.getMonth(); });
-      const minIdx = Math.min.apply(null, monthIndices), maxIdx = Math.max.apply(null, monthIndices);
+      const minIdx = Math.min.apply(null, monthIndices);
+      const maxIdx = Math.max(Math.max.apply(null, monthIndices), curIdx);
       timelineMonths = [];
       for (let idx = minIdx; idx <= maxIdx; idx++) timelineMonths.push({ year: Math.floor(idx / 12), month: (idx % 12) + 1 });
     } else {
-      const now = new Date();
       timelineMonths = [{ year: now.getFullYear(), month: now.getMonth() + 1 }];
     }
     const timelineYoyMonths = timelineMonths.map(({ year, month }) => ({ year: year - 1, month }));
@@ -309,7 +320,8 @@ router.get('/', async (req, res) => {
       months: timelineMonths.map((m) => m.year + '-' + String(m.month).padStart(2, '0')),
       data: monthlyRevenue(trendRows, timelineMonths),
       compareData: compareTrendRows ? monthlyRevenue(compareTrendRows, timelineMonths) : null,
-      yoyData: monthlyRevenue(trendRows, timelineYoyMonths)
+      yoyData: monthlyRevenue(trendRows, timelineYoyMonths),
+      inProgressMonth: now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0')
     };
   }
 
@@ -401,21 +413,29 @@ router.get('/cohort-customers/export', async (req, res) => {
 });
 
 // Resolves the "lapsed regular buyers" panel: customers who bought in at least
-// `minMonths` DISTINCT calendar months over their full history through the last
-// FULLY completed month (the in-progress current month is never counted toward
-// this — a customer isn't "regular" because they happened to already buy once
-// this month), but have NOT bought anything yet in the current month. Two
-// separate queries rather than one grouped one: which months a customer has ever
-// bought in (to count distinct months) is a different question from whether they
-// bought in the specific current-month window (to exclude them) — trying to
-// answer both from one row set would need the same date column sliced two
-// different ways at once.
-async function resolveLapsedCustomers(organizationId, minMonths) {
+// `minMonths` DISTINCT calendar months over the last 12 FULLY completed months
+// (the in-progress current month is never counted toward this — a customer isn't
+// "regular" because they happened to already buy once this month), but have NOT
+// bought anything yet in the current month. Two separate queries rather than one
+// grouped one: which months a customer bought in (to count distinct months) is a
+// different question from whether they bought in the specific current-month
+// window (to exclude them) — trying to answer both from one row set would need
+// the same date column sliced two different ways at once. `entityFilters`, when
+// given, is the exact same shape buildEntityWhere takes for the main dashboard
+// endpoint — passed through so this panel respects whatever customer/product/
+// segment filters are active in the main filter table, exactly like every other
+// chart on the page.
+async function resolveLapsedCustomers(organizationId, minMonths, entityFilters) {
   const now = new Date();
   const curMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const windowStart = new Date(now.getFullYear(), now.getMonth() - 12, 1);
+  const hasEntityFilter = !!(entityFilters.customerNumbers.length || entityFilters.productCodes.length || entityFilters.primaryClasses.length ||
+    entityFilters.customerTypes.length || entityFilters.cities.length || entityFilters.centralCustomers.length || entityFilters.superTypes.length || entityFilters.departments.length);
+  const baseWhere = hasEntityFilter ? await buildEntityWhere(organizationId, entityFilters) : { organizationId };
   const [pastSales, curMonthBuyers, customers] = await Promise.all([
-    prisma.sale.findMany({ where: { organizationId, date: { lt: curMonthStart } }, select: { customerNumber: true, date: true } }),
-    prisma.sale.findMany({ where: { organizationId, date: { gte: curMonthStart } }, select: { customerNumber: true }, distinct: ['customerNumber'] }),
+    prisma.sale.findMany({ where: Object.assign({}, baseWhere, { date: { gte: windowStart, lt: curMonthStart } }), select: { customerNumber: true, date: true } }),
+    prisma.sale.findMany({ where: Object.assign({}, baseWhere, { date: { gte: curMonthStart, lt: nextMonthStart } }), select: { customerNumber: true }, distinct: ['customerNumber'] }),
     prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, centralCustomer: true, primaryClass: true, customerType: true } })
   ]);
   const monthSetByCustomer = {};
@@ -440,17 +460,30 @@ async function resolveLapsedCustomers(organizationId, minMonths) {
   return { currentMonthLabel: MONTH_NAMES[now.getMonth()] + ' ' + now.getFullYear(), matches };
 }
 
+function parseLapsedEntityFilters(req) {
+  return {
+    customerNumbers: parseCsv(req.query.customerNumber),
+    productCodes: parseCsv(req.query.productCode),
+    primaryClasses: parseCsv(req.query.primaryClass),
+    customerTypes: parseCsv(req.query.customerType),
+    cities: parseCsv(req.query.city),
+    centralCustomers: parseCsv(req.query.centralCustomer),
+    superTypes: parseCsv(req.query.superType),
+    departments: parseCsv(req.query.department)
+  };
+}
+
 router.get('/lapsed-customers', async (req, res) => {
   const organizationId = req.user.organizationId;
-  const minMonths = Math.max(1, parseInt(req.query.minMonths, 10) || 3);
-  const { currentMonthLabel, matches } = await resolveLapsedCustomers(organizationId, minMonths);
+  const minMonths = Math.min(12, Math.max(1, parseInt(req.query.minMonths, 10) || 7));
+  const { currentMonthLabel, matches } = await resolveLapsedCustomers(organizationId, minMonths, parseLapsedEntityFilters(req));
   res.json({ minMonths, currentMonthLabel, customers: matches });
 });
 
 router.get('/lapsed-customers/export', async (req, res) => {
   const organizationId = req.user.organizationId;
-  const minMonths = Math.max(1, parseInt(req.query.minMonths, 10) || 3);
-  const { matches } = await resolveLapsedCustomers(organizationId, minMonths);
+  const minMonths = Math.min(12, Math.max(1, parseInt(req.query.minMonths, 10) || 7));
+  const { matches } = await resolveLapsedCustomers(organizationId, minMonths, parseLapsedEntityFilters(req));
   const buffer = rowsToXlsxBuffer([
     { key: 'customerNumber', label: 'מספר לקוח' },
     { key: 'name', label: 'שם לקוח' },

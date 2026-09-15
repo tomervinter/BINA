@@ -342,6 +342,7 @@ async function initDashboardFilters() {
     if (s && state.product.length && s.productNames) { state.productNames = s.productNames; updateUi(); }
     renderCohortCustomers(s);
     if (window.refreshDashboardTopInsights) window.refreshDashboardTopInsights(state);
+    if (window.refreshDashLapsedFilters) window.refreshDashLapsedFilters(state);
   }
 
   const pickers = {};

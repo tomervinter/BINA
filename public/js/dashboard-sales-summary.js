@@ -560,8 +560,22 @@ async function loadDashboardSalesSummary(filters) {
     // never has to click into a period filter just to see how each month fared.
     const mt = s.monthlyTimeline;
     const n = mt.months.length;
-    const labels = mt.months.map((mk) => { const [y, m] = mk.split('-'); return s.monthNames[+m - 1] + ' ' + y; });
+    // The current, still-in-progress month (see inProgressMonth in
+    // dashboardSalesSummary.js) gets a second label line and a lighter/muted bar
+    // color instead of the solid primary/compare color, so it reads visually as
+    // "not a finished month yet" rather than looking like a real, comparable data
+    // point sitting right next to full months.
+    const labels = mt.months.map((mk) => {
+      const [y, m] = mk.split('-');
+      const base = s.monthNames[+m - 1] + ' ' + y;
+      return mk === mt.inProgressMonth ? [base, '(החודש טרם הסתיים)'] : base;
+    });
     const monthMeta = mt.months.map((mk) => { const [y, m] = mk.split('-'); return { year: +y, month: +m }; });
+    const inProgressIdx = mt.inProgressMonth ? mt.months.indexOf(mt.inProgressMonth) : -1;
+    function withInProgressShade(color, lightColor) {
+      if (inProgressIdx < 0) return color;
+      return mt.months.map((mk, i) => (i === inProgressIdx ? lightColor : color));
+    }
     const timelineYoyEntries = buildYoyEntries(n,
       (i) => ({ value: mt.data[i], meta: monthMeta[i] }),
       (i) => mt.yoyData[i]
@@ -574,7 +588,7 @@ async function loadDashboardSalesSummary(filters) {
     const mtScale = dashYAxisSharedScale([mt.data, mt.compareData]);
     upsertChart('monthlyTrendChart', {
       type: 'bar',
-      data: { labels, datasets: [{ label: 'מחזור', data: mt.data, backgroundColor: DASH_BLUE, borderRadius: 4 }] },
+      data: { labels, datasets: [{ label: 'מחזור', data: mt.data, backgroundColor: withInProgressShade(DASH_BLUE, 'rgba(33,28,108,0.35)'), borderRadius: 4 }] },
       plugins: [yoyDrawPlugin(activeYoyEntries, [0])],
       options: {
         responsive: true, maintainAspectRatio: false,
@@ -597,7 +611,7 @@ async function loadDashboardSalesSummary(filters) {
       document.getElementById('monthlyTrendCompareChartTitle').textContent = compareFilterDesc;
       upsertChart('monthlyTrendCompareChart', {
         type: 'bar',
-        data: { labels, datasets: [{ label: compareAxisLabel || 'השוואה', data: mt.compareData, backgroundColor: DASH_PURPLE, borderRadius: 4 }] },
+        data: { labels, datasets: [{ label: compareAxisLabel || 'השוואה', data: mt.compareData, backgroundColor: withInProgressShade(DASH_PURPLE, 'rgba(20,103,240,0.35)'), borderRadius: 4 }] },
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
