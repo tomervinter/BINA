@@ -46,7 +46,7 @@ async function initDashLapsedCustomersPanel() {
 
   function updateSubtitle(minMonths, currentMonthLabel) {
     const monthPhrase = currentMonthLabel ? ('ב' + currentMonthLabel) : 'החודש';
-    subtitleEl.textContent = 'לקוחות שרכשו ב-' + minMonths + ' מתוך 12 החודשים האחרונים, אך טרם רכשו ' + monthPhrase + '.';
+    subtitleEl.textContent = 'לקוחות שרכשו ב-' + minMonths + ' מ-12 החודשים האחרונים, אך טרם רכשו ' + monthPhrase + '.';
   }
 
   function collapse() {

@@ -399,10 +399,10 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
    dashRegisterPanelToggle in dashboard.html) rather than each independently
    toggleable, since three tables' worth of content open side by side was the
    original problem this whole thing replaced. */
-.dash-panel-region{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--surface);box-shadow:var(--shadow-card);flex:0 1 950px;min-width:0;}
+.dash-panel-region{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--green);border-radius:10px;padding:16px;background:var(--green-soft);box-shadow:var(--shadow-card);flex:0 1 950px;min-width:0;}
 .dash-panel-toggles-vertical{display:flex;flex-direction:column;gap:6px;width:280px;flex:none;}
 .dash-panel-toggle{width:100%;justify-content:flex-start;text-align:right;white-space:normal;line-height:1.3;}
-.dash-panel-toggle.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.dash-panel-toggle.active{background:var(--green-btn);border-color:var(--green-btn);color:#fff;}
 .dash-panel-content{flex:1;min-width:0;}
 #dashPanelEmptyState{padding:24px 0;text-align:center;}
 

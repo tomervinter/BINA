@@ -41,10 +41,9 @@ async function initDashDecliningCustomersPanel() {
   }
 
   function updateSubtitle(minPct, yearLabel, priorYearLabel, lastCompletedMonthLabel) {
-    const base = 'לקוחות עם ירידה במחזור מצטבר';
-    const periodPhrase = yearLabel ? (' מינואר עד ' + lastCompletedMonthLabel + ' לעומת אותה תקופה ב-' + priorYearLabel) : (' השנה מול אשתקד');
-    const pctPhrase = minPct > 0 ? (' של לפחות ' + minPct + '%') : '';
-    subtitleEl.textContent = base + periodPhrase + pctPhrase + ', ולכל לקוח — המוצרים שירדו אצלו.';
+    const periodPhrase = yearLabel ? (yearLabel + ' מול ' + priorYearLabel) : 'השנה מול אשתקד';
+    const pctPhrase = minPct > 0 ? (' (מעל ' + minPct + '%)') : '';
+    subtitleEl.textContent = 'לקוחות בירידה מצטברת, ' + periodPhrase + pctPhrase + '.';
   }
 
   function collapse() {

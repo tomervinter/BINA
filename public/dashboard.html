@@ -79,6 +79,10 @@
             <div class="card-title" style="margin-bottom:2px;">סינון הדשבורד — בדיקה ראשית מול השוואה</div>
             <div class="page-subtitle" id="dashFilterSubtitle" style="margin-bottom:0;">כברירת מחדל, כל הנתונים בדשבורד מציגים את כלל הלקוחות וכל התקופות. מלאו כל שורה בנפרד כדי לסנן לפיה, ואת עמודת ההשוואה כדי להציג לצידה נתון להשוואה.</div>
           </div>
+          <div class="table-head-left">
+            <div class="card-title" style="margin-bottom:2px;">דוחות ניתוח לקוחות נוספים</div>
+            <div class="page-subtitle" style="margin-bottom:0;">בחרו אחת משלוש האפשרויות מימין כדי להציג את הסינון והנתונים.</div>
+          </div>
         </div>
         <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;margin-top:12px;">
         <div class="table-scroll" style="max-width:100%;width:fit-content;overflow:visible;">
@@ -255,7 +259,7 @@
         <div class="dash-panel-content" id="dashPanelContent">
         <div class="page-subtitle" id="dashPanelEmptyState">בחרו אחת מהאפשרויות מימין כדי להציג את הסינון והנתונים.</div>
         <div class="dash-panel-box" id="dashCohortPanelBox" style="display:none;">
-          <div class="page-subtitle" id="dashPurchaseCohortSubtitle" style="margin-bottom:10px;">מצמצם את הלקוח/ות בבדיקה הראשית למי שקנו מוצר מסוים ו/או למי שלא קנו מוצר אחר.</div>
+          <div class="page-subtitle" id="dashPurchaseCohortSubtitle" style="margin-bottom:10px;">מצמצם ללקוחות שקנו ו/או לא קנו מוצר מסוים.</div>
           <div style="display:flex;gap:16px;flex-wrap:wrap;">
             <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:220px;">
               <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">קנו מוצר/ים:</span>
@@ -283,11 +287,11 @@
         </div>
 
         <div class="dash-panel-box" id="dashLapsedPanelBox" style="display:none;">
-          <div class="page-subtitle" id="dashLapsedSubtitle" style="margin-bottom:10px;">לקוחות שרכשו במספר החודשים שתגדירו מתוך 12 החודשים האחרונים, אך טרם רכשו החודש.</div>
+          <div class="page-subtitle" id="dashLapsedSubtitle" style="margin-bottom:10px;">לקוחות שרכשו במספר החודשים שתגדירו מ-12 האחרונים, אך טרם רכשו החודש.</div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">מספר חודשי רכישה מינימלי (מתוך 12 אחרונים):</span>
-            <input type="number" id="dashLapsedMinMonths" min="1" max="12" step="1" value="7" style="width:70px;">
-            <button class="btn btn-success-soft btn-sm" id="dashLapsedShowBtn" type="button">הצג</button>
+            <input type="number" id="dashLapsedMinMonths" min="1" max="12" step="1" value="7" style="width:70px;height:34px;box-sizing:border-box;padding:0 8px;">
+            <button class="btn btn-success-soft btn-sm" id="dashLapsedShowBtn" type="button" style="height:34px;box-sizing:border-box;">הצג</button>
           </div>
           <div id="dashLapsedCustomersSection" style="display:none;margin-top:14px;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
@@ -304,11 +308,11 @@
         </div>
 
         <div class="dash-panel-box" id="dashDecliningPanelBox" style="display:none;">
-          <div class="page-subtitle" id="dashDecliningSubtitle" style="margin-bottom:10px;">לקוחות עם ירידה במחזור מצטבר השנה מול אשתקד, ולכל לקוח — המוצרים שירדו אצלו.</div>
+          <div class="page-subtitle" id="dashDecliningSubtitle" style="margin-bottom:10px;">לקוחות בירידה מצטברת, השנה מול אשתקד.</div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">אחוז ירידה מינימלי:</span>
-            <input type="number" id="dashDecliningMinPct" min="0" max="100" step="1" value="0" style="width:70px;">
-            <button class="btn btn-success-soft btn-sm" id="dashDecliningShowBtn" type="button">הצג</button>
+            <input type="number" id="dashDecliningMinPct" min="0" max="100" step="1" value="0" style="width:70px;height:34px;box-sizing:border-box;padding:0 8px;">
+            <button class="btn btn-success-soft btn-sm" id="dashDecliningShowBtn" type="button" style="height:34px;box-sizing:border-box;">הצג</button>
           </div>
           <div id="dashDecliningCustomersSection" style="display:none;margin-top:14px;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
