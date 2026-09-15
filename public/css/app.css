@@ -388,8 +388,18 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .dft-cell-clear:hover{color:var(--red);background:var(--surface);}
 .dash-filter-table tbody tr:last-child th,.dash-filter-table tbody tr:last-child td{border-bottom:none;}
 
+/* ---------- Dashboard side-panel toggle buttons ---------- */
+/* Each of the three cohort-style panels starts collapsed behind one of these —
+   at three panels' combined width (~1540px) they'd otherwise almost never fit
+   in one row and just stack; three short buttons always fit regardless of
+   screen width, and each opens its own panel independently (not an accordion —
+   opening one doesn't close the others). */
+.dash-panel-toggle.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
+.dash-panel-toggle-arrow{display:inline-block;transition:transform .15s;font-size:10px;}
+.dash-panel-toggle[aria-expanded="true"] .dash-panel-toggle-arrow{transform:rotate(180deg);}
+
 /* ---------- Purchase-cohort filter panel, a bounded box beside the filter table ---------- */
-.dash-cohort-panel{flex:0 1 500px;width:100%;max-width:500px;box-sizing:border-box;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-2);}
+.dash-cohort-panel{flex:0 1 500px;width:100%;max-width:500px;box-sizing:border-box;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-2);margin-top:12px;}
 .dash-cohort-panel .mms-toggle{width:100%;max-width:none;}
 .dash-cohort-panel #dashBoughtProductsPicker,.dash-cohort-panel #dashNotBoughtProductsPicker{min-width:0;}
 /* Fixed column widths + ellipsis truncation so 5 columns fit the panel's width

@@ -16,6 +16,21 @@ async function initDashDecliningCustomersPanel() {
   const exportBtn = document.getElementById('dashDecliningExportBtn');
   const subtitleEl = document.getElementById('dashDecliningSubtitle');
 
+  // Panel starts collapsed behind its own toggle button (see dash-panel-toggles
+  // in dashboard.html), independent of the "הצג"/"הסתר" toggle below which only
+  // governs the results list once the panel itself is open.
+  (function wirePanelToggle() {
+    const btn = document.getElementById('dashDecliningToggleBtn');
+    const box = document.getElementById('dashDecliningPanelBox');
+    if (!btn || !box) return;
+    btn.addEventListener('click', () => {
+      const isOpen = box.style.display !== 'none';
+      box.style.display = isOpen ? 'none' : '';
+      btn.setAttribute('aria-expanded', String(!isOpen));
+      btn.classList.toggle('active', !isOpen);
+    });
+  })();
+
   let filterState = null;
   let expanded = false;
 
