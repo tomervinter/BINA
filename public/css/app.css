@@ -39,6 +39,15 @@ h1{font-size:22px;font-weight:800;margin:0 0 4px;}
 .page-loading-logo{width:72px;height:72px;border-radius:18px;box-shadow:var(--shadow-card);}
 .page-loading-brand{font-size:20px;font-weight:800;color:var(--text);letter-spacing:.3px;}
 .page-loading-text{font-size:14px;font-weight:600;color:var(--text-muted);margin-top:8px;}
+/* Three dots appearing/disappearing in sequence after "אנא המתן" — a lightweight
+   "something is happening" cue for what can otherwise be a static-looking wait.
+   Each dot's animation-delay is offset by a third of the cycle so they pulse
+   one after another rather than all together. */
+.page-loading-dots span{opacity:0;animation:pageLoadingDot 1.4s infinite;}
+.page-loading-dots span:nth-child(1){animation-delay:0s;}
+.page-loading-dots span:nth-child(2){animation-delay:.2s;}
+.page-loading-dots span:nth-child(3){animation-delay:.4s;}
+@keyframes pageLoadingDot{0%,80%,100%{opacity:0;}30%{opacity:1;}}
 
 /* ---------- Auth (login/signup) ---------- */
 .auth-page{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--sidebar);padding:24px;}
@@ -59,6 +68,23 @@ input[type=text],input[type=email],input[type=password],input[type=number]{
 }
 .error-box{background:var(--red-soft);color:var(--red);padding:10px 14px;border-radius:9px;font-size:12.5px;margin-bottom:14px;display:none;}
 .link{color:var(--accent);text-decoration:none;font-size:13px;font-weight:700;}
+
+/* ---------- Whole-app proportional scaling for laptop-size screens ---------- */
+/* The app's layout (dashboard panel row especially) is laid out for a roughly
+   1600px-wide content area; a narrower laptop screen doesn't have room for that
+   and things wrap onto extra rows / look cramped instead of matching the desktop
+   layout. Rather than redesigning every page's layout to reflow differently per
+   width, this scales the ENTIRE rendered page down (zoom, not transform — it
+   reflows layout at the smaller effective size rather than just visually
+   shrinking a fixed-size render) so any screen down to ~1040px sees the exact
+   same relative layout as a full-width desktop, just smaller — "shrink
+   everything, keep every proportion" rather than restructuring anything.
+   Clamped at 1 (never zooms IN past the real 1:1 size on a wide desktop) and at
+   .65 (a floor so text never gets too small to read before the dedicated mobile
+   layout below takes over at 820px and resets this back to 1). Uses `vw`, which
+   CSS defines against the real/physical viewport regardless of zoom, so this
+   keeps computing itself correctly as the window is resized. */
+html{zoom:max(.65,min(1,calc(100vw / 1600px)));}
 
 /* ---------- App shell ---------- */
 .app-shell{display:grid;grid-template-columns:272px 1fr;min-height:100vh;background:var(--bg);}
@@ -105,6 +131,7 @@ input[type=text],input[type=email],input[type=password],input[type=number]{
 .logout-btn svg{width:14px;height:14px;}
 
 @media (max-width:820px){
+  html{zoom:1;}
   .app-shell{grid-template-columns:1fr;}
   .sidebar{position:relative;height:auto;}
   .main-content{padding:18px;}
