@@ -397,9 +397,14 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .dash-panel-toggle.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
 .dash-panel-toggle-arrow{display:inline-block;transition:transform .15s;font-size:10px;}
 .dash-panel-toggle[aria-expanded="true"] .dash-panel-toggle-arrow{transform:rotate(180deg);}
+/* Bounds the toggle buttons AND whatever panel(s) they open in one shared box,
+   so the buttons don't float loose on the page background disconnected from
+   what they control — reads as one "extra filters" region. */
+.dash-panel-region{border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-2);margin-top:12px;}
+.dash-panel-region-body{display:flex;gap:20px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:14px;padding-top:14px;}
 
-/* ---------- Purchase-cohort filter panel, a bounded box beside the filter table ---------- */
-.dash-cohort-panel{flex:0 1 500px;width:100%;max-width:500px;box-sizing:border-box;border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-2);margin-top:12px;}
+/* ---------- Purchase-cohort filter panel, sits inside .dash-panel-region ---------- */
+.dash-cohort-panel{flex:0 1 500px;width:100%;max-width:500px;box-sizing:border-box;}
 .dash-cohort-panel .mms-toggle{width:100%;max-width:none;}
 .dash-cohort-panel #dashBoughtProductsPicker,.dash-cohort-panel #dashNotBoughtProductsPicker{min-width:0;}
 /* Fixed column widths + ellipsis truncation so 5 columns fit the panel's width
