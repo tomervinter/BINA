@@ -33,6 +33,34 @@
         }
       }
     };
+
+    // Shared accordion coordinator for the dashboard's three side-panels (see
+    // .dash-panel-region in app.css). Each panel's own JS module (dashboard-
+    // filters.js, dashboard-lapsed-customers.js, dashboard-declining-
+    // customers.js) calls this once with its own button/box id pair instead of
+    // wiring its own click handler directly — centralizes the "opening one
+    // closes the others" rule in one place rather than duplicating it three
+    // times. Clicking the already-open panel's button closes it (back to the
+    // empty state) rather than being stuck always-one-open.
+    window.__dashPanels = [];
+    window.dashRegisterPanelToggle = function (btnId, boxId) {
+      window.__dashPanels.push({ btnId: btnId, boxId: boxId });
+      var btn = document.getElementById(btnId);
+      var box = document.getElementById(boxId);
+      if (!btn || !box) return;
+      btn.addEventListener('click', function () {
+        var wasOpen = box.style.display !== 'none';
+        window.__dashPanels.forEach(function (p) {
+          var b = document.getElementById(p.boxId), bt = document.getElementById(p.btnId);
+          var shouldOpen = !wasOpen && p.boxId === boxId;
+          if (b) b.style.display = shouldOpen ? '' : 'none';
+          if (bt) { bt.setAttribute('aria-expanded', String(shouldOpen)); bt.classList.toggle('active', shouldOpen); }
+        });
+        var anyOpen = window.__dashPanels.some(function (p) { return document.getElementById(p.boxId).style.display !== 'none'; });
+        var empty = document.getElementById('dashPanelEmptyState');
+        if (empty) empty.style.display = anyOpen ? 'none' : '';
+      });
+    };
   </script>
   <div class="app-shell">
     <aside class="sidebar" id="sidebarMount"></aside>
@@ -218,14 +246,15 @@
         </div>
 
         <div class="dash-panel-region">
-        <div class="dash-panel-toggles" style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-ghost btn-sm dash-panel-toggle" id="dashCohortToggleBtn" type="button" aria-expanded="false">לקוחות שקונים מוצר X ולא קונים מוצר Y <span class="dash-panel-toggle-arrow">▾</span></button>
-          <button class="btn btn-ghost btn-sm dash-panel-toggle" id="dashLapsedToggleBtn" type="button" aria-expanded="false">לקוחות שקונים בקביעות וטרם קנו החודש <span class="dash-panel-toggle-arrow">▾</span></button>
-          <button class="btn btn-ghost btn-sm dash-panel-toggle" id="dashDecliningToggleBtn" type="button" aria-expanded="false">לקוחות שיורדים במכר <span class="dash-panel-toggle-arrow">▾</span></button>
+        <div class="dash-panel-toggles-vertical">
+          <button class="btn btn-ghost btn-sm dash-panel-toggle" id="dashCohortToggleBtn" type="button" aria-expanded="false">לקוחות שקונים מוצר X ולא קונים מוצר Y</button>
+          <button class="btn btn-ghost btn-sm dash-panel-toggle" id="dashLapsedToggleBtn" type="button" aria-expanded="false">לקוחות שקונים בקביעות וטרם קנו החודש</button>
+          <button class="btn btn-ghost btn-sm dash-panel-toggle" id="dashDecliningToggleBtn" type="button" aria-expanded="false">לקוחות שיורדים במכר</button>
         </div>
 
-        <div class="dash-panel-region-body">
-        <div class="dash-cohort-panel" id="dashCohortPanelBox" style="display:none;">
+        <div class="dash-panel-content" id="dashPanelContent">
+        <div class="page-subtitle" id="dashPanelEmptyState">בחרו אחת מהאפשרויות מימין כדי להציג את הסינון והנתונים.</div>
+        <div class="dash-panel-box" id="dashCohortPanelBox" style="display:none;">
           <div class="page-subtitle" id="dashPurchaseCohortSubtitle" style="margin-bottom:10px;">מצמצם את הלקוח/ות בבדיקה הראשית למי שקנו מוצר מסוים ו/או למי שלא קנו מוצר אחר.</div>
           <div style="display:flex;flex-direction:column;gap:10px;">
             <div style="display:flex;align-items:center;gap:6px;">
@@ -253,7 +282,7 @@
           </div>
         </div>
 
-        <div class="dash-cohort-panel" id="dashLapsedPanelBox" style="display:none;">
+        <div class="dash-panel-box" id="dashLapsedPanelBox" style="display:none;">
           <div class="page-subtitle" id="dashLapsedSubtitle" style="margin-bottom:10px;">לקוחות שרכשו במספר החודשים שתגדירו מתוך 12 החודשים האחרונים, אך טרם רכשו החודש.</div>
           <div style="display:flex;align-items:center;gap:6px;">
             <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">מספר חודשי רכישה מינימלי (מתוך 12 אחרונים):</span>
@@ -276,7 +305,7 @@
           </div>
         </div>
 
-        <div class="dash-cohort-panel" id="dashDecliningPanelBox" style="display:none;">
+        <div class="dash-panel-box" id="dashDecliningPanelBox" style="display:none;">
           <div class="page-subtitle" id="dashDecliningSubtitle" style="margin-bottom:10px;">לקוחות עם ירידה במחזור מצטבר השנה מול אשתקד, ולכל לקוח — המוצרים שירדו אצלו.</div>
           <div style="display:flex;align-items:center;gap:6px;">
             <span style="font-weight:700;font-size:12.5px;white-space:nowrap;">אחוז ירידה מינימלי:</span>

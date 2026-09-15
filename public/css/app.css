@@ -388,25 +388,26 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
 .dft-cell-clear:hover{color:var(--red);background:var(--surface);}
 .dash-filter-table tbody tr:last-child th,.dash-filter-table tbody tr:last-child td{border-bottom:none;}
 
-/* ---------- Dashboard side-panel toggle buttons ---------- */
-/* Each of the three cohort-style panels starts collapsed behind one of these —
-   at three panels' combined width (~1540px) they'd otherwise almost never fit
-   in one row and just stack; three short buttons always fit regardless of
-   screen width, and each opens its own panel independently (not an accordion —
-   opening one doesn't close the others). */
-.dash-panel-toggle.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
-.dash-panel-toggle-arrow{display:inline-block;transition:transform .15s;font-size:10px;}
-.dash-panel-toggle[aria-expanded="true"] .dash-panel-toggle-arrow{transform:rotate(180deg);}
-/* Bounds the toggle buttons AND whatever panel(s) they open in one shared box,
-   so the buttons don't float loose on the page background disconnected from
-   what they control — reads as one "extra filters" region. */
-.dash-panel-region{border:1px solid var(--border);border-radius:10px;padding:14px 16px;background:var(--surface-2);margin-top:12px;}
-.dash-panel-region-body{display:flex;gap:20px;flex-wrap:wrap;border-top:1px solid var(--border);margin-top:14px;padding-top:14px;}
+/* ---------- Dashboard side-panel accordion ---------- */
+/* Three cohort-style panels (bought/not-bought cohort, lapsed regular buyers,
+   declining customers), bound together in one region: a vertical stack of
+   selector buttons on the right (RTL start side) and the selected panel's
+   content — filter inputs + its own results table — on the left. Exclusive
+   selection (opening one closes whichever other was open — see
+   dashRegisterPanelToggle in dashboard.html) rather than each independently
+   toggleable, since three tables' worth of content open side by side was the
+   original problem this whole thing replaced. */
+.dash-panel-region{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--surface-2);margin-top:12px;}
+.dash-panel-toggles-vertical{display:flex;flex-direction:column;gap:6px;width:280px;flex:none;}
+.dash-panel-toggle{width:100%;justify-content:flex-start;text-align:right;white-space:normal;line-height:1.3;}
+.dash-panel-toggle.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.dash-panel-content{flex:1;min-width:0;}
+#dashPanelEmptyState{padding:24px 0;text-align:center;}
 
-/* ---------- Purchase-cohort filter panel, sits inside .dash-panel-region ---------- */
-.dash-cohort-panel{flex:0 1 500px;width:100%;max-width:500px;box-sizing:border-box;}
-.dash-cohort-panel .mms-toggle{width:100%;max-width:none;}
-.dash-cohort-panel #dashBoughtProductsPicker,.dash-cohort-panel #dashNotBoughtProductsPicker{min-width:0;}
+/* ---------- Panel content box, sits inside .dash-panel-content ---------- */
+.dash-panel-box{width:100%;}
+.dash-panel-box .mms-toggle{width:100%;max-width:none;}
+.dash-panel-box #dashBoughtProductsPicker,.dash-panel-box #dashNotBoughtProductsPicker{min-width:0;}
 /* Fixed column widths + ellipsis truncation so 5 columns fit the panel's width
    without ever needing horizontal scroll — full values are still on the title tooltip. */
 .cohort-customers-table{table-layout:fixed;width:100%;font-size:11px;}

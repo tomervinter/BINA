@@ -23,17 +23,7 @@ async function initDashLapsedCustomersPanel() {
   // Panel starts collapsed behind its own toggle button (see dash-panel-toggles
   // in dashboard.html), independent of the "הצג"/"הסתר" toggle below which only
   // governs the results list once the panel itself is open.
-  (function wirePanelToggle() {
-    const btn = document.getElementById('dashLapsedToggleBtn');
-    const box = document.getElementById('dashLapsedPanelBox');
-    if (!btn || !box) return;
-    btn.addEventListener('click', () => {
-      const isOpen = box.style.display !== 'none';
-      box.style.display = isOpen ? 'none' : '';
-      btn.setAttribute('aria-expanded', String(!isOpen));
-      btn.classList.toggle('active', !isOpen);
-    });
-  })();
+  if (window.dashRegisterPanelToggle) window.dashRegisterPanelToggle('dashLapsedToggleBtn', 'dashLapsedPanelBox');
 
   let filterState = null;
   let expanded = false;

@@ -85,17 +85,7 @@ async function initDashboardFilters() {
   // in dashboard.html) — pushes the actual box open below the button row rather
   // than always showing all three side-panels at once, which is what made them
   // wrap onto separate rows and stack instead of fitting side by side.
-  (function wireCohortPanelToggle() {
-    const btn = document.getElementById('dashCohortToggleBtn');
-    const box = document.getElementById('dashCohortPanelBox');
-    if (!btn || !box) return;
-    btn.addEventListener('click', () => {
-      const isOpen = box.style.display !== 'none';
-      box.style.display = isOpen ? 'none' : '';
-      btn.setAttribute('aria-expanded', String(!isOpen));
-      btn.classList.toggle('active', !isOpen);
-    });
-  })();
+  if (window.dashRegisterPanelToggle) window.dashRegisterPanelToggle('dashCohortToggleBtn', 'dashCohortPanelBox');
 
   // Seven less-commonly-used filter rows (superType/department/product/city/
   // centralCustomer/primaryClass/customerType) start collapsed to keep the table
