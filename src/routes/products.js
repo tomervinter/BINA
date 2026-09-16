@@ -1,5 +1,4 @@
 const express = require('express');
-const multer = require('multer');
 const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer } = require('../lib/csv');
@@ -7,9 +6,9 @@ const { parseListQuery } = require('../lib/listQuery');
 const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
 const { replaceAll } = require('../lib/bulkInsert');
 const { createJob, updateJob } = require('../lib/uploadJobs');
+const upload = require('../lib/uploadMiddleware');
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(requireAuth);
 

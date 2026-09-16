@@ -27,19 +27,6 @@
   <script src="js/confirm-modal.js"></script>
   <script src="js/column-order.js"></script>
   <script src="js/inline-edit-table.js"></script>
-  <script>
-    initInlineEditTable({
-      pageKey: 'seasons',
-      apiBase: '/api/seasons',
-      addLabel: 'הוספת עונה',
-      countLabel: 'עונות',
-      fields: [
-        { key: 'name', label: 'עונה' },
-        { key: 'year', label: 'שנה', type: 'number', default: new Date().getFullYear() },
-        { key: 'fromDate', label: 'מתאריך', type: 'date' },
-        { key: 'toDate', label: 'עד תאריך', type: 'date' }
-      ]
-    });
-  </script>
+  <script src="js/page-seasons.js"></script>
 </body>
 </html>

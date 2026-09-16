@@ -97,3 +97,5 @@ async function initUsersPage() {
 
   await loadTable();
 }
+
+initUsersPage();

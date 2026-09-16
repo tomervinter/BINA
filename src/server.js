@@ -30,13 +30,38 @@ const uploadStatusRoutes = require('./routes/uploadStatus');
 
 const app = express();
 
-// CSP disabled: the login/signup pages use inline <script> tags. Tighten this
-// (nonce-based CSP) before hosting on a public domain.
-app.use(helmet({ contentSecurityPolicy: false }));
+// Every page script now lives in an external public/js/*.js file (no inline
+// <script> blocks anywhere in public/*.html), so script-src can drop
+// 'unsafe-inline' entirely — only same-origin scripts and the Chart.js UMD
+// build (dashboard.html, reports-yoy.html) are allowed to run. style-src keeps
+// 'unsafe-inline' since the UI relies heavily on inline style="" attributes;
+// that's a much smaller blast radius than allowing arbitrary inline script.
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", 'https://cdnjs.cloudflare.com'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      imgSrc: ["'self'", 'data:'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      connectSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'self'"]
+    }
+  }
+}));
 app.use(compression());
 app.use(cors({ origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : true, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
+
+// General ceiling on every API route (previously only /api/auth was limited at
+// all) — generous enough not to interfere with a dashboard page's normal burst
+// of AJAX calls, but bounds abuse/scripted hammering of any endpoint. The
+// stricter authLimiter below still applies on top of this for login specifically.
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 600, standardHeaders: true, legacyHeaders: false });
+app.use('/api', apiLimiter);
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 app.use('/api/auth', authLimiter, authRoutes);
@@ -68,6 +93,18 @@ app.use('/api/upload-status', uploadStatusRoutes);
 app.use(express.static(path.join(__dirname, '..', 'public'), {
   setHeaders: (res) => res.setHeader('Cache-Control', 'public, max-age=60')
 }));
+
+// Catches any error passed via next(err), or an async route handler's rejected
+// promise (Express 5 forwards those here automatically) — including multer's
+// file-type/file-size rejections from uploadMiddleware.js — and responds with
+// plain JSON instead of Express's default HTML error page, which every
+// frontend fetch() call in this app assumes it can res.json() unconditionally.
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  console.error('Unhandled request error:', err);
+  const status = err.status || err.statusCode || 400;
+  res.status(status).json({ error: err.message || 'שגיאה בעיבוד הבקשה' });
+});
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

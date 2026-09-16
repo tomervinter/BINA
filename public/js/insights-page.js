@@ -139,3 +139,5 @@ async function initInsightsPage() {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   });
 }
+
+initInsightsPage();

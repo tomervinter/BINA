@@ -108,3 +108,5 @@ async function initRuleEnginePage() {
 
   render();
 }
+
+initRuleEnginePage();

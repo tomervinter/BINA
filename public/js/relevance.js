@@ -263,3 +263,5 @@ async function initRelevancePage() {
   columns = applyColumnOrder(originalColumns, await loadColumnOrder(RELEVANCE_TABLE_KEY));
   await load();
 }
+
+initRelevancePage();

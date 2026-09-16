@@ -96,3 +96,5 @@ async function initDashLapsedCustomersPanel() {
   updateSubtitle(Math.min(12, Math.max(1, parseInt(minMonthsInput.value, 10) || 1)), null);
   if (window.dashMarkReady) window.dashMarkReady();
 }
+
+initDashLapsedCustomersPanel();

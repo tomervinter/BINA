@@ -43,3 +43,5 @@ async function initOrganizationsPage() {
 
   await loadTable();
 }
+
+initOrganizationsPage();

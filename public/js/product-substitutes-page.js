@@ -72,3 +72,5 @@ async function initProductSubstitutesPage() {
 
   await loadTable();
 }
+
+initProductSubstitutesPage();

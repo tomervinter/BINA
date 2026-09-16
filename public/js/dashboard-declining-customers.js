@@ -86,3 +86,5 @@ async function initDashDecliningCustomersPanel() {
   updateSubtitle(Math.max(0, parseFloat(minPctInput.value) || 0), null, null, null);
   if (window.dashMarkReady) window.dashMarkReady();
 }
+
+initDashDecliningCustomersPanel();

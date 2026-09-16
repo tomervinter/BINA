@@ -100,3 +100,5 @@ async function initYoyReportPage() {
     { key: 'deltaPct', label: 'שינוי', html: true, render: deltaCell }
   ], report.bySuperType, { exportFilename: 'yoy-by-supertype', tableKey: 'reports-yoy-supertype' });
 }
+
+initYoyReportPage();

@@ -9,6 +9,9 @@ const router = express.Router();
 const COOKIE_OPTS = {
   httpOnly: true,
   sameSite: 'lax',
+  // Only HTTPS in production — local dev serves plain http://localhost, where a
+  // secure cookie would silently never be sent back, breaking local login.
+  secure: process.env.NODE_ENV === 'production',
   maxAge: 7 * 24 * 60 * 60 * 1000
 };
 
