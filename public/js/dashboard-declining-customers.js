@@ -61,8 +61,8 @@ async function initDashDecliningCustomersPanel() {
     bodyEl.innerHTML = data.customers.map((c) =>
       '<tr><td>' + Layout.escapeHtml(c.customerNumber) + '</td><td>' + Layout.escapeHtml(c.name) + '</td><td>' +
       Layout.escapeHtml(c.centralCustomer || '') + '</td><td>' + Layout.escapeHtml(c.primaryClass || '') + '</td><td>' +
-      Layout.escapeHtml(c.customerType || '') + '</td><td>' + c.declinePct + '</td><td>' + Layout.escapeHtml(c.productName) + '</td></tr>'
-    ).join('') || '<tr><td colspan="7">אין לקוחות תואמים</td></tr>';
+      Layout.escapeHtml(c.customerType || '') + '</td><td>' + c.declinePct + '</td><td>' + Layout.escapeHtml(c.productCode) + '</td><td>' + Layout.escapeHtml(c.productName) + '</td></tr>'
+    ).join('') || '<tr><td colspan="8">אין לקוחות תואמים</td></tr>';
     exportBtn.href = '/api/dashboard-sales-summary/declining-customers/export?' + buildQuery(minPct);
     section.style.display = '';
     showBtn.textContent = 'הסתר';

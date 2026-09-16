@@ -519,16 +519,16 @@ router.get('/lapsed-customers/export', async (req, res) => {
   const organizationId = req.user.organizationId;
   const minMonths = Math.min(12, Math.max(1, parseInt(req.query.minMonths, 10) || 7));
   const { matches, monthsWindow } = await resolveLapsedCustomers(organizationId, minMonths, parseLapsedEntityFilters(req));
-  // Excel-only horizontal month breakdown: for each of the trailing 12 months (the
-  // same window the "חודשי רכישה" count is based on), one "קנה/לא קנה" column and
-  // one "סכום" column, so the report reads as a purchase-by-month grid — the
-  // on-screen table stays as a single activeMonths count, unchanged.
+  // Excel-only horizontal month breakdown: one amount column per trailing month
+  // (the same 12-month window the "חודשי רכישה" count is based on), labeled with
+  // just the short month name — a 0 already reads as "didn't buy" on its own, so
+  // there's no separate קנה/לא קנה column. The on-screen table stays as a single
+  // activeMonths count, unchanged.
   const monthColumns = [];
   monthsWindow.forEach(({ year, month }) => {
     const mk = year + '-' + String(month).padStart(2, '0');
-    const label = MONTH_NAMES[month - 1] + ' ' + year;
-    monthColumns.push({ key: 'bought_' + mk, label: 'קנה/לא קנה — ' + label, value: (row) => ((row.monthlyRevenue[mk] || 0) > 0 ? 'קנה' : 'לא קנה') });
-    monthColumns.push({ key: 'amount_' + mk, label: 'סכום — ' + label, value: (row) => Math.round((row.monthlyRevenue[mk] || 0) * 100) / 100 });
+    const shortLabel = MONTH_NAMES[month - 1] + ' ' + String(year).slice(-2);
+    monthColumns.push({ key: 'amount_' + mk, label: shortLabel, value: (row) => Math.round((row.monthlyRevenue[mk] || 0) * 100) / 100 });
   });
   const buffer = rowsToXlsxBuffer([
     { key: 'customerNumber', label: 'מספר לקוח' },
@@ -654,7 +654,8 @@ router.get('/declining-customers/export', async (req, res) => {
     { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
     { key: 'customerType', label: 'סוג לקוח' },
     { key: 'declinePct', label: 'ירידה מצטברת (%)' },
-    { key: 'productName', label: 'מוצר שירד' }
+    { key: 'productCode', label: 'מק"ט' },
+    { key: 'productName', label: 'שם מוצר' }
   ], matches);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="declining-customers.xlsx"');
