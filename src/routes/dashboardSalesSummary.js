@@ -604,7 +604,9 @@ async function resolveDecliningCustomers(organizationId, minDeclinePct, entityFi
         const pid = k.slice(cid.length + 1);
         const priorRev = priorByProduct[k];
         const curRev = curByProduct[k] || 0;
-        return curRev < priorRev ? { pid, name: (prodMap[pid] && prodMap[pid].name) || pid, drop: priorRev - curRev } : null;
+        return curRev < priorRev
+          ? { pid, name: (prodMap[pid] && prodMap[pid].name) || pid, drop: priorRev - curRev, declinePct: Math.round(((priorRev - curRev) / priorRev) * 1000) / 10 }
+          : null;
       })
       .filter(Boolean)
       .sort((a, b) => b.drop - a.drop);
@@ -617,7 +619,7 @@ async function resolveDecliningCustomers(organizationId, minDeclinePct, entityFi
       customerType: (custMap[cid] && custMap[cid].customerType) || null,
       declinePct: Math.round(declinePct * 10) / 10
     };
-    declinedProducts.forEach((p) => matches.push(Object.assign({}, base, { productCode: p.pid, productName: p.name })));
+    declinedProducts.forEach((p) => matches.push(Object.assign({}, base, { productCode: p.pid, productName: p.name, productDeclinePct: p.declinePct })));
   });
   matches.sort((a, b) => b.declinePct - a.declinePct);
   const customerCount = new Set(matches.map((m) => m.customerNumber)).size;
@@ -655,7 +657,8 @@ router.get('/declining-customers/export', async (req, res) => {
     { key: 'customerType', label: 'סוג לקוח' },
     { key: 'declinePct', label: 'ירידה מצטברת (%)' },
     { key: 'productCode', label: 'מק"ט' },
-    { key: 'productName', label: 'שם מוצר' }
+    { key: 'productName', label: 'שם מוצר' },
+    { key: 'productDeclinePct', label: 'ירידה במוצר מצטברת שנה מול שנה (%)' }
   ], matches);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="declining-customers.xlsx"');
