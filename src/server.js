@@ -26,6 +26,7 @@ const salesFullReportRoutes = require('./routes/salesFullReport');
 const dashboardSalesSummaryRoutes = require('./routes/dashboardSalesSummary');
 const columnOrderRoutes = require('./routes/columnOrder');
 const organizationsRoutes = require('./routes/organizations');
+const uploadStatusRoutes = require('./routes/uploadStatus');
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use('/api/sales-full-report', salesFullReportRoutes);
 app.use('/api/dashboard-sales-summary', dashboardSalesSummaryRoutes);
 app.use('/api/column-order', columnOrderRoutes);
 app.use('/api/organizations', organizationsRoutes);
+app.use('/api/upload-status', uploadStatusRoutes);
 
 // A short max-age (not no-cache): every navigation was paying a full network
 // round-trip per static JS/CSS file just to revalidate a file that almost never

@@ -6,6 +6,7 @@ const { parseFileBuffer } = require('../lib/csv');
 const { parseListQuery } = require('../lib/listQuery');
 const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
 const { replaceAll } = require('../lib/bulkInsert');
+const { createJob, updateJob } = require('../lib/uploadJobs');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -81,9 +82,16 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     forMarketing: r['לשיווק'] || null
   })).filter((r) => r.itemCode);
 
-  await replaceAll(prisma, 'product', { organizationId: orgId }, rows);
-
-  res.json({ ok: true, count: rows.length });
+  // Handed off to a background job (see lib/uploadJobs.js) — see sales.js's upload
+  // route for why this doesn't await the DB write before responding.
+  const jobId = createJob(orgId);
+  res.json({ jobId, count: rows.length });
+  replaceAll(prisma, 'product', { organizationId: orgId }, rows)
+    .then(() => updateJob(jobId, { status: 'done', count: rows.length }))
+    .catch((err) => {
+      console.error('Products upload job failed:', jobId, err);
+      updateJob(jobId, { status: 'error', error: 'שגיאה בשמירת הנתונים בבסיס הנתונים — נסו שוב או פנו לתמיכה' });
+    });
 });
 
 router.delete('/', async (req, res) => {

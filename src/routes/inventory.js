@@ -6,6 +6,7 @@ const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer, parseDMY, parseNumber } = require('../lib/csv');
 const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
 const { replaceAll } = require('../lib/bulkInsert');
+const { createJob, updateJob } = require('../lib/uploadJobs');
 const { buildFilterClauses, parseRawListQuery } = require('../lib/rawFilter');
 
 const router = express.Router();
@@ -100,9 +101,16 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     };
   }).filter((r) => r.sku);
 
-  await replaceAll(prisma, 'inventoryRecord', { organizationId: orgId }, rows);
-
-  res.json({ ok: true, count: rows.length });
+  // Handed off to a background job (see lib/uploadJobs.js) — see sales.js's upload
+  // route for why this doesn't await the DB write before responding.
+  const jobId = createJob(orgId);
+  res.json({ jobId, count: rows.length });
+  replaceAll(prisma, 'inventoryRecord', { organizationId: orgId }, rows)
+    .then(() => updateJob(jobId, { status: 'done', count: rows.length }))
+    .catch((err) => {
+      console.error('Inventory upload job failed:', jobId, err);
+      updateJob(jobId, { status: 'error', error: 'שגיאה בשמירת הנתונים בבסיס הנתונים — נסו שוב או פנו לתמיכה' });
+    });
 });
 
 router.delete('/', async (req, res) => {

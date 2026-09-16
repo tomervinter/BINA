@@ -6,6 +6,7 @@ const requireAuth = require('../middleware/requireAuth');
 const { parseFileBuffer, parseNumber } = require('../lib/csv');
 const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
 const { replaceAll } = require('../lib/bulkInsert');
+const { createJob, updateJob } = require('../lib/uploadJobs');
 const { buildFilterClauses, parseRawListQuery } = require('../lib/rawFilter');
 
 const router = express.Router();
@@ -124,9 +125,17 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     };
   }).filter((r) => r.customerNumber && r.productCode && r.date);
 
-  await replaceAll(prisma, 'sale', { organizationId: orgId }, rows);
-
-  res.json({ ok: true, count: rows.length });
+  // Handed off to a background job (see lib/uploadJobs.js) — a large sales file's bulk
+  // insert to Postgres can take well past any reasonable HTTP/proxy timeout, so the
+  // response goes back immediately and the frontend polls /api/upload-status/:jobId.
+  const jobId = createJob(orgId);
+  res.json({ jobId, count: rows.length });
+  replaceAll(prisma, 'sale', { organizationId: orgId }, rows)
+    .then(() => updateJob(jobId, { status: 'done', count: rows.length }))
+    .catch((err) => {
+      console.error('Sales upload job failed:', jobId, err);
+      updateJob(jobId, { status: 'error', error: 'שגיאה בשמירת הנתונים בבסיס הנתונים — נסו שוב או פנו לתמיכה' });
+    });
 });
 
 router.delete('/', async (req, res) => {

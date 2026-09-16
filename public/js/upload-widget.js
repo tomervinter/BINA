@@ -26,20 +26,56 @@ function initUploadWidget(container, opts) {
     statusLine.style.display = text ? 'block' : 'none';
   }
 
+  // Uploading returns a jobId as soon as the file is parsed — the actual database
+  // write runs in the background (see src/lib/uploadJobs.js) so a large file's slow
+  // bulk insert never has to finish inside this one request/response, which is what
+  // used to time out (as an opaque network error) for real-world multi-thousand-row
+  // sales exports. Poll for completion instead.
+  const POLL_INTERVAL_MS = 1500;
+  const MAX_POLL_ATTEMPTS = 400; // ~10 minutes, matching the server's own job timeout
+
   async function uploadFile(file) {
     if (!file) return;
     const form = new FormData();
     form.append('file', file);
     setStatus('טוען...', 'var(--text-muted)');
+    let jobId;
     try {
       const res = await fetch(opts.apiBase + '/upload', { method: 'POST', credentials: 'include', body: form });
       const result = await res.json();
       if (!res.ok) { setStatus(result.error || 'שגיאה בהעלאה', 'var(--red)'); return; }
-      setStatus('✓ נטענו ' + result.count.toLocaleString('he-IL') + ' רשומות', 'var(--green)');
-      if (opts.onUploaded) opts.onUploaded();
+      jobId = result.jobId;
     } catch (err) {
       setStatus('שגיאת רשת', 'var(--red)');
+      return;
     }
+    setStatus('מעבד את הקובץ...', 'var(--text-muted)');
+    await pollJobStatus(jobId);
+  }
+
+  async function pollJobStatus(jobId) {
+    for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
+      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      let data;
+      try {
+        const res = await fetch('/api/upload-status/' + jobId, { credentials: 'include' });
+        data = await res.json();
+        if (!res.ok) { setStatus(data.error || 'שגיאה בעיבוד הקובץ', 'var(--red)'); return; }
+      } catch (err) {
+        setStatus('שגיאת רשת', 'var(--red)');
+        return;
+      }
+      if (data.status === 'done') {
+        setStatus('✓ נטענו ' + data.count.toLocaleString('he-IL') + ' רשומות', 'var(--green)');
+        if (opts.onUploaded) opts.onUploaded();
+        return;
+      }
+      if (data.status === 'error') {
+        setStatus(data.error || 'שגיאה בעיבוד הקובץ', 'var(--red)');
+        return;
+      }
+    }
+    setStatus('העיבוד נמשך זמן רב מהצפוי — רעננו את העמוד בעוד כמה דקות', 'var(--red)');
   }
 
   container.querySelector('.js-pickFileBtn').addEventListener('click', () => fileInput.click());

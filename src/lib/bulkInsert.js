@@ -9,13 +9,15 @@ function chunk(arr, size) {
   return out;
 }
 
-// Runs deleteMany + chunked createMany calls as one atomic transaction, with a
-// generous timeout since a very large replace can take a while.
+// Runs deleteMany + chunked createMany calls as one atomic transaction. Callers now
+// always run this from a background job (see lib/uploadJobs.js) rather than inline in
+// an HTTP request, so a generous timeout costs nothing — it no longer risks the
+// request itself timing out at the platform/proxy level for a very large file.
 async function replaceAll(prisma, model, where, rows) {
   const chunks = chunk(rows, CHUNK_SIZE);
   await prisma.$transaction(
     [prisma[model].deleteMany({ where }), ...chunks.map((c) => prisma[model].createMany({ data: c }))],
-    { timeout: 120000 }
+    { timeout: 600000 }
   );
 }
 
