@@ -42,6 +42,19 @@ model User {
   isSuperAdmin   Boolean      @default(false)
   createdAt      DateTime     @default(now())
   columnOrders   ColumnOrder[]
+
+  // Email verification — set on every newly-invited user (see users.js /invite),
+  // cleared once GET /api/auth/verify-email confirms the token. Only the token's
+  // hash is stored, same principle as passwordHash.
+  emailVerified          Boolean   @default(true)
+  emailVerifyTokenHash   String?   @unique
+  emailVerifyExpiresAt   DateTime?
+
+  // Self-service password reset (POST /api/auth/forgot-password + reset-password) —
+  // previously the only way to change a user's password was an admin doing it
+  // directly via the invite/edit form. Same hash-only-storage principle.
+  passwordResetTokenHash String?   @unique
+  passwordResetExpiresAt DateTime?
 }
 
 model Customer {

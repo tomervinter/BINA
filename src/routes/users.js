@@ -4,8 +4,15 @@ const prisma = require('../lib/prisma');
 const requireAuth = require('../middleware/requireAuth');
 const requireAdmin = require('../middleware/requireAdmin');
 const attachSuperAdmin = require('../middleware/attachSuperAdmin');
+const { generateToken } = require('../lib/tokens');
+const { sendEmail } = require('../lib/email');
 
 const router = express.Router();
+const VERIFY_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function appUrl() {
+  return process.env.APP_URL || 'http://localhost:' + (process.env.PORT || 4000);
+}
 router.use(requireAuth);
 router.use(attachSuperAdmin);
 
@@ -45,15 +52,25 @@ router.post('/invite', requireAdmin, async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
+  const { raw, hash } = generateToken();
   const user = await prisma.user.create({
     data: {
       email: normalizedEmail,
       passwordHash,
       name: name || null,
       role: role === 'admin' ? 'admin' : 'member',
-      organizationId: targetOrgId
+      organizationId: targetOrgId,
+      emailVerified: false,
+      emailVerifyTokenHash: hash,
+      emailVerifyExpiresAt: new Date(Date.now() + VERIFY_TOKEN_TTL_MS)
     }
   });
+  const link = appUrl() + '/verify-email.html?token=' + raw;
+  sendEmail({
+    to: user.email,
+    subject: 'ברוכים הבאים ל-BINA — אימות כתובת מייל',
+    html: '<p>נוצר עבורכם חשבון ב-BINA.</p><p>לחצו כדי לאמת את כתובת המייל שלכם:</p><p><a href="' + link + '">אימות מייל</a></p>'
+  }).catch((err) => console.error('Failed to send invite verification email:', err));
   res.json({ id: user.id, email: user.email, name: user.name, role: user.role, organizationId: user.organizationId });
 });
 

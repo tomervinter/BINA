@@ -7,6 +7,7 @@
   --border:#E5E7F1;--text:#1B2144;--text-muted:#6A7093;--text-faint:#9298B8;
   --accent:#3D5CF5;--accent-strong:#2C48D8;--accent-soft:#E8ECFE;
   --red:#DE4B4B;--red-soft:#FBE1E1;--red-dot:#F2A0A0;
+  --amber:#9A6417;--amber-soft:#FDF1DC;
   --green:#2FA360;--green-soft:#DFF4E7;--green-dot:#8FDBAE;--green-btn:#1E9E5C;--green-btn-hover:#188A50;
   /* --blue/-soft/-dot are the dashboard primary-side palette — a deep indigo-blue
      per a reference button screenshot, kept as its own token (distinct from
@@ -67,6 +68,9 @@ input[type=text],input[type=email],input[type=password],input[type=number]{
   font-family:inherit;background:var(--surface-2);color:var(--text);margin-bottom:14px;
 }
 .error-box{background:var(--red-soft);color:var(--red);padding:10px 14px;border-radius:9px;font-size:12.5px;margin-bottom:14px;display:none;}
+.success-box{background:var(--green-soft);color:var(--green);padding:10px 14px;border-radius:9px;font-size:12.5px;margin-bottom:14px;display:none;}
+.verify-banner{background:var(--amber-soft);color:var(--amber);padding:9px 20px;font-size:12.5px;font-weight:600;text-align:center;}
+.verify-banner button{background:none;border:none;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit;font-weight:700;}
 .link{color:var(--accent);text-decoration:none;font-size:13px;font-weight:700;}
 
 /* ---------- Whole-app proportional scaling for laptop-size screens ---------- */

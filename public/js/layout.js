@@ -119,6 +119,29 @@ const Layout = (function () {
     );
   }
 
+  // Non-blocking — an unverified user can keep using the app — just a persistent
+  // nudge at the very top of the page with a one-click resend, injected here
+  // rather than into every page's own HTML so all ~20 pages get it for free.
+  function renderVerifyBanner(user) {
+    if (user.emailVerified) return;
+    const bar = document.createElement('div');
+    bar.className = 'verify-banner';
+    bar.innerHTML = 'כתובת המייל שלכם עדיין לא אומתה. ' +
+      '<button type="button" id="resendVerifyBtn">שליחת קישור אימות מחדש</button>' +
+      '<span id="resendVerifyMsg" style="margin-inline-start:8px;"></span>';
+    document.body.prepend(bar);
+    document.getElementById('resendVerifyBtn').addEventListener('click', async () => {
+      const msg = document.getElementById('resendVerifyMsg');
+      msg.textContent = 'שולח...';
+      try {
+        const res = await fetch('/api/auth/resend-verification', { method: 'POST', credentials: 'include' });
+        msg.textContent = res.ok ? 'קישור אימות נשלח לתיבת המייל שלכם.' : 'שגיאה בשליחה — נסו שוב.';
+      } catch (err) {
+        msg.textContent = 'שגיאת רשת — נסו שוב.';
+      }
+    });
+  }
+
   async function init(pageKey) {
     // Fired together, not sequentially — nav-counts only needs the same auth cookie
     // auth/me checks, not auth/me's response, and this runs on every single page
@@ -146,6 +169,7 @@ const Layout = (function () {
       });
     }
     if (topbarMount) topbarMount.innerHTML = renderTopbar(pageKey, data.organization);
+    renderVerifyBanner(data.user);
 
     Layout.currentUser = data.user;
     Layout.currentOrg = data.organization;
