@@ -126,6 +126,22 @@ async function resolvePurchaseCohort(organizationId, boughtProducts, notBoughtPr
   return base.filter((c) => !excludeSet.has(c));
 }
 
+// Total quantity each customer bought across the given products (scoped to `period`
+// the same way resolvePurchaseCohort's distinctBuyers is) — used to show "how much of
+// product X did this customer actually buy" alongside the "bought X" cohort list.
+async function boughtQuantityByCustomer(organizationId, productCodes, period) {
+  if (!productCodes.length) return {};
+  const dateWhere = period ? monthsWhereClause(period) : {};
+  const rows = await prisma.sale.groupBy({
+    by: ['customerNumber'],
+    where: Object.assign({ organizationId, productCode: { in: productCodes } }, dateWhere),
+    _sum: { quantity: true }
+  });
+  const map = {};
+  rows.forEach((r) => { map[r.customerNumber] = r._sum.quantity || 0; });
+  return map;
+}
+
 // Dashboard infographic data, sourced from the same sales-full-report consolidation.
 // Aggregated in the database and grouped by distinct customer/product (bounded by
 // entity count, not raw sale-row count) — never loads the raw sales table into memory,
@@ -174,6 +190,7 @@ router.get('/', async (req, res) => {
   // "Bought X" / "didn't buy Y" is scoped to the selected period, same as every other
   // number on the dashboard — not "ever bought", unless no period filter is active.
   const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts, period);
+  const boughtQtyMap = await boughtQuantityByCustomer(organizationId, boughtProducts, period);
   const hasEntityFilter = !!(customerNumbers.length || productCodes.length || primaryClasses.length || customerTypes.length || cities.length || centralCustomers.length || superTypes.length || departments.length || purchaseCohort);
   const baseWhere = hasEntityFilter
     ? await buildEntityWhere(organizationId, { customerNumbers, productCodes, primaryClasses, customerTypes, cities, centralCustomers, superTypes, departments, restrictToCustomers: purchaseCohort })
@@ -239,7 +256,8 @@ router.get('/', async (req, res) => {
     name: (custMap[cn] && custMap[cn].name) || cn,
     centralCustomer: (custMap[cn] && custMap[cn].centralCustomer) || null,
     primaryClass: (custMap[cn] && custMap[cn].primaryClass) || null,
-    customerType: (custMap[cn] && custMap[cn].customerType) || null
+    customerType: (custMap[cn] && custMap[cn].customerType) || null,
+    boughtQuantity: boughtProducts.length ? (boughtQtyMap[cn] || 0) : null
   })) : null;
 
   function groupRevenue(rows, idField, map, classifyField) {
@@ -394,18 +412,21 @@ router.get('/cohort-customers/export', async (req, res) => {
   const notBoughtProducts = parseCsv(req.query.notBoughtProducts);
   const period = parseMonthList(req.query.periodMonths);
   const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts, period);
+  const boughtQtyMap = await boughtQuantityByCustomer(organizationId, boughtProducts, period);
   const hasEntityFilter = !!(customerNumbers.length || primaryClasses.length || customerTypes.length || purchaseCohort);
   const where = hasEntityFilter
     ? await buildEntityWhere(organizationId, { customerNumbers, productCodes: [], primaryClasses, customerTypes, restrictToCustomers: purchaseCohort })
     : { organizationId };
   const customerFilter = where.customerNumber ? { organizationId, customerNumber: where.customerNumber } : { organizationId };
-  const rows = await prisma.customer.findMany({ where: customerFilter, orderBy: { name: 'asc' } });
+  const rows = (await prisma.customer.findMany({ where: customerFilter, orderBy: { name: 'asc' } }))
+    .map((r) => Object.assign({}, r, { boughtQuantity: boughtProducts.length ? (boughtQtyMap[r.customerNumber] || 0) : '' }));
   const buffer = rowsToXlsxBuffer([
     { key: 'customerNumber', label: 'מספר לקוח' },
     { key: 'name', label: 'שם לקוח' },
     { key: 'centralCustomer', label: 'לקוח מרכז' },
     { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
-    { key: 'customerType', label: 'סוג לקוח' }
+    { key: 'customerType', label: 'סוג לקוח' },
+    { key: 'boughtQuantity', label: 'כמות שנרכשה' }
   ], rows);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="customers-filtered.xlsx"');
@@ -434,14 +455,21 @@ async function resolveLapsedCustomers(organizationId, minMonths, entityFilters) 
     entityFilters.customerTypes.length || entityFilters.cities.length || entityFilters.centralCustomers.length || entityFilters.superTypes.length || entityFilters.departments.length);
   const baseWhere = hasEntityFilter ? await buildEntityWhere(organizationId, entityFilters) : { organizationId };
   const [pastSales, curMonthBuyers, customers] = await Promise.all([
-    prisma.sale.findMany({ where: Object.assign({}, baseWhere, { date: { gte: windowStart, lt: curMonthStart } }), select: { customerNumber: true, date: true } }),
+    prisma.sale.findMany({ where: Object.assign({}, baseWhere, { date: { gte: windowStart, lt: curMonthStart } }), select: { customerNumber: true, date: true, revenue: true } }),
     prisma.sale.findMany({ where: Object.assign({}, baseWhere, { date: { gte: curMonthStart, lt: nextMonthStart } }), select: { customerNumber: true }, distinct: ['customerNumber'] }),
     prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, centralCustomer: true, primaryClass: true, customerType: true } })
   ]);
   const monthSetByCustomer = {};
+  // Per-customer, per-month revenue within the same 12-month window — only used by
+  // the Excel export's horizontal month layout (see /lapsed-customers/export), not
+  // by the on-screen table, so it's built here (reusing pastSales) rather than with
+  // a separate query.
+  const monthlyRevenueByCustomer = {};
   pastSales.forEach((s) => {
     const mk = s.date.getFullYear() + '-' + String(s.date.getMonth() + 1).padStart(2, '0');
     (monthSetByCustomer[s.customerNumber] = monthSetByCustomer[s.customerNumber] || new Set()).add(mk);
+    const rev = (monthlyRevenueByCustomer[s.customerNumber] = monthlyRevenueByCustomer[s.customerNumber] || {});
+    rev[mk] = (rev[mk] || 0) + (s.revenue || 0);
   });
   const boughtThisMonth = new Set(curMonthBuyers.map((s) => s.customerNumber));
   const custMap = {};
@@ -454,10 +482,14 @@ async function resolveLapsedCustomers(organizationId, minMonths, entityFilters) 
       centralCustomer: (custMap[cn] && custMap[cn].centralCustomer) || null,
       primaryClass: (custMap[cn] && custMap[cn].primaryClass) || null,
       customerType: (custMap[cn] && custMap[cn].customerType) || null,
-      activeMonths: monthSetByCustomer[cn].size
+      activeMonths: monthSetByCustomer[cn].size,
+      monthlyRevenue: monthlyRevenueByCustomer[cn] || {}
     }))
     .sort((a, b) => b.activeMonths - a.activeMonths);
-  return { currentMonthLabel: MONTH_NAMES[now.getMonth()] + ' ' + now.getFullYear(), matches };
+  const nowIdx = now.getFullYear() * 12 + now.getMonth();
+  const monthsWindow = [];
+  for (let idx = nowIdx - 12; idx <= nowIdx - 1; idx++) monthsWindow.push({ year: Math.floor(idx / 12), month: (idx % 12) + 1 });
+  return { currentMonthLabel: MONTH_NAMES[now.getMonth()] + ' ' + now.getFullYear(), matches, monthsWindow };
 }
 
 function parseLapsedEntityFilters(req) {
@@ -477,13 +509,27 @@ router.get('/lapsed-customers', async (req, res) => {
   const organizationId = req.user.organizationId;
   const minMonths = Math.min(12, Math.max(1, parseInt(req.query.minMonths, 10) || 7));
   const { currentMonthLabel, matches } = await resolveLapsedCustomers(organizationId, minMonths, parseLapsedEntityFilters(req));
-  res.json({ minMonths, currentMonthLabel, customers: matches });
+  // monthlyRevenue is only for the Excel export's month grid (see /export below) —
+  // the on-screen table stays exactly as before, just the activeMonths count.
+  const customers = matches.map(({ monthlyRevenue, ...rest }) => rest);
+  res.json({ minMonths, currentMonthLabel, customers });
 });
 
 router.get('/lapsed-customers/export', async (req, res) => {
   const organizationId = req.user.organizationId;
   const minMonths = Math.min(12, Math.max(1, parseInt(req.query.minMonths, 10) || 7));
-  const { matches } = await resolveLapsedCustomers(organizationId, minMonths, parseLapsedEntityFilters(req));
+  const { matches, monthsWindow } = await resolveLapsedCustomers(organizationId, minMonths, parseLapsedEntityFilters(req));
+  // Excel-only horizontal month breakdown: for each of the trailing 12 months (the
+  // same window the "חודשי רכישה" count is based on), one "קנה/לא קנה" column and
+  // one "סכום" column, so the report reads as a purchase-by-month grid — the
+  // on-screen table stays as a single activeMonths count, unchanged.
+  const monthColumns = [];
+  monthsWindow.forEach(({ year, month }) => {
+    const mk = year + '-' + String(month).padStart(2, '0');
+    const label = MONTH_NAMES[month - 1] + ' ' + year;
+    monthColumns.push({ key: 'bought_' + mk, label: 'קנה/לא קנה — ' + label, value: (row) => ((row.monthlyRevenue[mk] || 0) > 0 ? 'קנה' : 'לא קנה') });
+    monthColumns.push({ key: 'amount_' + mk, label: 'סכום — ' + label, value: (row) => Math.round((row.monthlyRevenue[mk] || 0) * 100) / 100 });
+  });
   const buffer = rowsToXlsxBuffer([
     { key: 'customerNumber', label: 'מספר לקוח' },
     { key: 'name', label: 'שם לקוח' },
@@ -491,7 +537,7 @@ router.get('/lapsed-customers/export', async (req, res) => {
     { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
     { key: 'customerType', label: 'סוג לקוח' },
     { key: 'activeMonths', label: 'חודשי רכישה' }
-  ], matches);
+  ].concat(monthColumns), matches);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="lapsed-customers.xlsx"');
   res.send(buffer);
@@ -505,9 +551,10 @@ router.get('/lapsed-customers/export', async (req, res) => {
 // customer qualifies when this year's cumulative total is below last year's by
 // at least `minDeclinePct`; `entityFilters` scopes both years' sales identically
 // to the active customer/product/segment filters, same as the lapsed-customers
-// panel beside it. For each qualifying customer, also lists which specific
-// products are individually down year-over-year (including a product bought
-// last year but not at all this year, i.e. a 100% drop) — not just family-level,
+// panel beside it. Returns one row PER (customer, declined product) pair — not
+// one row per customer with a joined product list — so a customer with several
+// declining products gets one line per product (including a product bought
+// last year but not at all this year, i.e. a 100% drop), not just family-level,
 // since this is a quick overview list rather than a rigorous insight.
 async function resolveDecliningCustomers(organizationId, minDeclinePct, entityFilters) {
   const now = new Date();
@@ -561,21 +608,23 @@ async function resolveDecliningCustomers(organizationId, minDeclinePct, entityFi
       })
       .filter(Boolean)
       .sort((a, b) => b.drop - a.drop);
-    matches.push({
+    if (!declinedProducts.length) return; // shouldn't happen (a total decline implies at least one product dropped), but guards against an empty row
+    const base = {
       customerNumber: cid,
       name: (custMap[cid] && custMap[cid].name) || cid,
       centralCustomer: (custMap[cid] && custMap[cid].centralCustomer) || null,
       primaryClass: (custMap[cid] && custMap[cid].primaryClass) || null,
       customerType: (custMap[cid] && custMap[cid].customerType) || null,
-      declinePct: Math.round(declinePct * 10) / 10,
-      declinedProducts: declinedProducts.map((p) => p.name)
-    });
+      declinePct: Math.round(declinePct * 10) / 10
+    };
+    declinedProducts.forEach((p) => matches.push(Object.assign({}, base, { productCode: p.pid, productName: p.name })));
   });
   matches.sort((a, b) => b.declinePct - a.declinePct);
+  const customerCount = new Set(matches.map((m) => m.customerNumber)).size;
   return {
     yearLabel: String(year), priorYearLabel: String(year - 1),
     lastCompletedMonthLabel: MONTH_NAMES[lastCompletedMonth - 1] + ' ' + year,
-    matches
+    customerCount, matches
   };
 }
 
@@ -590,8 +639,8 @@ function parseMinDeclinePct(raw) {
 router.get('/declining-customers', async (req, res) => {
   const organizationId = req.user.organizationId;
   const minDeclinePct = parseMinDeclinePct(req.query.minDeclinePct);
-  const { yearLabel, priorYearLabel, lastCompletedMonthLabel, matches } = await resolveDecliningCustomers(organizationId, minDeclinePct, parseLapsedEntityFilters(req));
-  res.json({ minDeclinePct, yearLabel, priorYearLabel, lastCompletedMonthLabel, customers: matches });
+  const { yearLabel, priorYearLabel, lastCompletedMonthLabel, customerCount, matches } = await resolveDecliningCustomers(organizationId, minDeclinePct, parseLapsedEntityFilters(req));
+  res.json({ minDeclinePct, yearLabel, priorYearLabel, lastCompletedMonthLabel, customerCount, customers: matches });
 });
 
 router.get('/declining-customers/export', async (req, res) => {
@@ -605,7 +654,7 @@ router.get('/declining-customers/export', async (req, res) => {
     { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
     { key: 'customerType', label: 'סוג לקוח' },
     { key: 'declinePct', label: 'ירידה מצטברת (%)' },
-    { key: 'declinedProducts', label: 'מוצרים שירדו', value: (row) => row.declinedProducts.join(', ') }
+    { key: 'productName', label: 'מוצר שירד' }
   ], matches);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="declining-customers.xlsx"');

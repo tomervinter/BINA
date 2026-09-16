@@ -57,13 +57,12 @@ async function initDashDecliningCustomersPanel() {
     const res = await fetch('/api/dashboard-sales-summary/declining-customers?' + buildQuery(minPct), { credentials: 'include' });
     const data = res.ok ? await res.json() : { customers: [] };
     updateSubtitle(minPct, data.yearLabel, data.priorYearLabel, data.lastCompletedMonthLabel);
-    countEl.textContent = data.customers.length + ' לקוחות תואמים';
-    bodyEl.innerHTML = data.customers.map((c) => {
-      const productsText = c.declinedProducts.join(', ');
-      return '<tr><td>' + Layout.escapeHtml(c.customerNumber) + '</td><td>' + Layout.escapeHtml(c.name) + '</td><td>' +
-        Layout.escapeHtml(c.centralCustomer || '') + '</td><td>' + Layout.escapeHtml(c.primaryClass || '') + '</td><td>' +
-        Layout.escapeHtml(c.customerType || '') + '</td><td>' + c.declinePct + '</td><td title="' + Layout.escapeHtml(productsText) + '">' + Layout.escapeHtml(productsText || '—') + '</td></tr>';
-    }).join('') || '<tr><td colspan="7">אין לקוחות תואמים</td></tr>';
+    countEl.textContent = (data.customerCount || 0) + ' לקוחות · ' + data.customers.length + ' מוצרים שירדו';
+    bodyEl.innerHTML = data.customers.map((c) =>
+      '<tr><td>' + Layout.escapeHtml(c.customerNumber) + '</td><td>' + Layout.escapeHtml(c.name) + '</td><td>' +
+      Layout.escapeHtml(c.centralCustomer || '') + '</td><td>' + Layout.escapeHtml(c.primaryClass || '') + '</td><td>' +
+      Layout.escapeHtml(c.customerType || '') + '</td><td>' + c.declinePct + '</td><td>' + Layout.escapeHtml(c.productName) + '</td></tr>'
+    ).join('') || '<tr><td colspan="7">אין לקוחות תואמים</td></tr>';
     exportBtn.href = '/api/dashboard-sales-summary/declining-customers/export?' + buildQuery(minPct);
     section.style.display = '';
     showBtn.textContent = 'הסתר';

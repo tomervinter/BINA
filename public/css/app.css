@@ -428,6 +428,10 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
    without ever needing horizontal scroll — full values are still on the title tooltip. */
 .cohort-customers-table{table-layout:fixed;width:100%;font-size:11px;}
 .cohort-customers-table th,.cohort-customers-table td{padding:5px 6px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* Header cells wrap instead of truncating — a column label cut off with an
+   ellipsis and no hover-title (unlike data cells, which do have one) would
+   leave the user unable to see what the column even is. */
+.cohort-customers-table th{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3;}
 .cohort-customers-table th:nth-child(1),.cohort-customers-table td:nth-child(1){width:17%;}
 .cohort-customers-table th:nth-child(2),.cohort-customers-table td:nth-child(2){width:27%;}
 .cohort-customers-table th:nth-child(3),.cohort-customers-table td:nth-child(3){width:22%;}
