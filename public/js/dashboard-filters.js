@@ -512,6 +512,13 @@ async function initDashboardFilters() {
     state.boughtProducts = f.productCode ? [f.productCode] : [];
     pickers.dashNotBoughtProductsPicker.setSelected([]);
     pickers.dashBoughtProductsPicker.setSelected(state.boughtProducts);
+    // The product filter this click just set lives inside the "לקוחות שקונים
+    // מוצר X ולא קונים מוצר Y" accordion panel, which starts collapsed — without
+    // opening it here, the only visible change is the customerType filter in the
+    // always-shown table above, and the product filter looks like it never applied.
+    const cohortBox = document.getElementById('dashCohortPanelBox');
+    const cohortBtn = document.getElementById('dashCohortToggleBtn');
+    if (cohortBox && cohortBtn && cohortBox.style.display === 'none') cohortBtn.click();
     document.dispatchEvent(new Event('click'));
     apply();
   };
