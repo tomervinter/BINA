@@ -68,6 +68,13 @@ function dashYAxisSharedScale(valueArrays, targetTicks) {
 
 function fmtMoneyShort(n) { return Math.round(n || 0).toLocaleString('he-IL') + ' ₪'; }
 
+// Chart.js's tick values for a linear axis aren't always whole numbers — min/max
+// are fixed independently of the "nice" step grid (see dashYAxisSharedScale), so
+// intermediate gridlines can land on fractional values like 1,514,667.75. Every
+// axis showing a revenue/quantity figure rounds through this instead of calling
+// toLocaleString directly, so labels never show a decimal.
+function fmtAxisTick(v) { return Math.round(v).toLocaleString('he-IL'); }
+
 function reportUrl(params) {
   const q = new URLSearchParams(params).toString();
   return 'reports-full-sales.html' + (q ? '?' + q : '');
@@ -507,7 +514,7 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(ptYoyEntries, 0) } }
         },
-        scales: { y: { min: ptScale.min, max: ptScale.max, ticks: { stepSize: ptScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } }, x: { ticks: DASH_TREND_X_TICKS } },
+        scales: { y: { min: ptScale.min, max: ptScale.max, ticks: { stepSize: ptScale.step, autoSkip: false, callback: fmtAxisTick } }, x: { ticks: DASH_TREND_X_TICKS } },
         onClick: function (evt, elements) {
           if (!elements.length) return;
           const m = pt.periodMonths[elements[0].index];
@@ -527,7 +534,7 @@ async function loadDashboardSalesSummary(filters) {
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { min: ptScale.min, max: ptScale.max, ticks: { stepSize: ptScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } }, x: { ticks: DASH_TREND_X_TICKS } },
+          scales: { y: { min: ptScale.min, max: ptScale.max, ticks: { stepSize: ptScale.step, autoSkip: false, callback: fmtAxisTick } }, x: { ticks: DASH_TREND_X_TICKS } },
           onClick: function (evt, elements) {
             if (!elements.length) return;
             const m = pt.compareMonths[elements[0].index];
@@ -597,7 +604,7 @@ async function loadDashboardSalesSummary(filters) {
           legend: { display: false },
           tooltip: { callbacks: { afterLabel: yoyTooltipAfterLabel(activeYoyEntries, 0) } }
         },
-        scales: { y: { min: mtScale.min, max: mtScale.max, ticks: { stepSize: mtScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } }, x: { ticks: DASH_TREND_X_TICKS } },
+        scales: { y: { min: mtScale.min, max: mtScale.max, ticks: { stepSize: mtScale.step, autoSkip: false, callback: fmtAxisTick } }, x: { ticks: DASH_TREND_X_TICKS } },
         onClick: function (evt, elements) {
           if (!elements.length || !window.applyDashboardPeriodFilter) return;
           const m = monthMeta[elements[0].index];
@@ -615,7 +622,7 @@ async function loadDashboardSalesSummary(filters) {
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
-          scales: { y: { min: mtScale.min, max: mtScale.max, ticks: { stepSize: mtScale.step, autoSkip: false, callback: (v) => v.toLocaleString("he-IL") } }, x: { ticks: DASH_TREND_X_TICKS } },
+          scales: { y: { min: mtScale.min, max: mtScale.max, ticks: { stepSize: mtScale.step, autoSkip: false, callback: fmtAxisTick } }, x: { ticks: DASH_TREND_X_TICKS } },
           onClick: function (evt, elements) {
             if (!elements.length || !window.applyDashboardPeriodFilter) return;
             const m = monthMeta[elements[0].index];
@@ -649,7 +656,7 @@ async function loadDashboardSalesSummary(filters) {
         responsive: true, maintainAspectRatio: false,
         layout: type === 'bar' ? { padding: { right: 46 } } : undefined,
         plugins: type === 'doughnut' ? legendOpts : { legend: { display: false } },
-        scales: type === 'bar' ? { x: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } } : undefined,
+        scales: type === 'bar' ? { x: { ticks: { callback: fmtAxisTick } } } : undefined,
         onClick: clickable ? function (evt, elements) {
           if (!elements.length) return;
           window.applyDashboardFilterByDimension(filterKey, rows[elements[0].index].name, isCompare);
@@ -685,7 +692,7 @@ async function loadDashboardSalesSummary(filters) {
         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
         layout: { padding: { right: 46 } },
         plugins: { legend: { display: false } },
-        scales: { x: { ticks: { callback: (v) => v.toLocaleString('he-IL') } } },
+        scales: { x: { ticks: { callback: fmtAxisTick } } },
         onClick: clickable ? function (evt, elements) {
           if (!elements.length) return;
           window.applyDashboardFilterByDimension(filterKey, rows[elements[0].index].code, isCompare);
