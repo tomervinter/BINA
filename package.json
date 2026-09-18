@@ -6,7 +6,14 @@
   "scripts": {
     "start": "node src/server.js",
     "postinstall": "prisma generate",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "pretest": "node tests/pretest-db-push.js",
+    "test": "jest --runInBand"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/tests/setup.js"
+    ]
   },
   "keywords": [],
   "author": "",
@@ -27,5 +34,9 @@
     "multer": "^2.3.0",
     "prisma": "5.22.0",
     "xlsx": "0.18.5"
+  },
+  "devDependencies": {
+    "jest": "^30.5.1",
+    "supertest": "^7.2.2"
   }
 }

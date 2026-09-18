@@ -116,7 +116,14 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: err.message || 'שגיאה בעיבוד הבקשה' });
 });
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`BINA (SaaS) listening on http://localhost:${PORT}`);
-});
+// Only binds a real port when this file is run directly (`node src/server.js`,
+// which is exactly what `npm start` does) — not when the tests require() this
+// module to get the Express app and drive it in-process via supertest.
+if (require.main === module) {
+  const PORT = process.env.PORT || 4000;
+  app.listen(PORT, () => {
+    console.log(`BINA (SaaS) listening on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
