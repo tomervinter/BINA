@@ -30,6 +30,14 @@ const uploadStatusRoutes = require('./routes/uploadStatus');
 
 const app = express();
 
+// Render sits exactly one reverse-proxy hop in front of this app, and sets
+// X-Forwarded-For on every request. Without this, express-rate-limit refuses to
+// trust that header (correctly, by default — trusting a spoofable header without
+// being told to is unsafe) and throws on every rate-limited request, which was
+// crash-looping the whole process in production the moment it received real
+// traffic and never happened locally (no proxy in front of it there).
+app.set('trust proxy', 1);
+
 // Every page script now lives in an external public/js/*.js file (no inline
 // <script> blocks anywhere in public/*.html), so script-src can drop
 // 'unsafe-inline' entirely — only same-origin scripts and the Chart.js UMD
