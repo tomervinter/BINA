@@ -7,7 +7,7 @@ services:
     name: bina-radar
     runtime: node
     plan: free
-    buildCommand: npm install && npx prisma db push
+    buildCommand: npm install && npx prisma db push --accept-data-loss
     startCommand: npm start
     envVars:
       - key: DATABASE_URL
