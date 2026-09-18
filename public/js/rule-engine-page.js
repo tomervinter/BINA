@@ -75,17 +75,17 @@ async function initRuleEnginePage() {
   function render() {
     const container = document.getElementById('rulesContainer');
     let html = '';
-    INSIGHT_RULES.forEach((r, idx) => {
-      html += '<div class="rule-type-heading"' + (idx === 0 ? ' style="margin-top:0;"' : '') + '>' + Layout.escapeHtml(r.title) + '</div>';
-      html += '<div class="rule-grid">';
+    INSIGHT_RULES.forEach((r) => {
+      html += '<div class="rule-type-heading">' + Layout.escapeHtml(r.title) + '</div>';
+      html += '<ul class="rule-list">';
       r.subrules.forEach((sub) => {
-        html += '<div class="rule-subcard">' +
+        html += '<li class="rule-list-item">' +
           '<div class="rule-subtitle">' + Layout.escapeHtml(sub.title) + '</div>' +
           '<div class="rule-text">' + renderRuleTemplate(sub.rule) + '</div>' +
           (sub.detail ? '<div class="rule-detail">' + renderRuleTemplate(sub.detail) + '</div>' : '') +
-          '</div>';
+          '</li>';
       });
-      html += '</div>';
+      html += '</ul>';
     });
     container.innerHTML = html;
 
