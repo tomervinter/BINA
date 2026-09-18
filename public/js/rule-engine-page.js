@@ -76,7 +76,7 @@ async function initRuleEnginePage() {
     const container = document.getElementById('rulesContainer');
     let html = '';
     INSIGHT_RULES.forEach((r) => {
-      html += '<div class="rule-type-heading">' + Layout.escapeHtml(r.title) + '</div>';
+      html += '<div class="rule-type-heading rule-type-' + r.type + '">' + Layout.escapeHtml(r.title) + '</div>';
       html += '<ul class="rule-list">';
       r.subrules.forEach((sub) => {
         html += '<li class="rule-list-item">' +

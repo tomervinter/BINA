@@ -344,8 +344,15 @@ a.kpi-card:hover{box-shadow:0 2px 4px rgba(27,33,68,.06), 0 10px 24px rgba(27,33
 .rules-general-list li{margin-bottom:10px;}
 .rules-general-list li:last-child{margin-bottom:0;}
 .rules-general-list b{color:var(--text);}
-.rule-type-heading{font-weight:800;font-size:15.5px;margin:26px 0 4px;}
+.rule-type-heading{font-weight:800;font-size:18px;margin:28px 0 5px;}
 .rule-type-heading:first-child{margin-top:0;}
+/* One color per insight type (matches the 3 INSIGHT_RULES entries in
+   rule-engine-page.js), reusing existing palette tokens rather than inventing
+   new ones — lets a reader tell at a glance which of the 3 rule types a given
+   sub-rule belongs to while scrolling the long list. */
+.rule-type-salesPattern{color:var(--accent);}
+.rule-type-purchasePattern{color:var(--green);}
+.rule-type-peerGap{color:var(--purple-seg);}
 /* A plain vertical list (not the grid-of-narrow-cards this replaced) — every
    sub-rule gets the page's full width, so its paragraph-length rule/detail text
    wraps naturally instead of being squeezed into a ~280px column with its own
@@ -354,9 +361,9 @@ a.kpi-card:hover{box-shadow:0 2px 4px rgba(27,33,68,.06), 0 10px 24px rgba(27,33
 .rule-list{margin:0;padding:0;list-style:none;}
 .rule-list-item{padding:16px 2px;border-bottom:1px solid var(--border);}
 .rule-list-item:last-child{border-bottom:none;}
-.rule-subtitle{font-weight:700;font-size:14px;margin-bottom:7px;}
-.rule-text{color:var(--text);font-size:13.5px;line-height:1.9;}
-.rule-detail{color:var(--text-muted);font-size:13px;line-height:1.85;margin-top:7px;}
+.rule-subtitle{font-weight:700;font-size:16px;margin-bottom:8px;}
+.rule-text{color:var(--text);font-size:15px;line-height:1.9;}
+.rule-detail{color:var(--text-muted);font-size:14.5px;line-height:1.85;margin-top:8px;}
 .rules-category-heading{font-size:11px;font-weight:800;color:var(--text-faint);text-transform:uppercase;letter-spacing:.04em;padding:16px 18px 4px;}
 .rules-category-heading:first-child{padding-top:2px;}
 input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-width:30px;border:none;border-bottom:1.5px dotted var(--text-faint);background:transparent;font:inherit;font-weight:700;color:var(--text);text-align:center;padding:0 2px;margin:0 2px;font-variant-numeric:tabular-nums;transition:background-color .12s,border-color .12s;}
