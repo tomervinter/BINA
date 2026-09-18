@@ -57,6 +57,22 @@ model User {
   passwordResetExpiresAt DateTime?
 }
 
+// Records sensitive/destructive actions only (file uploads that replace all data,
+// delete-all, user invites/role changes, org creation, login attempts) — not every
+// GET request. See src/lib/auditLog.js. userId/userEmail are both kept (not just a
+// relation) so the log still reads sensibly after a user is deleted.
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  userEmail      String?
+  action         String
+  details        String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+}
+
 model Customer {
   id              String       @id @default(cuid())
   organizationId  String

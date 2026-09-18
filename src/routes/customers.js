@@ -7,6 +7,7 @@ const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
 const { replaceAll } = require('../lib/bulkInsert');
 const { createJob, updateJob } = require('../lib/uploadJobs');
 const upload = require('../lib/uploadMiddleware');
+const { logAction } = require('../lib/auditLog');
 
 const EXPORT_COLUMNS = [
   { key: 'customerNumber', label: 'מספר לקוח' },
@@ -86,6 +87,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
   // route for why this doesn't await the DB write before responding.
   const jobId = createJob(orgId);
   res.json({ jobId, count: rows.length });
+  logAction(req.user, 'customer.upload', rows.length + ' שורות');
   replaceAll(prisma, 'customer', { organizationId: orgId }, rows)
     .then(() => updateJob(jobId, { status: 'done', count: rows.length }))
     .catch((err) => {
@@ -96,6 +98,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
 router.delete('/', async (req, res) => {
   await prisma.customer.deleteMany({ where: { organizationId: req.user.organizationId } });
+  logAction(req.user, 'customer.delete_all');
   res.json({ ok: true });
 });
 

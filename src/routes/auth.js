@@ -5,6 +5,7 @@ const { signToken, TOKEN_COOKIE } = require('../lib/auth');
 const requireAuth = require('../middleware/requireAuth');
 const { generateToken, hashToken } = require('../lib/tokens');
 const { sendEmail } = require('../lib/email');
+const { logAction } = require('../lib/auditLog');
 
 const router = express.Router();
 
@@ -37,10 +38,14 @@ router.post('/login', async (req, res) => {
   const user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase().trim() } });
   if (!user) return res.status(401).json({ error: 'אימייל או סיסמה שגויים' });
   const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) return res.status(401).json({ error: 'אימייל או סיסמה שגויים' });
+  if (!valid) {
+    logAction({ organizationId: user.organizationId, userId: user.id, email: user.email }, 'auth.login_failed');
+    return res.status(401).json({ error: 'אימייל או סיסמה שגויים' });
+  }
 
   const token = signToken(user);
   res.cookie(TOKEN_COOKIE, token, COOKIE_OPTS);
+  logAction({ organizationId: user.organizationId, userId: user.id, email: user.email }, 'auth.login');
   res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
 });
 

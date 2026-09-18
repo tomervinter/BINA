@@ -6,6 +6,7 @@ const { parseFileBuffer, parseNumber } = require('../lib/csv');
 const { rowsToXlsxBuffer } = require('../lib/xlsxExport');
 const { replaceAll } = require('../lib/bulkInsert');
 const { createJob, updateJob } = require('../lib/uploadJobs');
+const { logAction } = require('../lib/auditLog');
 const { buildFilterClauses, parseRawListQuery } = require('../lib/rawFilter');
 const upload = require('../lib/uploadMiddleware');
 
@@ -129,6 +130,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
   // response goes back immediately and the frontend polls /api/upload-status/:jobId.
   const jobId = createJob(orgId);
   res.json({ jobId, count: rows.length });
+  logAction(req.user, 'sale.upload', rows.length + ' שורות');
   replaceAll(prisma, 'sale', { organizationId: orgId }, rows)
     .then(() => updateJob(jobId, { status: 'done', count: rows.length }))
     .catch((err) => {
@@ -139,6 +141,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
 router.delete('/', async (req, res) => {
   await prisma.sale.deleteMany({ where: { organizationId: req.user.organizationId } });
+  logAction(req.user, 'sale.delete_all');
   res.json({ ok: true });
 });
 

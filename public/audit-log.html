@@ -1,0 +1,30 @@
+<!doctype html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>יומן ביקורת — BINA</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebarMount"></aside>
+    <main class="main-content full-width">
+      <div class="topbar" id="topbarMount"></div>
+
+      <div class="page-title">יומן ביקורת</div>
+      <div class="page-subtitle">תיעוד פעולות רגישות בחשבון — טעינת/מחיקת נתונים, הזמנת משתמשים, ושינויי הרשאות.</div>
+
+      <div class="card">
+        <div class="card-title">פעולות אחרונות</div>
+        <div id="tableContainer"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/layout.js"></script>
+  <script src="js/column-order.js"></script>
+  <script src="js/server-table.js"></script>
+  <script src="js/audit-log-page.js"></script>
+</body>
+</html>

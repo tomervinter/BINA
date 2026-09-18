@@ -17,7 +17,8 @@ const NAV_ICONS = {
   'reports-yoy': '<path d="M4 19.5h16"></path><path d="M7 19.5v-6M12 19.5v-10M17 19.5v-3.5"></path>',
   'reports-full-sales': '<rect x="3.5" y="4" width="17" height="16" rx="1.6"></rect><path d="M3.5 9.5h17M3.5 14.5h17M9 4v16"></path>',
   'product-substitutes': '<path d="M7 7h11l-2.5-2.5"></path><path d="M17 17H6l2.5 2.5"></path>',
-  organizations: '<rect x="4" y="10" width="7" height="10.5" rx="1"></rect><rect x="13" y="4" width="7" height="16.5" rx="1"></rect><path d="M7 13.5h1M7 17h1M16 7.5h1M16 11h1M16 14.5h1"></path>'
+  organizations: '<rect x="4" y="10" width="7" height="10.5" rx="1"></rect><rect x="13" y="4" width="7" height="16.5" rx="1"></rect><path d="M7 13.5h1M7 17h1M16 7.5h1M16 11h1M16 14.5h1"></path>',
+  'audit-log': '<path d="M4 19.5V6a2 2 0 0 1 2-2h9l5 5v10.5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z"></path><path d="M9 12.2l1.8 1.8L15 9.8"></path>'
 };
 
 function navSvg(key) {
@@ -43,7 +44,8 @@ const NAV_GROUPS = [
     { key: 'reports-full-sales', href: 'reports-full-sales.html', label: 'דוח מכירות מלא' }
   ] },
   { title: 'ניהול חברה', items: [
-    { key: 'users', href: 'users.html', label: 'משתמשים' }
+    { key: 'users', href: 'users.html', label: 'משתמשים' },
+    { key: 'audit-log', href: 'audit-log.html', label: 'יומן ביקורת' }
   ] }
 ];
 
@@ -52,7 +54,7 @@ const PAGE_LABELS = {
   inventory: 'טעינת מלאי', holidays: 'ניהול חגים', seasons: 'ניהול עונתיות', relevance: 'שיוך חג ועונה למוצר',
   insights: 'יומן תובנות', 'rule-engine': 'מנוע התובנות', users: 'משתמשים',
   'reports-yoy': 'דוח שנה מול שנה', 'product-substitutes': 'מוצרים תחליפיים', 'reports-full-sales': 'דוח מכירות מלא',
-  organizations: 'ניהול חברות'
+  organizations: 'ניהול חברות', 'audit-log': 'יומן ביקורת'
 };
 
 const Layout = (function () {

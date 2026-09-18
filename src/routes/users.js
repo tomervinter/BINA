@@ -6,6 +6,7 @@ const requireAdmin = require('../middleware/requireAdmin');
 const attachSuperAdmin = require('../middleware/attachSuperAdmin');
 const { generateToken } = require('../lib/tokens');
 const { sendEmail } = require('../lib/email');
+const { logAction } = require('../lib/auditLog');
 
 const router = express.Router();
 const VERIFY_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -71,6 +72,9 @@ router.post('/invite', requireAdmin, async (req, res) => {
     subject: 'ברוכים הבאים ל-BINA — אימות כתובת מייל',
     html: '<p>נוצר עבורכם חשבון ב-BINA.</p><p>לחצו כדי לאמת את כתובת המייל שלכם:</p><p><a href="' + link + '">אימות מייל</a></p>'
   }).catch((err) => console.error('Failed to send invite verification email:', err));
+  // Logged against the TARGET org (not the inviter's own, which can differ when a
+  // super-admin invites into another company) so that company's own audit log shows it.
+  logAction({ organizationId: targetOrgId, userId: req.user.userId, email: req.user.email }, 'user.invite', normalizedEmail);
   res.json({ id: user.id, email: user.email, name: user.name, role: user.role, organizationId: user.organizationId });
 });
 
@@ -81,6 +85,7 @@ router.put('/:id/role', requireAdmin, async (req, res) => {
   const target = await prisma.user.findFirst({ where });
   if (!target) return res.status(404).json({ error: 'משתמש לא נמצא' });
   await prisma.user.update({ where: { id: target.id }, data: { role } });
+  logAction({ organizationId: target.organizationId, userId: req.user.userId, email: req.user.email }, 'user.role_change', target.email + ' -> ' + role);
   res.json({ ok: true });
 });
 
@@ -90,6 +95,7 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   const target = await prisma.user.findFirst({ where });
   if (!target) return res.status(404).json({ error: 'משתמש לא נמצא' });
   await prisma.user.delete({ where: { id: target.id } });
+  logAction({ organizationId: target.organizationId, userId: req.user.userId, email: req.user.email }, 'user.delete', target.email);
   res.json({ ok: true });
 });
 
