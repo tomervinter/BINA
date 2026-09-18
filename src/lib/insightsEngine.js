@@ -217,14 +217,15 @@ async function computeInsights(organizationId) {
   }
   const byCustomerFamily = groupBy(s, (x) => x.cid + '|' + famKey(x.pid));
 
-  // See general policy 8: true if the given window overlaps a holiday/season window
-  // (with the holiday's own before/after padding) that is marked relevant for at
-  // least one of the given products — meaning a dip in that window is expected
-  // seasonal behavior, not a meaningful decline worth surfacing.
-  function isExplainedBySeasonality(startMs, endMs, pids) {
-    if (!pids.length) return false;
-    function overlaps(rows, source) {
-      return rows.some((r) => {
+  // See general policy 8: finds the specific holiday/season row (if any) whose
+  // window (with the holiday's own before/after padding) overlaps the given range
+  // and is marked relevant for at least one of the given products — meaning a dip
+  // in that window is expected seasonal behavior, not a meaningful decline worth
+  // surfacing. Returns the matching row + its source ('holiday'/'season'), or null.
+  function findSeasonalityMatch(startMs, endMs, pids) {
+    if (!pids.length) return null;
+    function firstOverlap(rows, source) {
+      return rows.find((r) => {
         const name = String(r.name || '').trim();
         if (!name) return false;
         const before = source === 'holiday' ? (r.daysBefore || 0) : 0;
@@ -233,9 +234,48 @@ async function computeInsights(organizationId) {
         const wEnd = new Date(r.toDate).getTime() + after * DAY_MS;
         if (wEnd <= startMs || wStart >= endMs) return false;
         return pids.some((pid) => { const rel = relevanceEngine.isRelevant(relCtx, pid, source, name); return rel.known && rel.value; });
-      });
+      }) || null;
     }
-    return overlaps(relCtx.holidays, 'holiday') || overlaps(relCtx.seasons, 'season');
+    const holidayMatch = firstOverlap(relCtx.holidays, 'holiday');
+    if (holidayMatch) return { row: holidayMatch, source: 'holiday' };
+    const seasonMatch = firstOverlap(relCtx.seasons, 'season');
+    if (seasonMatch) return { row: seasonMatch, source: 'season' };
+    return null;
+  }
+  function isExplainedBySeasonality(startMs, endMs, pids) {
+    return !!findSeasonalityMatch(startMs, endMs, pids);
+  }
+  // Rule 1d(c)'s stronger check: a peak that overlaps a holiday/season isn't
+  // automatically dismissed as fake — it's CONFIRMED as a recurring pattern only
+  // when the exact same holiday/season's PRIOR occurrence (same name, one year
+  // earlier — sourced from the holidays/seasons management tables, which carry a
+  // year per entry so this doesn't assume the holiday falls in the same Gregorian
+  // month every year) shows the same shape: a peak in that month followed by a
+  // comparable drop over the same relative month-offsets. Only then is this
+  // "not really a peak, just this customer's normal pre-holiday pattern repeating"
+  // rather than a guess — an unconfirmed overlap alone stays a caveat (see
+  // SEASONALITY_CAVEAT below), not full suppression.
+  function isRecurringHolidayPattern(match, peakMonthKey, secondHalfKeys, events, pctThreshold) {
+    if (!match) return false;
+    const name = String(match.row.name || '').trim();
+    const priorYear = match.row.year - 1;
+    const priorRows = (match.source === 'holiday' ? relCtx.holidays : relCtx.seasons)
+      .filter((r) => String(r.name || '').trim() === name && r.year === priorYear);
+    if (!priorRows.length) return false; // no prior-year entry for this holiday — nothing to confirm against
+    const priorMonthKey = monthKey(new Date(priorRows[0].fromDate).getTime());
+
+    const peakIdx = monthIndexOf(peakMonthKey);
+    const offsets = secondHalfKeys.map((mk) => monthIndexOf(mk) - peakIdx);
+    const priorPeakIdx = monthIndexOf(priorMonthKey);
+    const priorSecondHalfKeys = offsets.map((off) => monthKeyFromIndex(priorPeakIdx + off));
+
+    const revenueInMonth = (mk) => events.filter((e) => monthKey(e.t) === mk).reduce((a, e) => a + e.rev, 0);
+    const priorPeakValue = revenueInMonth(priorMonthKey);
+    if (priorPeakValue <= 0) return false; // no data that far back for this customer — can't confirm
+    const priorSecondHalfVals = priorSecondHalfKeys.map(revenueInMonth);
+    const priorAvg = priorSecondHalfVals.reduce((a, v) => a + v, 0) / priorSecondHalfVals.length;
+    const priorDelta = (priorAvg - priorPeakValue) / priorPeakValue;
+    return priorDelta <= -(pctThreshold / 100);
   }
   // A decline explained by seasonality is never suppressed — it's shown with a
   // caveat and flagged breakdown.needsReview:true regardless of severity, purely as
@@ -425,7 +465,14 @@ async function computeInsights(organizationId) {
         if (delta > -params.peakDrop_pctThreshold / 100) break peakDrop; // only a decline counts — see general policy 7
         const isHighSeverity = Math.abs(delta) >= params.peakDrop_highPct / 100;
         const [peakMStart, peakMEnd] = monthRangeMs(peakMonthKey);
-        const seasonalityExplained = isExplainedBySeasonality(peakMStart, peakMEnd, pids);
+        const seasonalityMatch = findSeasonalityMatch(peakMStart, peakMEnd, pids);
+        // The peak overlaps a holiday/season AND the exact same holiday's prior
+        // occurrence shows the same peak-then-drop shape for this customer — this
+        // isn't a decline, it's this customer's normal pre-holiday pattern
+        // repeating. Confirmed, not just guessed, so the insight is dropped
+        // entirely rather than shown with a caveat (see isRecurringHolidayPattern).
+        if (seasonalityMatch && isRecurringHolidayPattern(seasonalityMatch, peakMonthKey, secondHalfKeys, events, params.peakDrop_pctThreshold)) break peakDrop;
+        const seasonalityExplained = !!seasonalityMatch;
         trendByCustomer[cid] = {
           delta, isHighSeverity, seasonalityExplained,
           message: `מחזור הלקוח הגיע לשיא ב${fmtMonthYearKey(peakMonthKey)} (${fmtMoneyHe(peakValue)}), ומאז — ${monthKeysLabel(secondHalfKeys)} — עומד בממוצע על ${fmtMoneyHe(recentAvg)}: ירידה של ${Math.round(Math.abs(delta) * 100)}% מהשיא, ללא חזרה לרמה ההיא.` + customerFrequencyNote(events),
