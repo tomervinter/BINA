@@ -36,18 +36,21 @@ describe('sales upload', () => {
       .attach('file', Buffer.from(csv, 'utf8'), 'sales.csv');
     expect(uploadRes.status).toBe(200);
     expect(uploadRes.body.jobId).toBeTruthy();
-    expect(uploadRes.body.count).toBe(1);
+    // Parsing now happens in the background too (not just the DB write), so the
+    // initial response no longer carries a row count — only the final status does.
 
     // Poll the background job (see src/lib/uploadJobs.js) until it's done — same
     // flow the real frontend uses, not a shortcut around it.
-    let status;
+    let status, finalCount;
     for (let i = 0; i < 20; i++) {
       const statusRes = await request(app).get('/api/upload-status/' + uploadRes.body.jobId).set('Cookie', cookie);
       status = statusRes.body.status;
+      finalCount = statusRes.body.count;
       if (status !== 'processing') break;
       await new Promise((r) => setTimeout(r, 100));
     }
     expect(status).toBe('done');
+    expect(finalCount).toBe(1);
 
     const sale = await prisma.sale.findFirst({ where: { organizationId: org.id, customerNumber: 'TEST-C1' } });
     expect(sale).toBeTruthy();

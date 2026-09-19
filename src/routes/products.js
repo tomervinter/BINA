@@ -60,39 +60,49 @@ router.get('/export', async (req, res) => {
 
 router.post('/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'לא נבחר קובץ' });
-  let records;
-  try {
-    records = parseFileBuffer(req.file.buffer, req.file.originalname);
-  } catch (err) {
-    return res.status(400).json({ error: 'שגיאה בקריאת הקובץ — ודאו שזהו קובץ CSV או Excel תקין' });
-  }
-  if (!records.length) return res.status(400).json({ error: 'הקובץ ריק' });
 
   const orgId = req.user.organizationId;
-  const rows = records.map((r) => ({
-    organizationId: orgId,
-    itemCode: String(r['קוד פריט'] || '').trim(),
-    name: String(r['שם פריט'] || '').trim(),
-    type: r['טיפוס'] || null,
-    superType: r['טיפוס על'] || null,
-    department: r['מחלקה'] || null,
-    unit: r['יחידת מידה למוצר'] || null,
-    status: r['סטטוס מוצר'] || 'פעיל',
-    forProcurement: r['לעיתוד'] || null,
-    forMarketing: r['לשיווק'] || null
-  })).filter((r) => r.itemCode);
-
-  // Handed off to a background job (see lib/uploadJobs.js) — see sales.js's upload
-  // route for why this doesn't await the DB write before responding.
   const jobId = createJob(orgId);
-  res.json({ jobId, count: rows.length });
-  logAction(req.user, 'product.upload', rows.length + ' שורות');
-  replaceAll(prisma, 'product', { organizationId: orgId }, rows)
-    .then(() => updateJob(jobId, { status: 'done', count: rows.length }))
-    .catch((err) => {
+  res.json({ jobId });
+
+  // Parsing is itself real CPU-bound work — run here in the background alongside
+  // the DB write (not just the DB write, as before), so the HTTP response never
+  // waits on ANY of it. See sales.js's upload route for the fuller explanation.
+  (async () => {
+    let records;
+    try {
+      records = parseFileBuffer(req.file.buffer, req.file.originalname);
+    } catch (err) {
+      updateJob(jobId, { status: 'error', error: 'שגיאה בקריאת הקובץ — ודאו שזהו קובץ CSV או Excel תקין' });
+      return;
+    }
+    if (!records.length) {
+      updateJob(jobId, { status: 'error', error: 'הקובץ ריק' });
+      return;
+    }
+
+    const rows = records.map((r) => ({
+      organizationId: orgId,
+      itemCode: String(r['קוד פריט'] || '').trim(),
+      name: String(r['שם פריט'] || '').trim(),
+      type: r['טיפוס'] || null,
+      superType: r['טיפוס על'] || null,
+      department: r['מחלקה'] || null,
+      unit: r['יחידת מידה למוצר'] || null,
+      status: r['סטטוס מוצר'] || 'פעיל',
+      forProcurement: r['לעיתוד'] || null,
+      forMarketing: r['לשיווק'] || null
+    })).filter((r) => r.itemCode);
+
+    logAction(req.user, 'product.upload', rows.length + ' שורות');
+    try {
+      await replaceAll(prisma, 'product', { organizationId: orgId }, rows);
+      updateJob(jobId, { status: 'done', count: rows.length });
+    } catch (err) {
       console.error('Products upload job failed:', jobId, err);
       updateJob(jobId, { status: 'error', error: 'שגיאה בשמירת הנתונים בבסיס הנתונים — נסו שוב או פנו לתמיכה' });
-    });
+    }
+  })();
 });
 
 router.delete('/', async (req, res) => {

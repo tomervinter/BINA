@@ -42,11 +42,22 @@ function initUploadWidget(container, opts) {
     let jobId;
     try {
       const res = await fetch(opts.apiBase + '/upload', { method: 'POST', credentials: 'include', body: form });
-      const result = await res.json();
+      let result;
+      try {
+        result = await res.json();
+      } catch (parseErr) {
+        // A response with no valid JSON body — most often an empty 502/504 from
+        // the hosting platform's own proxy — means the request never made it back
+        // to our own error handling at all. Almost always the upload itself simply
+        // took too long (a very large file over a slow connection), not a bug in
+        // the app, so the message points at that instead of a bare "network error".
+        setStatus('השרת לא הגיב בזמן — ייתכן שהקובץ גדול מדי או שהחיבור לאינטרנט איטי. נסו שוב, או פנו לתמיכה אם זה חוזר על עצמו.', 'var(--red)');
+        return;
+      }
       if (!res.ok) { setStatus(result.error || 'שגיאה בהעלאה', 'var(--red)'); return; }
       jobId = result.jobId;
     } catch (err) {
-      setStatus('שגיאת רשת', 'var(--red)');
+      setStatus('שגיאת רשת — בדקו את החיבור לאינטרנט ונסו שוב', 'var(--red)');
       return;
     }
     setStatus('מעבד את הקובץ...', 'var(--text-muted)');

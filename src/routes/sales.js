@@ -98,45 +98,58 @@ router.get('/export', async (req, res) => {
 });
 
 router.post('/upload', upload.single('file'), async (req, res) => {
+  const t0 = Date.now();
+  console.log('[upload] sales: request handler entered, file received,', req.file ? req.file.size + ' bytes' : 'no file');
   if (!req.file) return res.status(400).json({ error: 'לא נבחר קובץ' });
-  let records;
-  try {
-    records = parseFileBuffer(req.file.buffer, req.file.originalname);
-  } catch (err) {
-    return res.status(400).json({ error: 'שגיאה בקריאת הקובץ — ודאו שזהו קובץ CSV או Excel תקין' });
-  }
-  if (!records.length) return res.status(400).json({ error: 'הקובץ ריק' });
 
   const orgId = req.user.organizationId;
-  const rows = records.map((r) => {
-    const year = parseInt(r['שנה'], 10);
-    const month = parseInt(r['חודש'], 10);
-    const validPeriod = year > 1900 && month >= 1 && month <= 12;
-    return {
-      organizationId: orgId,
-      customerNumber: String(r['מספר לקוח'] || '').trim(),
-      productCode: String(r['קוד פריט'] || '').trim(),
-      // Sales are now recorded at month granularity only (no exact day) — stored as the
-      // 1st of the month so existing day/week-based Date math keeps working unmodified.
-      date: validPeriod ? new Date(year, month - 1, 1) : null,
-      quantity: parseNumber(r['מכר כמותי']),
-      revenue: parseNumber(r['מכר כספי']),
-      weight: r['משקל'] != null ? parseNumber(r['משקל']) : null
-    };
-  }).filter((r) => r.customerNumber && r.productCode && r.date);
-
-  // Handed off to a background job (see lib/uploadJobs.js) — a large sales file's bulk
-  // insert to Postgres can take well past any reasonable HTTP/proxy timeout, so the
-  // response goes back immediately and the frontend polls /api/upload-status/:jobId.
   const jobId = createJob(orgId);
-  res.json({ jobId, count: rows.length });
-  logAction(req.user, 'sale.upload', rows.length + ' שורות');
-  replaceAll(prisma, 'sale', { organizationId: orgId }, rows)
-    .then(() => updateJob(jobId, { status: 'done', count: rows.length }))
-    .catch((err) => {
+  res.json({ jobId });
+
+  // Parsing a large xlsx is itself real CPU-bound work — timed and run here in the
+  // background alongside the DB write (not just the DB write, as before), so the
+  // HTTP response never waits on ANY of it. See lib/uploadJobs.js.
+  (async () => {
+    let records;
+    try {
+      records = parseFileBuffer(req.file.buffer, req.file.originalname);
+      console.log('[upload] sales: parsed', records.length, 'records in', Date.now() - t0, 'ms since handler entry');
+    } catch (err) {
+      updateJob(jobId, { status: 'error', error: 'שגיאה בקריאת הקובץ — ודאו שזהו קובץ CSV או Excel תקין' });
+      return;
+    }
+    if (!records.length) {
+      updateJob(jobId, { status: 'error', error: 'הקובץ ריק' });
+      return;
+    }
+
+    const rows = records.map((r) => {
+      const year = parseInt(r['שנה'], 10);
+      const month = parseInt(r['חודש'], 10);
+      const validPeriod = year > 1900 && month >= 1 && month <= 12;
+      return {
+        organizationId: orgId,
+        customerNumber: String(r['מספר לקוח'] || '').trim(),
+        productCode: String(r['קוד פריט'] || '').trim(),
+        // Sales are now recorded at month granularity only (no exact day) — stored as the
+        // 1st of the month so existing day/week-based Date math keeps working unmodified.
+        date: validPeriod ? new Date(year, month - 1, 1) : null,
+        quantity: parseNumber(r['מכר כמותי']),
+        revenue: parseNumber(r['מכר כספי']),
+        weight: r['משקל'] != null ? parseNumber(r['משקל']) : null
+      };
+    }).filter((r) => r.customerNumber && r.productCode && r.date);
+
+    logAction(req.user, 'sale.upload', rows.length + ' שורות');
+    try {
+      await replaceAll(prisma, 'sale', { organizationId: orgId }, rows);
+      console.log('[upload] sales: DB write done,', rows.length, 'rows,', Date.now() - t0, 'ms since handler entry');
+      updateJob(jobId, { status: 'done', count: rows.length });
+    } catch (err) {
       console.error('Sales upload job failed:', jobId, err);
       updateJob(jobId, { status: 'error', error: 'שגיאה בשמירת הנתונים בבסיס הנתונים — נסו שוב או פנו לתמיכה' });
-    });
+    }
+  })();
 });
 
 router.delete('/', async (req, res) => {
