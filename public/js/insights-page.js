@@ -36,6 +36,7 @@ async function initInsightsPage() {
     { key: 'customerName', label: 'לקוח', width: '110px', wrap: true, render: (r) => r.customerName || '' },
     { key: 'city', label: 'עיר', width: '80px', wrap: true, render: (r) => (custMap[r.customerId] && custMap[r.customerId].city) || '' },
     { key: 'centralCustomer', label: 'לקוח מרכז', width: '100px', wrap: true, render: (r) => (custMap[r.customerId] && custMap[r.customerId].centralCustomer) || '' },
+    { key: 'salesAgent', label: 'סוכן מכירות', width: '100px', wrap: true, render: (r) => (custMap[r.customerId] && custMap[r.customerId].salesAgent) || '' },
     { key: 'primaryClass', label: 'סיווג ראשי', width: '90px', wrap: true, render: (r) => (custMap[r.customerId] && custMap[r.customerId].primaryClass) || '' },
     { key: 'customerType', label: 'סוג לקוח', width: '90px', wrap: true, render: (r) => (custMap[r.customerId] && custMap[r.customerId].customerType) || '' },
     { key: 'entity', label: 'מוצר', width: '110px', wrap: true, render: (r) => r.productCode ? (prodName[r.productCode] || r.productCode) : '' },
@@ -75,6 +76,7 @@ async function initInsightsPage() {
     paramFilter('customer', 'customerId'),
     paramFilter('city', 'city'),
     paramFilter('centralCustomer', 'centralCustomer'),
+    paramFilter('salesAgent', 'salesAgent'),
     paramFilter('primaryClass', 'primaryClass'),
     paramFilter('customerType', 'customerType')
   );

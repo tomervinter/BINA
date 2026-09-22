@@ -35,6 +35,7 @@ async function initDashDecliningCustomersPanel() {
     setList('customerType', f.customerType);
     setList('city', f.city);
     setList('centralCustomer', f.centralCustomer);
+    setList('salesAgent', f.salesAgent);
     setList('superType', f.superType);
     setList('department', f.department);
     return qs.toString();

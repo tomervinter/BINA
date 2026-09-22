@@ -11,7 +11,7 @@
 // Respects every one of the dashboard's CUSTOMER-IDENTITY filters (see
 // dashboard-filters.js, which calls window.refreshDashboardTopInsights on every
 // filter change) — not just an explicit customer selection, but also primaryClass/
-// customerType/city/centralCustomer, resolved to a customer set the same way
+// customerType/city/centralCustomer/salesAgent, resolved to a customer set the same way
 // buildEntityWhere does server-side (src/routes/dashboardSalesSummary.js): a
 // segment filter wins over an explicit customer-number list when both are given.
 // The comparison-side KPI tile gets its OWN resolved set the same way (its own
@@ -40,8 +40,8 @@ let dashAllCustomers = null; // customerNumber -> the full customer row (primary
 // combine with AND (a customer must match every one given), not OR.
 function resolveInsightCustomerIds(f) {
   const primaryClass = f.primaryClass || [], customerType = f.customerType || [],
-    city = f.city || [], centralCustomer = f.centralCustomer || [], customer = f.customer || [];
-  if (primaryClass.length || customerType.length || city.length || centralCustomer.length) {
+    city = f.city || [], centralCustomer = f.centralCustomer || [], salesAgent = f.salesAgent || [], customer = f.customer || [];
+  if (primaryClass.length || customerType.length || city.length || centralCustomer.length || salesAgent.length) {
     const out = new Set();
     Object.keys(dashAllCustomers || {}).forEach((cid) => {
       const c = dashAllCustomers[cid];
@@ -49,6 +49,7 @@ function resolveInsightCustomerIds(f) {
       if (customerType.length && !customerType.includes(c.customerType)) return;
       if (city.length && !city.includes(c.city)) return;
       if (centralCustomer.length && !centralCustomer.includes(c.centralCustomer)) return;
+      if (salesAgent.length && !salesAgent.includes(c.salesAgent)) return;
       out.add(cid);
     });
     return out;
@@ -70,9 +71,9 @@ function renderDashboardTopInsights(filters) {
   // resolved set wholesale (so its tile isn't left meaninglessly unfiltered).
   const hasCompareIdentity = !!((filters.compareCustomer && filters.compareCustomer.length) ||
     (filters.comparePrimaryClass && filters.comparePrimaryClass.length) || (filters.compareCustomerType && filters.compareCustomerType.length) ||
-    (filters.compareCity && filters.compareCity.length) || (filters.compareCentralCustomer && filters.compareCentralCustomer.length));
+    (filters.compareCity && filters.compareCity.length) || (filters.compareCentralCustomer && filters.compareCentralCustomer.length) || (filters.compareSalesAgent && filters.compareSalesAgent.length));
   const compareIds = hasCompareIdentity
-    ? resolveInsightCustomerIds({ customer: filters.compareCustomer, primaryClass: filters.comparePrimaryClass, customerType: filters.compareCustomerType, city: filters.compareCity, centralCustomer: filters.compareCentralCustomer })
+    ? resolveInsightCustomerIds({ customer: filters.compareCustomer, primaryClass: filters.comparePrimaryClass, customerType: filters.compareCustomerType, city: filters.compareCity, centralCustomer: filters.compareCentralCustomer, salesAgent: filters.compareSalesAgent })
     : primaryIds;
   const compareFiltered = compareIds ? dashAllInsights.filter((i) => compareIds.has(i.customerId)) : dashAllInsights;
 
@@ -102,13 +103,14 @@ function renderDashboardTopInsights(filters) {
   function insightsHref(bundle) {
     const one = (arr) => (arr && arr.length === 1) ? arr[0] : null;
     const primaryClass = one(bundle.primaryClass), customerType = one(bundle.customerType),
-      city = one(bundle.city), centralCustomer = one(bundle.centralCustomer);
+      city = one(bundle.city), centralCustomer = one(bundle.centralCustomer), salesAgent = one(bundle.salesAgent);
     const params = new URLSearchParams();
-    if (primaryClass || customerType || city || centralCustomer) {
+    if (primaryClass || customerType || city || centralCustomer || salesAgent) {
       if (primaryClass) params.set('primaryClass', primaryClass);
       if (customerType) params.set('customerType', customerType);
       if (city) params.set('city', city);
       if (centralCustomer) params.set('centralCustomer', centralCustomer);
+      if (salesAgent) params.set('salesAgent', salesAgent);
     } else {
       const customer = one(bundle.customer);
       if (customer) params.set('customer', customer);
@@ -127,9 +129,9 @@ function renderDashboardTopInsights(filters) {
       '<div class="kpi-desc">' + desc + '</div>' +
       '</a>';
   }
-  const primaryBundle = { customer: filters.customer, primaryClass: filters.primaryClass, customerType: filters.customerType, city: filters.city, centralCustomer: filters.centralCustomer };
+  const primaryBundle = { customer: filters.customer, primaryClass: filters.primaryClass, customerType: filters.customerType, city: filters.city, centralCustomer: filters.centralCustomer, salesAgent: filters.salesAgent };
   const compareBundle = hasCompareIdentity
-    ? { customer: filters.compareCustomer, primaryClass: filters.comparePrimaryClass, customerType: filters.compareCustomerType, city: filters.compareCity, centralCustomer: filters.compareCentralCustomer }
+    ? { customer: filters.compareCustomer, primaryClass: filters.comparePrimaryClass, customerType: filters.compareCustomerType, city: filters.compareCity, centralCustomer: filters.compareCentralCustomer, salesAgent: filters.compareSalesAgent }
     : primaryBundle;
   const primaryGrid = document.getElementById('salesSummaryKpiGrid');
   const compareGrid = document.getElementById('salesSummaryCompareKpiGrid');
