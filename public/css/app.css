@@ -450,34 +450,37 @@ input.rule-param-input[type=number]{-moz-appearance:textfield;width:2.8em;min-wi
    ellipsis and no hover-title (unlike data cells, which do have one) would
    leave the user unable to see what the column even is. */
 .cohort-customers-table th{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.3;}
-.cohort-customers-table th:nth-child(1),.cohort-customers-table td:nth-child(1){width:14%;}
-.cohort-customers-table th:nth-child(2),.cohort-customers-table td:nth-child(2){width:23%;}
-.cohort-customers-table th:nth-child(3),.cohort-customers-table td:nth-child(3){width:19%;}
-.cohort-customers-table th:nth-child(4),.cohort-customers-table td:nth-child(4){width:15%;}
-.cohort-customers-table th:nth-child(5),.cohort-customers-table td:nth-child(5){width:14%;}
+.cohort-customers-table th:nth-child(1),.cohort-customers-table td:nth-child(1){width:12%;}
+.cohort-customers-table th:nth-child(2),.cohort-customers-table td:nth-child(2){width:19%;}
+.cohort-customers-table th:nth-child(3),.cohort-customers-table td:nth-child(3){width:15%;}
+.cohort-customers-table th:nth-child(4),.cohort-customers-table td:nth-child(4){width:13%;}
+.cohort-customers-table th:nth-child(5),.cohort-customers-table td:nth-child(5){width:12%;}
 .cohort-customers-table th:nth-child(6),.cohort-customers-table td:nth-child(6){width:15%;}
-/* Lapsed-customers panel's table has its own 6th column (active-months count,
+.cohort-customers-table th:nth-child(7),.cohort-customers-table td:nth-child(7){width:14%;}
+/* Lapsed-customers panel's table has its own 7th column (active-months count,
    vs. the cohort table's bought-quantity), so its own widths replace the set
    above rather than adding to it. */
-.lapsed-customers-table th:nth-child(1),.lapsed-customers-table td:nth-child(1){width:15%;}
-.lapsed-customers-table th:nth-child(2),.lapsed-customers-table td:nth-child(2){width:23%;}
-.lapsed-customers-table th:nth-child(3),.lapsed-customers-table td:nth-child(3){width:19%;}
-.lapsed-customers-table th:nth-child(4),.lapsed-customers-table td:nth-child(4){width:15%;}
-.lapsed-customers-table th:nth-child(5),.lapsed-customers-table td:nth-child(5){width:14%;}
-.lapsed-customers-table th:nth-child(6),.lapsed-customers-table td:nth-child(6){width:14%;}
-/* Declining-customers panel's table has 8 columns (product code + name split
-   into their own columns), so its own widths replace the set above too. The
-   product-name column gets the most room since it's the one genuinely
-   variable-length field — the rest stay narrow, same as every other
+.lapsed-customers-table th:nth-child(1),.lapsed-customers-table td:nth-child(1){width:13%;}
+.lapsed-customers-table th:nth-child(2),.lapsed-customers-table td:nth-child(2){width:19%;}
+.lapsed-customers-table th:nth-child(3),.lapsed-customers-table td:nth-child(3){width:15%;}
+.lapsed-customers-table th:nth-child(4),.lapsed-customers-table td:nth-child(4){width:13%;}
+.lapsed-customers-table th:nth-child(5),.lapsed-customers-table td:nth-child(5){width:12%;}
+.lapsed-customers-table th:nth-child(6),.lapsed-customers-table td:nth-child(6){width:15%;}
+.lapsed-customers-table th:nth-child(7),.lapsed-customers-table td:nth-child(7){width:13%;}
+/* Declining-customers panel's table has 9 columns (product code + name split
+   into their own columns, plus sales agent), so its own widths replace the set
+   above too. The product-name column gets the most room since it's the one
+   genuinely variable-length field — the rest stay narrow, same as every other
    cohort-style table here. */
-.declining-customers-table th:nth-child(1),.declining-customers-table td:nth-child(1){width:11%;}
-.declining-customers-table th:nth-child(2),.declining-customers-table td:nth-child(2){width:16%;}
-.declining-customers-table th:nth-child(3),.declining-customers-table td:nth-child(3){width:14%;}
-.declining-customers-table th:nth-child(4),.declining-customers-table td:nth-child(4){width:11%;}
-.declining-customers-table th:nth-child(5),.declining-customers-table td:nth-child(5){width:10%;}
-.declining-customers-table th:nth-child(6),.declining-customers-table td:nth-child(6){width:8%;}
-.declining-customers-table th:nth-child(7),.declining-customers-table td:nth-child(7){width:10%;}
-.declining-customers-table th:nth-child(8),.declining-customers-table td:nth-child(8){width:20%;}
+.declining-customers-table th:nth-child(1),.declining-customers-table td:nth-child(1){width:9%;}
+.declining-customers-table th:nth-child(2),.declining-customers-table td:nth-child(2){width:13%;}
+.declining-customers-table th:nth-child(3),.declining-customers-table td:nth-child(3){width:11%;}
+.declining-customers-table th:nth-child(4),.declining-customers-table td:nth-child(4){width:9%;}
+.declining-customers-table th:nth-child(5),.declining-customers-table td:nth-child(5){width:9%;}
+.declining-customers-table th:nth-child(6),.declining-customers-table td:nth-child(6){width:11%;}
+.declining-customers-table th:nth-child(7),.declining-customers-table td:nth-child(7){width:7%;}
+.declining-customers-table th:nth-child(8),.declining-customers-table td:nth-child(8){width:9%;}
+.declining-customers-table th:nth-child(9),.declining-customers-table td:nth-child(9){width:22%;}
 
 /* ---------- Month multi-select dropdown ---------- */
 .mms{position:relative;display:inline-block;}

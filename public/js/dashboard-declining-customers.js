@@ -79,9 +79,14 @@ async function initDashDecliningCustomersPanel() {
     updateSubtitle(Math.max(0, parseFloat(minPctInput.value) || 0), null, null, null);
   });
 
+  // The active filters changing above (unlike minPctInput, which fires per
+  // keystroke) is a deliberate, discrete action — same as every other filter
+  // change driving a live re-render elsewhere on the dashboard — so a panel
+  // that's already open re-fetches and shows the up-to-date result immediately,
+  // rather than silently collapsing and making the user click "הצג" again to see it.
   window.refreshDashDecliningFilters = function (state) {
     filterState = state;
-    if (expanded) collapse();
+    if (expanded) load();
   };
 
   updateSubtitle(Math.max(0, parseFloat(minPctInput.value) || 0), null, null, null);

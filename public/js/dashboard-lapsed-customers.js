@@ -77,11 +77,12 @@ async function initDashLapsedCustomersPanel() {
     if (expanded) { collapse(); return; }
     load();
   });
-  // Changing the minimum-months input, or the active filters changing above,
-  // invalidates whatever's currently shown — collapse back to the "הצג" button
-  // rather than silently leaving a stale list on screen; the user re-expands to
-  // see the up-to-date result. The subtitle itself still updates live (with a
-  // generic "החודש הנוכחי" until a real fetch confirms the exact month label) so
+  // Changing the minimum-months input fires per keystroke, so it isn't safe to
+  // re-fetch on every change the way a filter selection is (see
+  // window.refreshDashLapsedFilters below) — instead it collapses back to the
+  // "הצג" button rather than leaving a stale list on screen; the user re-expands
+  // once they've settled on a value. The subtitle itself still updates live (with
+  // a generic "החודש הנוכחי" until a real fetch confirms the exact month label) so
   // the panel's own description never looks out of sync with the input above it.
   minMonthsInput.addEventListener('input', () => {
     if (expanded) collapse();
@@ -89,9 +90,14 @@ async function initDashLapsedCustomersPanel() {
     updateSubtitle(minMonths, null);
   });
 
+  // The active filters changing above (unlike the minMonths input, which fires
+  // per-keystroke) is a deliberate, discrete action — same as every other filter
+  // change driving a live re-render elsewhere on the dashboard — so a panel that's
+  // already open re-fetches and shows the up-to-date result immediately, rather
+  // than silently collapsing and making the user click "הצג" again to see it.
   window.refreshDashLapsedFilters = function (state) {
     filterState = state;
-    if (expanded) collapse();
+    if (expanded) load();
   };
 
   updateSubtitle(Math.min(12, Math.max(1, parseInt(minMonthsInput.value, 10) || 1)), null);
