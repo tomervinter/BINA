@@ -72,6 +72,8 @@ async function initDashboardFilters() {
     compareCity: document.getElementById('dashClearCompareCity'),
     centralCustomer: document.getElementById('dashClearCentralCustomer'),
     compareCentralCustomer: document.getElementById('dashClearCompareCentralCustomer'),
+    salesAgent: document.getElementById('dashClearSalesAgent'),
+    compareSalesAgent: document.getElementById('dashClearCompareSalesAgent'),
     superType: document.getElementById('dashClearSuperType'),
     compareSuperType: document.getElementById('dashClearCompareSuperType'),
     department: document.getElementById('dashClearDepartment'),
@@ -127,6 +129,7 @@ async function initDashboardFilters() {
   const customerTypeOptions = distinctOptions(customers.map((c) => c.customerType));
   const cityOptions = distinctOptions(customers.map((c) => c.city));
   const centralCustomerOptions = distinctOptions(customers.map((c) => c.centralCustomer));
+  const salesAgentOptions = distinctOptions(customers.map((c) => c.salesAgent));
   const superTypeOptions = distinctOptions(products.map((p) => p.superType));
   const departmentOptions = distinctOptions(products.map((p) => p.department));
   // Same year range for both sides — no reason a comparison must be last year
@@ -148,6 +151,7 @@ async function initDashboardFilters() {
     customerType: csv('customerType'),
     city: csv('city'),
     centralCustomer: csv('centralCustomer'),
+    salesAgent: csv('salesAgent'),
     superType: csv('superType'),
     department: csv('department'),
     // periodMonths/compareMonths are DERIVED (the year × month cross product) —
@@ -168,6 +172,7 @@ async function initDashboardFilters() {
     compareCustomerType: csv('compareCustomerType'),
     compareCity: csv('compareCity'),
     compareCentralCustomer: csv('compareCentralCustomer'),
+    compareSalesAgent: csv('compareSalesAgent'),
     compareSuperType: csv('compareSuperType'),
     compareDepartment: csv('compareDepartment'),
     // Cohort filter: narrows the primary customer selection to those who bought/didn't
@@ -201,6 +206,7 @@ async function initDashboardFilters() {
     set('customerType', state.customerType);
     set('city', state.city);
     set('centralCustomer', state.centralCustomer);
+    set('salesAgent', state.salesAgent);
     set('superType', state.superType);
     set('department', state.department);
     set('periodYears', state.periodYears);
@@ -213,6 +219,7 @@ async function initDashboardFilters() {
     set('compareCustomerType', state.compareCustomerType);
     set('compareCity', state.compareCity);
     set('compareCentralCustomer', state.compareCentralCustomer);
+    set('compareSalesAgent', state.compareSalesAgent);
     set('compareSuperType', state.compareSuperType);
     set('compareDepartment', state.compareDepartment);
     set('boughtProducts', state.boughtProducts);
@@ -234,7 +241,7 @@ async function initDashboardFilters() {
     if (state.superType.length || state.compareSuperType.length || state.department.length || state.compareDepartment.length ||
         state.product.length || state.compareProduct.length || state.primaryClass.length || state.comparePrimaryClass.length ||
         state.customerType.length || state.compareCustomerType.length || state.city.length || state.compareCity.length ||
-        state.centralCustomer.length || state.compareCentralCustomer.length) setFiltersExpanded(true);
+        state.centralCustomer.length || state.compareCentralCustomer.length || state.salesAgent.length || state.compareSalesAgent.length) setFiltersExpanded(true);
     cellClearBtns.customer.style.display = state.customer.length ? '' : 'none';
     cellClearBtns.compareCustomer.style.display = state.compareCustomer.length ? '' : 'none';
     cellClearBtns.year.style.display = state.periodYears.length ? '' : 'none';
@@ -251,6 +258,8 @@ async function initDashboardFilters() {
     cellClearBtns.compareCity.style.display = state.compareCity.length ? '' : 'none';
     cellClearBtns.centralCustomer.style.display = state.centralCustomer.length ? '' : 'none';
     cellClearBtns.compareCentralCustomer.style.display = state.compareCentralCustomer.length ? '' : 'none';
+    cellClearBtns.salesAgent.style.display = state.salesAgent.length ? '' : 'none';
+    cellClearBtns.compareSalesAgent.style.display = state.compareSalesAgent.length ? '' : 'none';
     cellClearBtns.superType.style.display = state.superType.length ? '' : 'none';
     cellClearBtns.compareSuperType.style.display = state.compareSuperType.length ? '' : 'none';
     cellClearBtns.department.style.display = state.department.length ? '' : 'none';
@@ -269,6 +278,7 @@ async function initDashboardFilters() {
     if (state.customerType.length) parts.push(state.customerType.length === 1 ? 'סוג לקוח ' + state.customerType[0] : state.customerType.length + ' סוגי לקוח');
     if (state.city.length) parts.push(state.city.length === 1 ? 'עיר ' + state.city[0] : state.city.length + ' ערים');
     if (state.centralCustomer.length) parts.push(state.centralCustomer.length === 1 ? 'לקוח מרכז ' + state.centralCustomer[0] : state.centralCustomer.length + ' לקוחות מרכז');
+    if (state.salesAgent.length) parts.push(state.salesAgent.length === 1 ? 'סוכן מכירות ' + state.salesAgent[0] : state.salesAgent.length + ' סוכני מכירות');
     if (state.superType.length) parts.push(state.superType.length === 1 ? 'טיפוס על ' + state.superType[0] : state.superType.length + ' טיפוסי על');
     if (state.department.length) parts.push(state.department.length === 1 ? 'מחלקת מוצר ' + state.department[0] : state.department.length + ' מחלקות מוצר');
     if (periodActive) parts.push('התקופה שנבחרה');
@@ -296,6 +306,7 @@ async function initDashboardFilters() {
     if (state.compareCustomerType.length) cmpParts.push(state.compareCustomerType.length === 1 ? 'לסוג לקוח ' + state.compareCustomerType[0] : 'ל-' + state.compareCustomerType.length + ' סוגי לקוח');
     if (state.compareCity.length) cmpParts.push(state.compareCity.length === 1 ? 'לעיר ' + state.compareCity[0] : 'ל-' + state.compareCity.length + ' ערים');
     if (state.compareCentralCustomer.length) cmpParts.push(state.compareCentralCustomer.length === 1 ? 'ללקוח מרכז ' + state.compareCentralCustomer[0] : 'ל-' + state.compareCentralCustomer.length + ' לקוחות מרכז');
+    if (state.compareSalesAgent.length) cmpParts.push(state.compareSalesAgent.length === 1 ? 'לסוכן מכירות ' + state.compareSalesAgent[0] : 'ל-' + state.compareSalesAgent.length + ' סוכני מכירות');
     if (state.compareSuperType.length) cmpParts.push(state.compareSuperType.length === 1 ? 'לטיפוס על ' + state.compareSuperType[0] : 'ל-' + state.compareSuperType.length + ' טיפוסי על');
     if (state.compareDepartment.length) cmpParts.push(state.compareDepartment.length === 1 ? 'למחלקת מוצר ' + state.compareDepartment[0] : 'ל-' + state.compareDepartment.length + ' מחלקות מוצר');
     if (state.compareMonths.length) cmpParts.push('לתקופה נוספת');
@@ -378,6 +389,8 @@ async function initDashboardFilters() {
   makePicker('dashCompareCityPicker', cityOptions, state.compareCity, false, (vals) => { state.compareCity = vals; apply(); });
   makePicker('dashCentralCustomerPicker', centralCustomerOptions, state.centralCustomer, false, (vals) => { state.centralCustomer = vals; apply(); });
   makePicker('dashCompareCentralCustomerPicker', centralCustomerOptions, state.compareCentralCustomer, false, (vals) => { state.compareCentralCustomer = vals; apply(); });
+  makePicker('dashSalesAgentPicker', salesAgentOptions, state.salesAgent, false, (vals) => { state.salesAgent = vals; apply(); });
+  makePicker('dashCompareSalesAgentPicker', salesAgentOptions, state.compareSalesAgent, false, (vals) => { state.compareSalesAgent = vals; apply(); });
   makePicker('dashSuperTypePicker', superTypeOptions, state.superType, false, (vals) => { state.superType = vals; apply(); });
   makePicker('dashCompareSuperTypePicker', superTypeOptions, state.compareSuperType, false, (vals) => { state.compareSuperType = vals; apply(); });
   makePicker('dashDepartmentPicker', departmentOptions, state.department, false, (vals) => { state.department = vals; apply(); });
@@ -401,6 +414,8 @@ async function initDashboardFilters() {
   cellClearBtns.compareCity.addEventListener('click', () => { state.compareCity = []; pickers.dashCompareCityPicker.setSelected([]); apply(); });
   cellClearBtns.centralCustomer.addEventListener('click', () => { state.centralCustomer = []; pickers.dashCentralCustomerPicker.setSelected([]); apply(); });
   cellClearBtns.compareCentralCustomer.addEventListener('click', () => { state.compareCentralCustomer = []; pickers.dashCompareCentralCustomerPicker.setSelected([]); apply(); });
+  cellClearBtns.salesAgent.addEventListener('click', () => { state.salesAgent = []; pickers.dashSalesAgentPicker.setSelected([]); apply(); });
+  cellClearBtns.compareSalesAgent.addEventListener('click', () => { state.compareSalesAgent = []; pickers.dashCompareSalesAgentPicker.setSelected([]); apply(); });
   cellClearBtns.superType.addEventListener('click', () => { state.superType = []; pickers.dashSuperTypePicker.setSelected([]); apply(); });
   cellClearBtns.compareSuperType.addEventListener('click', () => { state.compareSuperType = []; pickers.dashCompareSuperTypePicker.setSelected([]); apply(); });
   cellClearBtns.department.addEventListener('click', () => { state.department = []; pickers.dashDepartmentPicker.setSelected([]); apply(); });
@@ -433,8 +448,8 @@ async function initDashboardFilters() {
     state.compareMonths = dashCrossProductMonths(state.compareYears, state.compareMonthsSel);
     // An insight names a customer/product/period, never a segment or a comparison
     // axis — clear anything the user had set manually so it doesn't linger mixed in.
-    state.primaryClass = []; state.customerType = []; state.city = []; state.centralCustomer = []; state.superType = []; state.department = [];
-    state.compareCustomer = []; state.compareProduct = []; state.comparePrimaryClass = []; state.compareCustomerType = []; state.compareCity = []; state.compareCentralCustomer = []; state.compareSuperType = []; state.compareDepartment = [];
+    state.primaryClass = []; state.customerType = []; state.city = []; state.centralCustomer = []; state.salesAgent = []; state.superType = []; state.department = [];
+    state.compareCustomer = []; state.compareProduct = []; state.comparePrimaryClass = []; state.compareCustomerType = []; state.compareCity = []; state.compareCentralCustomer = []; state.compareSalesAgent = []; state.compareSuperType = []; state.compareDepartment = [];
     state.boughtProducts = []; state.notBoughtProducts = [];
     pickers.dashCustomerPicker.setSelected(state.customer);
     pickers.dashProductPicker.setSelected(state.product);
@@ -442,6 +457,7 @@ async function initDashboardFilters() {
     pickers.dashCustomerTypePicker.setSelected([]);
     pickers.dashCityPicker.setSelected([]);
     pickers.dashCentralCustomerPicker.setSelected([]);
+    pickers.dashSalesAgentPicker.setSelected([]);
     pickers.dashSuperTypePicker.setSelected([]);
     pickers.dashDepartmentPicker.setSelected([]);
     pickers.dashCompareCustomerPicker.setSelected([]);
@@ -450,6 +466,7 @@ async function initDashboardFilters() {
     pickers.dashCompareCustomerTypePicker.setSelected([]);
     pickers.dashCompareCityPicker.setSelected([]);
     pickers.dashCompareCentralCustomerPicker.setSelected([]);
+    pickers.dashCompareSalesAgentPicker.setSelected([]);
     pickers.dashCompareSuperTypePicker.setSelected([]);
     pickers.dashCompareDepartmentPicker.setSelected([]);
     pickers.dashBoughtProductsPicker.setSelected([]);
@@ -475,7 +492,7 @@ async function initDashboardFilters() {
     f = f || {};
     state.customer = []; state.product = []; state.productNames = null;
     state.primaryClass = []; state.superType = []; state.department = [];
-    state.city = []; state.centralCustomer = [];
+    state.city = []; state.centralCustomer = []; state.salesAgent = [];
     state.customerType = f.customerType ? [f.customerType] : [];
     pickers.dashCustomerPicker.setSelected([]);
     pickers.dashProductPicker.setSelected([]);
@@ -484,6 +501,7 @@ async function initDashboardFilters() {
     pickers.dashDepartmentPicker.setSelected([]);
     pickers.dashCityPicker.setSelected([]);
     pickers.dashCentralCustomerPicker.setSelected([]);
+    pickers.dashSalesAgentPicker.setSelected([]);
     pickers.dashCustomerTypePicker.setSelected(state.customerType);
     const periodDecomp = dashDecomposeMonths(f.periodMonths);
     state.periodYears = periodDecomp.years; state.periodMonthsSel = periodDecomp.months;
@@ -493,7 +511,7 @@ async function initDashboardFilters() {
     // Comparison side isn't part of what the insight is about — cleared so it
     // doesn't linger mixed in from whatever the user had set manually before.
     state.compareCustomer = []; state.compareProduct = []; state.comparePrimaryClass = [];
-    state.compareCustomerType = []; state.compareCity = []; state.compareCentralCustomer = []; state.compareSuperType = []; state.compareDepartment = [];
+    state.compareCustomerType = []; state.compareCity = []; state.compareCentralCustomer = []; state.compareSalesAgent = []; state.compareSuperType = []; state.compareDepartment = [];
     state.compareYears = []; state.compareMonthsSel = []; state.compareMonths = [];
     pickers.dashCompareCustomerPicker.setSelected([]);
     pickers.dashCompareProductPicker.setSelected([]);
@@ -501,6 +519,7 @@ async function initDashboardFilters() {
     pickers.dashCompareCustomerTypePicker.setSelected([]);
     pickers.dashCompareCityPicker.setSelected([]);
     pickers.dashCompareCentralCustomerPicker.setSelected([]);
+    pickers.dashCompareSalesAgentPicker.setSelected([]);
     pickers.dashCompareSuperTypePicker.setSelected([]);
     pickers.dashCompareDepartmentPicker.setSelected([]);
     pickers.dashCompareYearPicker.setSelected([]);

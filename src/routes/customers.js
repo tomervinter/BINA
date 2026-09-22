@@ -16,6 +16,7 @@ const EXPORT_COLUMNS = [
   { key: 'customerType', label: 'סוג לקוח' },
   { key: 'city', label: 'עיר' },
   { key: 'centralCustomer', label: 'שם לקוח מרכז' },
+  { key: 'salesAgent', label: 'סוכן מכירות' },
   { key: 'status', label: 'סטטוס לקוח' }
 ];
 const MAX_EXPORT_ROWS = 100000;
@@ -24,7 +25,7 @@ const router = express.Router();
 
 router.use(requireAuth);
 
-const LIST_FIELDS = ['customerNumber', 'name', 'primaryClass', 'customerType', 'city', 'centralCustomer', 'status'];
+const LIST_FIELDS = ['customerNumber', 'name', 'primaryClass', 'customerType', 'city', 'centralCustomer', 'salesAgent', 'status'];
 
 router.get('/', async (req, res) => {
   const { page, pageSize, sortBy, sortDir, where, skip, take } = parseListQuery(req, {
@@ -92,6 +93,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       customerType: r['סוג לקוח'] || null,
       city: r['עיר'] || null,
       centralCustomer: r['שם לקוח מרכז'] || null,
+      salesAgent: r['סוכן מכירות'] || null,
       status: r['סטטוס לקוח'] || 'פעיל'
     })).filter((r) => r.customerNumber);
 

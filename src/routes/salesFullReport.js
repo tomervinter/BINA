@@ -25,6 +25,7 @@ const COLUMNS = {
   customerType: { sql: 'c."customerType"', type: 'text' },
   city: { sql: 'c."city"', type: 'text' },
   centralCustomer: { sql: 'c."centralCustomer"', type: 'text' },
+  salesAgent: { sql: 'c."salesAgent"', type: 'text' },
   customerStatus: { sql: 'c."status"', type: 'text' },
   productCode: { sql: 's."productCode"', type: 'text' },
   productName: { sql: 'p."name"', type: 'text' },
@@ -45,6 +46,7 @@ const COLUMNS = {
 const SELECT_SQL = Prisma.raw(`
   s."customerNumber" AS "customerNumber", c."name" AS "customerName", c."primaryClass" AS "primaryClass",
   c."customerType" AS "customerType", c."city" AS "city", c."centralCustomer" AS "centralCustomer",
+  c."salesAgent" AS "salesAgent",
   c."status" AS "customerStatus", s."productCode" AS "productCode", p."name" AS "productName",
   p."type" AS "type", p."superType" AS "superType", p."department" AS "department", p."unit" AS "unit",
   p."status" AS "productStatus", p."forProcurement" AS "forProcurement", p."forMarketing" AS "forMarketing",
@@ -140,6 +142,7 @@ router.get('/export', async (req, res) => {
     { key: 'customerType', label: 'סוג לקוח' },
     { key: 'city', label: 'עיר' },
     { key: 'centralCustomer', label: 'שם לקוח מרכז' },
+    { key: 'salesAgent', label: 'סוכן מכירות' },
     { key: 'customerStatus', label: 'סטטוס לקוח' },
     { key: 'productCode', label: 'קוד פריט' },
     { key: 'productName', label: 'שם פריט' },

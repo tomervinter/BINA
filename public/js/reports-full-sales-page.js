@@ -9,7 +9,7 @@ async function initFullSalesReportPage() {
 
   // Dashboard charts (and anything else) can deep-link here with a pre-applied filter,
   // e.g. reports-full-sales.html?department=מחלקה+א or ?year=2026&month=4.
-  const FILTERABLE_KEYS = ['customerNumber', 'customerName', 'primaryClass', 'customerType', 'city', 'centralCustomer', 'customerStatus', 'productCode', 'productName', 'type', 'superType', 'department', 'unit', 'productStatus', 'forProcurement', 'forMarketing', 'year', 'month'];
+  const FILTERABLE_KEYS = ['customerNumber', 'customerName', 'primaryClass', 'customerType', 'city', 'centralCustomer', 'salesAgent', 'customerStatus', 'productCode', 'productName', 'type', 'superType', 'department', 'unit', 'productStatus', 'forProcurement', 'forMarketing', 'year', 'month'];
   const urlParams = new URLSearchParams(window.location.search);
   const initialFilters = {};
   FILTERABLE_KEYS.forEach((key) => { const v = urlParams.get(key); if (v) initialFilters[key] = v; });
@@ -27,6 +27,7 @@ async function initFullSalesReportPage() {
     { key: 'customerType', label: 'סוג לקוח' },
     { key: 'city', label: 'עיר' },
     { key: 'centralCustomer', label: 'שם לקוח מרכז' },
+    { key: 'salesAgent', label: 'סוכן מכירות' },
     { key: 'customerStatus', label: 'סטטוס לקוח' },
     { key: 'productName', label: 'שם פריט' },
     { key: 'type', label: 'טיפוס' },

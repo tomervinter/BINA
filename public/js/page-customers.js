@@ -9,6 +9,7 @@ initListPage({
     { key: 'customerType', label: 'סוג לקוח' },
     { key: 'city', label: 'עיר' },
     { key: 'centralCustomer', label: 'לקוח מרכז' },
+    { key: 'salesAgent', label: 'סוכן מכירות' },
     { key: 'status', label: 'סטטוס' }
   ]
 });

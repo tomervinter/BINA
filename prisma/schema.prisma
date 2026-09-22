@@ -83,6 +83,7 @@ model Customer {
   customerType    String?
   city            String?
   centralCustomer String?
+  salesAgent      String?
   status          String       @default("פעיל")
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
