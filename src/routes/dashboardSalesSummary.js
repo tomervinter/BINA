@@ -222,7 +222,7 @@ router.get('/', async (req, res) => {
     prisma.sale.aggregate({ where, _sum: { revenue: true, quantity: true } }),
     prisma.sale.groupBy({ by: ['customerNumber'], where, _sum: { revenue: true } }),
     prisma.sale.groupBy({ by: ['productCode'], where, _sum: { revenue: true } }),
-    prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, customerType: true, primaryClass: true, centralCustomer: true } }),
+    prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, customerType: true, primaryClass: true, centralCustomer: true, salesAgent: true } }),
     prisma.product.findMany({ where: { organizationId }, select: { itemCode: true, name: true, department: true, superType: true } }),
     // Unrestricted by the period/compare date filters (customer filter still applies)
     // so the trend chart can always look up a given month's year-earlier counterpart
@@ -260,6 +260,7 @@ router.get('/', async (req, res) => {
     centralCustomer: (custMap[cn] && custMap[cn].centralCustomer) || null,
     primaryClass: (custMap[cn] && custMap[cn].primaryClass) || null,
     customerType: (custMap[cn] && custMap[cn].customerType) || null,
+    salesAgent: (custMap[cn] && custMap[cn].salesAgent) || null,
     boughtQuantity: boughtProducts.length ? (boughtQtyMap[cn] || 0) : null
   })) : null;
 
@@ -413,14 +414,17 @@ router.get('/cohort-customers/export', async (req, res) => {
   const customerNumbers = parseCsv(req.query.customerNumber);
   const primaryClasses = parseCsv(req.query.primaryClass);
   const customerTypes = parseCsv(req.query.customerType);
+  const cities = parseCsv(req.query.city);
+  const centralCustomers = parseCsv(req.query.centralCustomer);
+  const salesAgents = parseCsv(req.query.salesAgent);
   const boughtProducts = parseCsv(req.query.boughtProducts);
   const notBoughtProducts = parseCsv(req.query.notBoughtProducts);
   const period = parseMonthList(req.query.periodMonths);
   const purchaseCohort = await resolvePurchaseCohort(organizationId, boughtProducts, notBoughtProducts, period);
   const boughtQtyMap = await boughtQuantityByCustomer(organizationId, boughtProducts, period);
-  const hasEntityFilter = !!(customerNumbers.length || primaryClasses.length || customerTypes.length || purchaseCohort);
+  const hasEntityFilter = !!(customerNumbers.length || primaryClasses.length || customerTypes.length || cities.length || centralCustomers.length || salesAgents.length || purchaseCohort);
   const where = hasEntityFilter
-    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes: [], primaryClasses, customerTypes, restrictToCustomers: purchaseCohort })
+    ? await buildEntityWhere(organizationId, { customerNumbers, productCodes: [], primaryClasses, customerTypes, cities, centralCustomers, salesAgents, restrictToCustomers: purchaseCohort })
     : { organizationId };
   const customerFilter = where.customerNumber ? { organizationId, customerNumber: where.customerNumber } : { organizationId };
   const rows = (await prisma.customer.findMany({ where: customerFilter, orderBy: { name: 'asc' } }))
@@ -431,6 +435,7 @@ router.get('/cohort-customers/export', async (req, res) => {
     { key: 'centralCustomer', label: 'לקוח מרכז' },
     { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
     { key: 'customerType', label: 'סוג לקוח' },
+    { key: 'salesAgent', label: 'סוכן מכירות' },
     { key: 'boughtQuantity', label: 'כמות שנרכשה' }
   ], rows);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -462,7 +467,7 @@ async function resolveLapsedCustomers(organizationId, minMonths, entityFilters) 
   const [pastSales, curMonthBuyers, customers] = await Promise.all([
     prisma.sale.findMany({ where: Object.assign({}, baseWhere, { date: { gte: windowStart, lt: curMonthStart } }), select: { customerNumber: true, date: true, revenue: true } }),
     prisma.sale.findMany({ where: Object.assign({}, baseWhere, { date: { gte: curMonthStart, lt: nextMonthStart } }), select: { customerNumber: true }, distinct: ['customerNumber'] }),
-    prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, centralCustomer: true, primaryClass: true, customerType: true } })
+    prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, centralCustomer: true, primaryClass: true, customerType: true, salesAgent: true } })
   ]);
   const monthSetByCustomer = {};
   // Per-customer, per-month revenue within the same 12-month window — only used by
@@ -487,6 +492,7 @@ async function resolveLapsedCustomers(organizationId, minMonths, entityFilters) 
       centralCustomer: (custMap[cn] && custMap[cn].centralCustomer) || null,
       primaryClass: (custMap[cn] && custMap[cn].primaryClass) || null,
       customerType: (custMap[cn] && custMap[cn].customerType) || null,
+      salesAgent: (custMap[cn] && custMap[cn].salesAgent) || null,
       activeMonths: monthSetByCustomer[cn].size,
       monthlyRevenue: monthlyRevenueByCustomer[cn] || {}
     }))
@@ -542,6 +548,7 @@ router.get('/lapsed-customers/export', async (req, res) => {
     { key: 'centralCustomer', label: 'לקוח מרכז' },
     { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
     { key: 'customerType', label: 'סוג לקוח' },
+    { key: 'salesAgent', label: 'סוכן מכירות' },
     { key: 'activeMonths', label: 'חודשי רכישה' }
   ].concat(monthColumns), matches);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -574,7 +581,7 @@ async function resolveDecliningCustomers(organizationId, minDeclinePct, entityFi
   const [curSales, priorSales, customers, products] = await Promise.all([
     prisma.sale.findMany({ where: Object.assign({}, baseWhere, { date: { gte: curStart, lt: curEnd } }), select: { customerNumber: true, productCode: true, revenue: true } }),
     prisma.sale.findMany({ where: Object.assign({}, baseWhere, { date: { gte: priorStart, lt: priorEnd } }), select: { customerNumber: true, productCode: true, revenue: true } }),
-    prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, centralCustomer: true, primaryClass: true, customerType: true } }),
+    prisma.customer.findMany({ where: { organizationId }, select: { customerNumber: true, name: true, centralCustomer: true, primaryClass: true, customerType: true, salesAgent: true } }),
     prisma.product.findMany({ where: { organizationId }, select: { itemCode: true, name: true } })
   ]);
   const custMap = {}; customers.forEach((c) => { custMap[c.customerNumber] = c; });
@@ -623,6 +630,7 @@ async function resolveDecliningCustomers(organizationId, minDeclinePct, entityFi
       centralCustomer: (custMap[cid] && custMap[cid].centralCustomer) || null,
       primaryClass: (custMap[cid] && custMap[cid].primaryClass) || null,
       customerType: (custMap[cid] && custMap[cid].customerType) || null,
+      salesAgent: (custMap[cid] && custMap[cid].salesAgent) || null,
       declinePct: Math.round(declinePct * 10) / 10
     };
     declinedProducts.forEach((p) => matches.push(Object.assign({}, base, { productCode: p.pid, productName: p.name, productDeclinePct: p.declinePct })));
@@ -661,6 +669,7 @@ router.get('/declining-customers/export', async (req, res) => {
     { key: 'centralCustomer', label: 'לקוח מרכז' },
     { key: 'primaryClass', label: 'סיווג ראשי לקוח' },
     { key: 'customerType', label: 'סוג לקוח' },
+    { key: 'salesAgent', label: 'סוכן מכירות' },
     { key: 'declinePct', label: 'ירידה מצטברת (%)' },
     { key: 'productCode', label: 'מק"ט' },
     { key: 'productName', label: 'שם מוצר' },

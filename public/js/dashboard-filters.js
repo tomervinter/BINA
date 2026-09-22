@@ -339,13 +339,16 @@ async function initDashboardFilters() {
     cohortBodyEl.innerHTML = s.filteredCustomers.map((c) =>
       '<tr><td>' + Layout.escapeHtml(c.customerNumber) + '</td><td>' + Layout.escapeHtml(c.name) + '</td><td>' +
       Layout.escapeHtml(c.centralCustomer || '') + '</td><td>' + Layout.escapeHtml(c.primaryClass || '') + '</td><td>' +
-      Layout.escapeHtml(c.customerType || '') + '</td><td>' + (c.boughtQuantity == null ? '' : c.boughtQuantity) + '</td></tr>'
-    ).join('') || '<tr><td colspan="6">אין לקוחות תואמים</td></tr>';
+      Layout.escapeHtml(c.customerType || '') + '</td><td>' + Layout.escapeHtml(c.salesAgent || '') + '</td><td>' + (c.boughtQuantity == null ? '' : c.boughtQuantity) + '</td></tr>'
+    ).join('') || '<tr><td colspan="7">אין לקוחות תואמים</td></tr>';
     const qs = new URLSearchParams();
     const setList = (key, arr) => { if (arr && arr.length) qs.set(key, arr.join(',')); };
     setList('customerNumber', state.customer);
     setList('primaryClass', state.primaryClass);
     setList('customerType', state.customerType);
+    setList('city', state.city);
+    setList('centralCustomer', state.centralCustomer);
+    setList('salesAgent', state.salesAgent);
     setList('boughtProducts', state.boughtProducts);
     setList('notBoughtProducts', state.notBoughtProducts);
     setList('periodMonths', state.periodMonths);

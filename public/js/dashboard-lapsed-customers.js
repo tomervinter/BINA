@@ -65,8 +65,8 @@ async function initDashLapsedCustomersPanel() {
     bodyEl.innerHTML = data.customers.map((c) =>
       '<tr><td>' + Layout.escapeHtml(c.customerNumber) + '</td><td>' + Layout.escapeHtml(c.name) + '</td><td>' +
       Layout.escapeHtml(c.centralCustomer || '') + '</td><td>' + Layout.escapeHtml(c.primaryClass || '') + '</td><td>' +
-      Layout.escapeHtml(c.customerType || '') + '</td><td>' + c.activeMonths + '</td></tr>'
-    ).join('') || '<tr><td colspan="6">אין לקוחות תואמים</td></tr>';
+      Layout.escapeHtml(c.customerType || '') + '</td><td>' + Layout.escapeHtml(c.salesAgent || '') + '</td><td>' + c.activeMonths + '</td></tr>'
+    ).join('') || '<tr><td colspan="7">אין לקוחות תואמים</td></tr>';
     exportBtn.href = '/api/dashboard-sales-summary/lapsed-customers/export?' + buildQuery(minMonths);
     section.style.display = '';
     showBtn.textContent = 'הסתר';
